@@ -1,0 +1,8 @@
+inputstream.o: inputstream.cpp /usr/include/stdc-predef.h inputstream.h \
+ /usr/lib64/gcc/x86_64-suse-linux/4.8/include/stddef.h
+
+/usr/include/stdc-predef.h:
+
+inputstream.h:
+
+/usr/lib64/gcc/x86_64-suse-linux/4.8/include/stddef.h:

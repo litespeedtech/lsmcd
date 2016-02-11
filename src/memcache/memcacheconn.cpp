@@ -1,0 +1,470 @@
+
+
+#include "memcacheconn.h"
+#include "memcache/lsmemcache.h"
+#include <log4cxx/logger.h>
+#include <util/autobuf.h>
+
+#include <edio/multiplexer.h>
+#include <socket/coresocket.h>
+#include <socket/gsockaddr.h>
+
+#include <string>
+
+#include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/sendfile.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <time.h>
+#include <unistd.h>
+#include <netinet/tcp.h>
+
+time_t  MemcacheConn::s_curTime;
+int     MemcacheConn::s_ConnTimeout = 30;
+
+
+MemcacheConn::MemcacheConn()
+    : m_iConnState(CS_DISCONNECTED)
+    , _pSasl(NULL)
+    , _pLink(NULL)
+    , _Protocol(MC_UNKNOWN)
+    , m_bufIncoming(4096)
+    , _ConnFlags(0)
+{
+}
+
+
+MemcacheConn::~MemcacheConn()
+{
+}
+
+
+//void MemcacheConn::ResetReq()
+//{
+//
+//}
+
+
+int MemcacheConn::protocolErr()
+{
+
+    m_iConnState = CS_CLOSING;
+    return -1;
+}
+
+#include "log4cxx/logger.h"
+int MemcacheConn::InitConn(int fd, struct sockaddr *addr)
+{
+    char achBuf[80];
+    m_iSSPort = (unsigned short)ntohs(((struct sockaddr_in  *)addr)->sin_port);
+    snprintf( achBuf, 80, "[%s:%d]", inet_ntoa( ((struct sockaddr_in *)addr)->sin_addr ),
+                m_iSSPort );
+    m_peerAddr = achBuf;
+    _ClientIP = *addr;
+    LS_DBG_M ("Memcache New connection from %s", m_peerAddr.c_str()) ;
+
+#ifdef USE_SASL
+    _pSasl = new LsMcSasl();
+    if (_pSasl == NULL)
+    {
+        LS_DBG_M("SASL initialization failed!\n");
+        return -1;
+    }
+#endif
+    setfd( fd );
+
+    //ResetReq();
+    m_iConnState      = CS_CONNECTED;
+    m_iLastActiveTime = s_curTime;
+
+    m_bufOutgoing.clear();
+    m_bufIncoming.clear();
+
+    return getMultiplexer()->add( this, POLLIN|POLLHUP|POLLERR );
+
+}
+
+
+int MemcacheConn::CloseConnection()
+{
+    if ( m_iConnState == CS_DISCONNECTED )
+        return 0;
+    if (LsMemcache::getInstance().getVerbose() > 1)
+    {
+        LS_INFO("<%d connection closed.\n", getfd());
+    }
+#ifdef USE_SASL
+    if (_pSasl != NULL)
+    {
+        delete _pSasl;
+        _pSasl = NULL;
+    }
+#endif
+    getMultiplexer()->remove( this );
+    ::close( getfd() );
+    m_iConnState = CS_DISCONNECTED;
+    _ConnFlags = 0;
+    m_bufOutgoing.clear();
+    m_bufIncoming.clear();
+    setfd( -1 );
+    return 0;
+}
+
+
+int MemcacheConn::connectTo(const GSockAddr *pServerAddr)
+{
+    int fd;
+    int ret;
+    Multiplexer * pMplex = getMultiplexer();
+    //LOG_DBG( _pClientConn->GetPeerAddr() << "-C" << _ChannelId <<
+    //" Connecting to Service Provider, socket type:" << (int)_Type );
+    char szBuf[64];
+    m_peerAddr = pServerAddr->toString(szBuf, 64);
+    m_iSSPort   = pServerAddr->getPort();
+
+    ret = CoreSocket::connect( *pServerAddr,
+                               pMplex->getFLTag(), &fd, 1 );
+    if (( fd == -1 )&&( errno == ECONNREFUSED ))
+    {
+        ret = CoreSocket::connect( *pServerAddr,
+                                   pMplex->getFLTag(), &fd, 1 );
+    }
+    if ( fd != -1 )
+    {
+         int nodelay = 1;
+        ::setsockopt( fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof( int ) );
+        m_iLastActiveTime = time( NULL );
+        ::fcntl( fd, F_SETFD, FD_CLOEXEC );
+        setfd( fd );
+        pMplex->add( this, POLLIN|POLLOUT|POLLHUP|POLLERR );
+        if ( ret == 0 )
+        {
+            m_iConnState = CS_CONNECTED;
+            onWrite();
+        }
+        else
+            m_iConnState = CS_CONNECTING;
+        return 0;
+    }
+    return -1;
+}
+
+
+int MemcacheConn::onInitConnected()
+{
+    int error;
+    socklen_t len = sizeof( int );
+    int ret = getsockopt( getfd(), SOL_SOCKET, SO_ERROR, &error, &len );
+
+    if (( ret == -1 )||( error != 0 ))
+    {
+        if ( ret != -1 )
+            errno = error;
+        //LOG_ERR( _pClientConn->GetPeerAddr() << "-C" << _ChannelId <<
+        //"Connection to Service Provider, socket type: " << (int)_Type << ", Failed, " <<
+        //strerror( errno ) );
+        m_iConnState = CS_CLOSING;
+        return -1;
+    }
+
+    m_iConnState = CS_CONNECTED;
+    //LOG_DBG( _pClientConn->GetPeerAddr() << "-C" << _ChannelId <<
+    //" Connected to Service Privider, socket type: " << (int)_Type );
+
+    onWrite();
+    return 0;
+}
+
+
+int MemcacheConn::handleEvents(short events)
+{
+    if ( events & POLLIN )
+    {
+        onRead();
+    }
+    if( events & POLLOUT )
+    {
+        onWrite();
+    }
+    if ( events & POLLHUP )
+    {
+        onHup();
+    }
+    else if ( events & POLLERR )
+    {
+        onErr();
+    }
+    if ( m_iConnState == CS_CLOSING )
+    {
+        CloseConnection();
+    }
+    return 0;
+}
+
+
+#include <test/testsendobj.h>
+
+void MemcacheConn::onTimer()
+{
+    //TestSendObj::testSend( this );
+}
+
+
+int MemcacheConn::Read(char *pBuf, int len)
+{
+    int ret;
+    while( 1 )
+    {
+        ret = read( getfd(), pBuf, len );
+        if ( ret == -1 )
+        {
+            if ( errno == EINTR )
+                continue;
+            if ( errno == EAGAIN )
+                ret = 0;
+        }
+        else if ( ret == 0 )
+        {
+            m_iConnState = CS_CLOSING;
+            ret = -1;
+        }
+        else
+        {
+            m_iLastActiveTime = s_curTime;
+        }
+        return ret;
+    }
+}
+
+
+int MemcacheConn::sendACKPacket(int ptype, ReplPacketHeader *pHeader)
+{
+    pHeader->setType( ptype );
+    pHeader->setPackLen( sizeof( *pHeader ) );
+    m_bufOutgoing.append( (const char*)pHeader, sizeof( *pHeader ) );
+    return 0;
+}
+
+
+int MemcacheConn::processIncoming()
+{
+    ReplPacketHeader header;
+    int consumed;
+    LsMemcache::getInstance().setConn(this);
+    if (_Protocol == MC_UNKNOWN)
+    {
+        if ((unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_INTERNAL_REQ)
+        {
+            _ConnFlags |= CS_INTERNAL;
+            m_bufIncoming.pop_front(1);
+            if (m_bufIncoming.size() <= 0)
+                return 0;
+        }
+        _Protocol =
+            (((unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_BINARY_REQ) ?
+            MC_BINARY : MC_ASCII);
+        if (LsMemcache::getInstance().getVerbose() > 1)
+        {
+            LS_INFO("%d: Client using the %s protocol\n", getfd(),
+                    (char *)((_Protocol == MC_BINARY) ? "binary" : "ascii"));
+        }
+    }
+    do
+    {
+        if ( m_bufIncoming.blockSize() != m_bufIncoming.size() )
+        {
+            int size = m_bufIncoming.size();
+            AutoBuf buf( size );
+            m_bufIncoming.moveTo( buf.end(), size );
+            m_bufIncoming.append( buf.begin(), size );
+
+        }
+        if (_ConnFlags & CS_RESPWAIT)   // waiting for remote response
+        {
+            LsMemcache::getInstance().putWaitQ(this);
+            break;
+        }
+        if (_ConnFlags & CS_INTERNAL)  // client command can change
+        {
+            _Protocol =
+                (((unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_BINARY_REQ) ?
+                MC_BINARY : MC_ASCII);
+        }
+        switch (_Protocol)
+        {
+            case MC_ASCII:
+                consumed = LsMemcache::getInstance().processCmd(
+                    m_bufIncoming.begin(), m_bufIncoming.size());
+                break;
+            case MC_BINARY:
+                consumed = LsMemcache::getInstance().processBinCmd(
+                    (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size());
+                break;
+            case MC_INTERNAL:
+                consumed = LsMemcache::getInstance().processInternal(
+                    (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size());
+                break;
+            default:
+                // should not get here
+                LS_INFO("%d: Unknown _Protocol! [%d]\n",
+                        getfd(), (int)_Protocol);
+                consumed = 0;
+                break;
+        }
+        if (consumed > 0)
+        {
+            m_bufIncoming.pop_front(consumed);
+        }
+        else if (consumed == 0)
+        {
+            CloseConnection();
+        }
+        // else need more data
+    }
+    while ((consumed > 0) && (m_bufIncoming.size() > 0));
+
+    if (!m_bufOutgoing.empty())
+    {
+        Flush();
+    }
+    if (_Protocol == MC_INTERNAL)
+        LsMemcache::getInstance().processWaitQ();
+
+    return 0;
+}
+
+
+int MemcacheConn::onRead()
+{
+    int ret;
+    if ( m_iConnState == CS_CONNECTING )
+        return onInitConnected();
+    if ( m_bufIncoming.full() )
+        m_bufIncoming.guarantee( m_bufIncoming.size() + 4096 );
+    ret = Read( m_bufIncoming.end(), m_bufIncoming.contiguous() );
+    if ( ret > 0 )
+    {
+        m_bufIncoming.used( ret );
+        processIncoming();
+    }
+    return 0;
+}
+
+
+int MemcacheConn::onWrite()
+{
+    if ( m_iConnState == CS_CONNECTING )
+        return onInitConnected();
+    if ( m_bufOutgoing.empty() )
+    {
+
+        getMultiplexer()->suspendWrite( this );
+    }
+    else
+        return Flush();
+    return 0;
+}
+
+
+int MemcacheConn::onHup()
+{
+    m_iConnState = CS_CLOSING;
+    return 0;
+}
+
+
+int MemcacheConn::onErr()
+{
+    m_iConnState = CS_CLOSING;
+    return 0;
+}
+
+
+int MemcacheConn::SendEx(const char *msg, int len, int flags)
+{
+    int total = 0;
+    int ret;
+
+    while( len > 0 )
+    {
+        ret = write( getfd(), msg, len );
+        //assert( len == ret );
+        if ( ret == -1 )
+        {
+            if ( errno == EINTR )
+                continue;
+            else if ( errno != EAGAIN )
+            {
+                const char * pErrorStr = strerror( errno );
+                m_iConnState = CS_CLOSING;
+            }
+        }
+        else if ( ret > 0 )
+        {
+
+            total += ret;
+            if ( ret < len )
+                break;
+            len -= ret;
+            msg += ret;
+            continue;
+        }
+        break;
+    }
+    return total;
+
+}
+
+
+int MemcacheConn::SendBuff(const char *msg, int len, int flags)
+{
+    int total = 0;
+    if( m_bufOutgoing.empty() )
+       total = SendEx(msg, len, flags);
+    if(total < len)
+    {
+       int totalbuffed = m_bufOutgoing.append(msg + total, len - total);
+       if(totalbuffed  < 0 )
+           return totalbuffed;
+       else total += totalbuffed;
+       continueWrite();
+    }
+    return total;
+}
+
+
+int MemcacheConn::Flush()
+{
+    if ( getfd() == -1 )
+        return -1;
+    while( !m_bufOutgoing.empty() )
+    {
+        int sent = SendEx( m_bufOutgoing.begin(), m_bufOutgoing.blockSize(), 0 );
+        if ( sent > 0 )
+        {
+//            LOG_DBG( GetPeerAddr() <<
+//                " Sent to client " << sent << " Bytes." );
+            m_bufOutgoing.pop_front( sent );
+        }
+        else
+        {
+            getMultiplexer()->continueWrite( this );
+            return sent;
+        }
+
+    }
+
+    getMultiplexer()->suspendWrite( this );
+    return 0;
+
+}
+
+
+void MemcacheConn::continueWrite()
+{
+    getMultiplexer()->continueWrite( this );
+}

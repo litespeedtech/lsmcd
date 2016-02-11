@@ -1,0 +1,11 @@
+poolalloc.o: poolalloc.cpp /usr/include/stdc-predef.h \
+ ../../src/util/poolalloc.h ../../src/util/pool.h \
+ /usr/lib64/gcc/x86_64-suse-linux/4.8/include/stddef.h
+
+/usr/include/stdc-predef.h:
+
+../../src/util/poolalloc.h:
+
+../../src/util/pool.h:
+
+/usr/lib64/gcc/x86_64-suse-linux/4.8/include/stddef.h:

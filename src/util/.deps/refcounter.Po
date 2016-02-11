@@ -1,0 +1,6 @@
+refcounter.o: refcounter.cpp /usr/include/stdc-predef.h \
+ ../../src/util/refcounter.h
+
+/usr/include/stdc-predef.h:
+
+../../src/util/refcounter.h:

@@ -1,0 +1,144 @@
+#!/bin/sh
+
+PROG="$0"
+EXECUTABLE=lsmcd
+BASE_DIR=`dirname "$PROG"`
+cd "$BASE_DIR"
+BASE_DIR=`pwd`
+
+if [ ! -x "$BASE_DIR"/"$EXECUTABLE" ]; then
+    echo "[ERROR] Cannot find $BASE_DIR/$EXECUTABLE"
+    exit 1
+fi
+
+
+CONF="$BASE_DIR"/conf/node.conf
+DESC="lsmcd"
+
+if [ ! -f $CONF ] ; then
+	echo "[ERROR] Cannot find the config $CONF"
+	exit 1
+fi
+LINE=`grep TmpDir $CONF`
+if [ "x$LINE" != "x" ]; then
+	TMPDIR=`echo  $LINE |cut -d = -f2`	
+else
+	TMPDIR="/tmp/lsmcd"
+fi
+
+PIDFILE=$TMPDIR/lsmcd.pid
+
+
+RUNNING=0
+SYS_NAME=`uname -s`
+if [ "x$SYS_NAME" = "xFreeBSD" ] || [ "x$SYS_NAME" = "xDarwin" ] ; then
+	PS_CMD="ps -ax"
+else
+	PS_CMD="ps -ef"
+fi
+
+if [ -f $PIDFILE ] ; then
+	FPID=`cat $PIDFILE`
+	if [ "x$FPID" != "x" ]; then
+		PL=`$PS_CMD | grep $EXECUTABLE | grep -v grep | grep -w $FPID`
+		if [ "x$PL" != "x" ] ; then
+			RUNNING=1
+			PID=$FPID
+		fi
+	fi
+fi
+
+
+ret=0
+
+start()
+{
+	if [ -f "$PIDFILE" ]; then
+		PID=`cat $PIDFILE`
+	else
+		PID=""
+	fi
+	if [ ! -f "$CONF" ]; then
+		echo "[ERROR] Cannot find the configure file $CONF"
+		return 
+	fi
+    ./$EXECUTABLE -f $CONF
+	ret=$?
+
+	if [ $ret -eq 0 ]; then
+		NEW_PID=`cat $PIDFILE`
+		if [ "x$NEW_PID" = "x$PID" ] || [ "x$NEW_PID" = "x" ]; then
+			sleep 1
+			NEW_PID=`cat $PIDFILE`
+		fi
+		echo "[OK] $DESC: pid=$NEW_PID."
+
+	else
+		echo "[ERROR] Failed to start $DESC!"
+	fi
+}
+
+
+stop()
+{
+	kill -9 $PID
+	ret=$?
+    	if  [ $ret -eq 0 ]; then
+		echo "[OK] $DESC: stopped."
+	else
+		echo "[ERROR] can not kill $DESC"
+	fi
+}
+
+
+restart()
+{
+    if [ $RUNNING -eq 1 ]; then
+        kill -USR1 $PID
+        ret=$?
+        if  [ $ret -ne 0 ]; then
+            echo "[ERROR] can not gracefully shutdown $DESC"
+        fi
+    else
+        start
+    fi
+}
+
+help() {
+	echo $"Usage: $PROG {start|stop|restart|help}"
+	cat <<EOF
+
+start    - start cached daemon 
+stop     - stop  cached daemon
+restart  - restart (stop then start) cached daemon
+help     - this screen
+		
+EOF
+}
+
+case "$1" in 
+	start)
+		if [ $RUNNING -eq 1 ]; then
+			echo "[ERROR] $DESC is running with pid=$PID."
+			ret=1
+		else
+			start
+		fi
+		;;
+	stop)
+		if [ $RUNNING -eq 1 ]; then
+			stop
+		else
+			echo "[ERROR] $DESC is not running."
+			ret=1
+		fi
+		;;
+	restart)
+        	restart
+		;;
+	*)
+		help
+		ret=3
+		;;
+esac
+exit $ret

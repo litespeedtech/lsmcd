@@ -1,0 +1,28 @@
+autostr.o: autostr.cpp /usr/include/stdc-predef.h \
+ ../../src/util/autostr.h /usr/include/string.h /usr/include/features.h \
+ /usr/include/sys/cdefs.h /usr/include/bits/wordsize.h \
+ /usr/include/gnu/stubs.h /usr/include/gnu/stubs-64.h \
+ /usr/lib64/gcc/x86_64-suse-linux/4.8/include/stddef.h \
+ /usr/include/xlocale.h ../../src/util/pool.h
+
+/usr/include/stdc-predef.h:
+
+../../src/util/autostr.h:
+
+/usr/include/string.h:
+
+/usr/include/features.h:
+
+/usr/include/sys/cdefs.h:
+
+/usr/include/bits/wordsize.h:
+
+/usr/include/gnu/stubs.h:
+
+/usr/include/gnu/stubs-64.h:
+
+/usr/lib64/gcc/x86_64-suse-linux/4.8/include/stddef.h:
+
+/usr/include/xlocale.h:
+
+../../src/util/pool.h:

@@ -1,0 +1,23 @@
+    SET(repl_STAT_SRCS
+    repldef.cpp
+    lruhashreplbridge.cpp
+    replprgrsstrkr.cpp
+    nodeinfo.cpp
+    repllistener.cpp
+    replconn.cpp
+    sockconn.cpp
+    replcontainer.cpp
+    replicable.cpp
+    replpacker.cpp
+    replpacket.cpp
+    replreceiver.cpp
+    replregistry.cpp
+    replsender.cpp
+    gzipstream.cpp
+    replgroup.cpp
+    replicablelruhash.cpp
+    replconf.cpp
+    bulkreplctx.cpp
+    replsyncauditor.cpp
+    )
+    add_library(repl STATIC ${repl_STAT_SRCS})

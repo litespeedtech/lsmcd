@@ -1,5 +1,0 @@
-crc16.o: crc16.cpp /usr/include/stdc-predef.h crc16.h
-
-/usr/include/stdc-predef.h:
-
-crc16.h:

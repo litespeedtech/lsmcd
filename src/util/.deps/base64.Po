@@ -1,5 +1,0 @@
-base64.o: base64.cpp /usr/include/stdc-predef.h ../../src/util/base64.h
-
-/usr/include/stdc-predef.h:
-
-../../src/util/base64.h:

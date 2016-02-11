@@ -1,5 +1,0 @@
-flowcontrol.o: flowcontrol.cpp /usr/include/stdc-predef.h flowcontrol.h
-
-/usr/include/stdc-predef.h:
-
-flowcontrol.h:

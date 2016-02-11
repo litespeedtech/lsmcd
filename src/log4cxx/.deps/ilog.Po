@@ -1,8 +1,0 @@
-ilog.o: ilog.cpp /usr/include/stdc-predef.h ilog.h \
- ../../src/log4cxx/nsdefs.h
-
-/usr/include/stdc-predef.h:
-
-ilog.h:
-
-../../src/log4cxx/nsdefs.h:

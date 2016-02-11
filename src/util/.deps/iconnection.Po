@@ -1,6 +1,0 @@
-iconnection.o: iconnection.cpp /usr/include/stdc-predef.h \
- ../../src/util/iconnection.h
-
-/usr/include/stdc-predef.h:
-
-../../src/util/iconnection.h:

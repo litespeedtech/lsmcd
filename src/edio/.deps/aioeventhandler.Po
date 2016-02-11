@@ -1,6 +1,0 @@
-aioeventhandler.o: aioeventhandler.cpp /usr/include/stdc-predef.h \
- ../../src/edio/aioeventhandler.h
-
-/usr/include/stdc-predef.h:
-
-../../src/edio/aioeventhandler.h:

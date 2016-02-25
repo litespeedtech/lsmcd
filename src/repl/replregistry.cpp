@@ -11,7 +11,9 @@ ReplRegistry::ReplRegistry()
 {}
 
 ReplRegistry::~ReplRegistry()
-{}
+{
+    m_pConMap.release_objects();
+}
 
 ReplRegistry& ReplRegistry::operator= ( const ReplRegistry& other )
 {

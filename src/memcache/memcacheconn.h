@@ -118,27 +118,24 @@ private:
     Multiplexer * getMultiplexer() const    {   return m_pMultiplexer;   }
     
 private:
-
     int             m_iConnState;
     long            m_iLastActiveTime;
     
     AutoStr         m_peerAddr;
     int             m_iSSPort;
     GSockAddr       _ClientIP;
-
-    //char            _InitRandom[4];
         
     int             m_iMaxBufferSize;
     LoopBuf         m_bufOutgoing;
     LoopBuf         m_bufIncoming;
+    uint8_t         _Protocol;      // binary or ascii
+    uint8_t         _ConnFlags;
     
-    static int      s_ConnTimeout;
-
     Multiplexer *   m_pMultiplexer;
     LsMcSasl *     _pSasl;
     MemcacheConn *  _pLink;
-    uint8_t         _Protocol;      // binary or ascii
-    uint8_t         _ConnFlags;
+    static int      s_ConnTimeout;
+    
 };
 
 #endif

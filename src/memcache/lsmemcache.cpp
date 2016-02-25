@@ -127,14 +127,14 @@ uint64_t htonll(uint64_t val)
 }
 
 
-int LsMemcache::notImplemented(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::notImplemented(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     pThis->respond("NOT_IMPLEMENTED" "\r\n");
     return 0;
 }
 
 
+//NOTICE: Any additions/changes need to be updated in the getCmdFunction definition.
 LsMcCmdFunc LsMemcache::s_LsMcCmdFuncs[] =
 {
     { "test1",      sizeof("test1")-1,      0,          doCmdTest1 },
@@ -213,7 +213,7 @@ void LsMemcache::respond(const char *str)
         len = strlen(str);
         if (m_pConn->GetConnFlags() & CS_INTERNAL)
         {
-            if (len > sizeof(lenNbuf.buf))
+            if ((unsigned int)len > sizeof(lenNbuf.buf))
             {
                 str = "SERVER_ERROR Response too large\r\n";
                 len = strlen(str);
@@ -239,7 +239,7 @@ void LsMemcache::sendResult(const char *fmt, ...)
         return;
     va_start(va, fmt);
     len = vsnprintf(buf, sizeof(buf), fmt, va);
-    if (len >= sizeof(buf) - 1)
+    if (len >= (int)(sizeof(buf) - 1))
     {
         LS_ERROR("SERVER_ERROR Truncated result to client!\n");
     }
@@ -266,7 +266,7 @@ void LsMemcache::binRespond(uint8_t *buf, int cnt)
     {
         if (m_pConn->GetConnFlags() & CS_INTERNAL)
         {
-            if (cnt > sizeof(lenNbuf.buf))
+            if (cnt > (int)sizeof(lenNbuf.buf))
             {
                 LS_ERROR("SERVER_ERROR Response too large!\n");
                 return;
@@ -307,7 +307,7 @@ int LsMemcache::processInternal(
 {
     MemcacheConn *pLink;
     lenNbuf *ptr = (lenNbuf *)pBuf;
-    if (iLen < sizeof(ptr->len))
+    if (iLen < (int)sizeof(ptr->len))
         return -1;
     int len = ntohs(ptr->len);
     if (iLen < len)
@@ -338,10 +338,13 @@ LsMemcache::LsMemcache()
     , m_pWaitTail(NULL)
     , m_pStrt(NULL)
     , m_iHdrOff(0)
+    , m_hkey(0)
     , m_rescas(0)
     , m_needed(0)
     , m_retcode(0)
     , m_noreply(false)
+    , m_keyPool()
+    , m_keyList(10)
 {
     m_iterOff.m_iOffset = 0;
     ls_str_blank(&m_parms.key);
@@ -352,18 +355,6 @@ LsMemcache::LsMemcache()
     m_mcparms.m_iValMaxSz = VAL_MAXSIZE;
     m_mcparms.m_iMemMaxSz = MEM_MAXSIZE;
 }
-
-
-LsMemcache& LsMemcache::getInstance()
-{
-    static LsMemcache *s_pShmMemcache = NULL;
-
-    if (s_pShmMemcache == NULL)
-        s_pShmMemcache = new LsMemcache();
-
-    return *s_pShmMemcache;
-}
-
 
 static const char *g_pShmName = "SHMMCTEST";
 static const char *g_pHashName = "SHMMCHASH";
@@ -521,7 +512,6 @@ int LsMemcache::initMcShm(const char *pDirName, const char *pShmName,
 
 int LsMemcache::multiInitEvFunc(LsMcHashSlice *pSlice, void *pArg)
 {
-    LsShmHash *pHash = pSlice->m_pHash;
     LsCache2ReplEvent ***pppEvent = (LsCache2ReplEvent ***)pArg;
     pSlice->m_pNotifier = **pppEvent;
     ++(*pppEvent);
@@ -670,6 +660,18 @@ void LsMemcache::processWaitQ()
 }
 
 
+void LsMemcache::onTimer()
+{
+    static time_t lastTime = time(NULL);
+    time_t curTime = time(NULL);
+    if (lastTime + 30 < curTime)
+    {
+        m_keyPool.shrinkTo(10);
+        lastTime = curTime;
+    }
+}
+
+
 int LsMemcache::processCmd(char *pStr, int iLen)
 {
     int datasz;
@@ -678,6 +680,7 @@ int LsMemcache::processCmd(char *pStr, int iLen)
     char *pCmd;
     int len;
     LsMcCmdFunc *p;
+    ls_strpair_t input;
 
     if ((endp = (char *)memchr(pStr, '\n', iLen)) == NULL)
         return -1;  // need more data
@@ -692,7 +695,8 @@ int LsMemcache::processCmd(char *pStr, int iLen)
     }
 
     m_pStrt = pStr;     // save for possible fwd
-    pStr = advToken(pStr, &pCmd, &len);
+    pStr = advToken(pStr, endp - 1, &pCmd, &len);
+    input.key.ptr = pStr;
     if (len <= 0)
         return consumed;
     if ((p = getCmdFunction(pCmd, len)) == NULL)
@@ -700,8 +704,12 @@ int LsMemcache::processCmd(char *pStr, int iLen)
         respond(errorStr);
         return consumed;
     }
+    input.key.len = endp - input.key.ptr - 1;
+    input.val.ptr = endp + 1;
+    input.val.len = iLen - consumed;
     if ((datasz =
-        (*p->func)(this, pStr, endp + 1, iLen - consumed, p->arg)) >= 0)
+        (*p->func)(this, &input, p->arg)) >= 0)
+//         (*p->func)(this, pStr, endp + 1, iLen - consumed, p->arg)) >= 0)
     {
         return consumed + datasz;
     }
@@ -714,15 +722,126 @@ int LsMemcache::processCmd(char *pStr, int iLen)
 }
 
 
-LsMcCmdFunc *LsMemcache::getCmdFunction(char *pCmd, int len)
+LsMcCmdFunc *LsMemcache::getCmdFunction(const char *pCmd, int len)
 {
-    LsMcCmdFunc *p = &s_LsMcCmdFuncs[0];
-    while (p < &s_LsMcCmdFuncs[sizeof(s_LsMcCmdFuncs)/sizeof(s_LsMcCmdFuncs[0])])
+    LsMcCmdFunc *p;
+    int iPossible, iOffset = 1;
+    if ((pCmd == NULL) || (len < 3))
+        return NULL;
+    switch (*pCmd)
     {
-        if ((len == p->len) && (memcmp(pCmd, p->cmd, len) == 0))
-            return p;
-        ++p;
-    }
+    case 'b': // bget 
+        iPossible = 4;
+        break;
+    case 'f': // flush_all 
+        iPossible = 17;
+        break;
+    case 'i': // incr 
+        iPossible = 12;
+        break;
+    case 'q': // quit 
+        iPossible = 19;
+        break;
+    case 'r': // replace 
+        iPossible = 8;
+        break;
+    case 'a': // add append 
+        if ((*(pCmd + 1) == 'd'))
+            iPossible = 6;
+        else if ((*(pCmd + 1) == 'p'))
+            iPossible = 9;
+        else
+            return NULL;
+        iOffset = 2;
+        break;
+    case 'c': // cas clear
+        if (*(pCmd + 1) == 'a')
+            iPossible = 11;
+        else if (*(pCmd + 1) == 'l')
+            iPossible = 22;
+        else
+            return NULL;
+        iOffset = 2;
+        break;
+    case 'd': // decr delete 
+        if (*(pCmd + 1) != 'e')
+            return NULL;
+        else if (*(pCmd + 2) == 'c')
+            iPossible = 13;
+        else if (*(pCmd + 2) == 'l')
+            iPossible = 14;
+        else
+            return NULL;
+        iOffset = 3;
+        break;
+    case 'p': // printtids prepend 
+        if (*(pCmd + 1) != 'r')
+            return NULL;
+        else if (*(pCmd + 2) == 'i')
+            iPossible = 2;
+        else if (*(pCmd + 2) == 'e')
+            iPossible = 10;
+        else
+            return NULL;
+        iOffset = 3;
+        break;
+    case 's': // set stats shutdown 
+        switch (*(pCmd + 1))
+        {
+        case 'e':
+            iPossible = 7;
+            break;
+        case 't':
+            iPossible = 16;
+            break;
+        case 'h':
+            iPossible = 20;
+            break;
+        default:
+            return NULL;
+        };
+        iOffset = 2;
+        break;
+    case 'v': // version verbosity 
+        if ((len < 7) || (memcmp("er", pCmd + 1, 2) != 0))
+            return NULL;
+        else if (pCmd[3] == 's')
+            iPossible = 18;
+        else if (pCmd[3] == 'b')
+            iPossible = 21;
+        else
+            return NULL;
+        iOffset = 4;
+        break;
+    case 't':  // test1 test2 touch 
+        if ((*(pCmd + 1)) == 'o')
+            iPossible = 15;
+        else if ((len != 5) || (memcmp("est", pCmd + 1, 3) != 0))
+            return NULL;
+        else if (pCmd[4] == '1')
+            return &s_LsMcCmdFuncs[0];
+        else if (pCmd[4] == '2')
+            return &s_LsMcCmdFuncs[1];
+        else
+            return NULL;
+        iOffset = 2;
+        break;
+    case 'g': // get gets 
+        if (memcmp("et", pCmd + 1, 2) == 0)
+        {
+            if (len == 3)
+                return &s_LsMcCmdFuncs[3];
+            else if ((len == 4) && (pCmd[3] == 's'))
+                return &s_LsMcCmdFuncs[5];
+        }
+        // fall through
+    default:
+        return NULL;
+    };
+    p = &s_LsMcCmdFuncs[iPossible];
+    if ((len == p->len)
+        && (memcmp(pCmd + iOffset, p->cmd + iOffset, len - iOffset) == 0))
+        return p;
     return NULL;
 }
 
@@ -822,7 +941,7 @@ int LsMemcache::tidGetNxtItems(LsShmHash *pHash, uint64_t *pTidLast,
         pHash->enableLock();
     if ((cnt > 0) || (ret == 0))
     {
-        LS_DBG_M("tidGetNxtItems: cnt=%d, [%lld-%lld].\n", cnt, tidStrt,
+        LS_DBG_M("tidGetNxtItems: cnt=%d, [%llu-%llu].\n", cnt, tidStrt,
                  tidEnd);
     }
     else
@@ -853,7 +972,7 @@ int LsMemcache::getNxtTidItem(LsShmHash *pHash, uint64_t *pTidLast,
             if (isExpired((LsMcDataItem *)pElem->getVal()))
             {
                 *ppBlk = NULL;  // block may be deleted, or remapped on delete tid
-                LS_DBG_M("getNxtTidItem: expired (%lld)[%.*s]\n",
+                LS_DBG_M("getNxtTidItem: expired (%llu)[%.*s]\n",
                          tid, pElem->getKeyLen(), (char *)pElem->getKey());
                 pHash->eraseIterator(iIterOff);
                 continue;
@@ -867,7 +986,7 @@ int LsMemcache::getNxtTidItem(LsShmHash *pHash, uint64_t *pTidLast,
         {
             if (*pVal == TIDDEL_FLUSHALL)
             {
-                LS_DBG_M("getNxtTidItem: FLUSHALL tid=%lld.\n", tid);
+                LS_DBG_M("getNxtTidItem: FLUSHALL tid=%llu.\n", tid);
             }
             totSz = tidDelPktSize();
             if (totSz > iBufSz)
@@ -892,14 +1011,14 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
     LsShmTidMgr *pTidMgr = pHash->getTidMgr();
     pHash->disableLock();
     pHash->lockChkRehash();
-    while ((iBufSz > sizeof(LsShmPktHdr))
-        && (iBufSz >= ((LsShmPktHdr *)pBuf)->m_iSize))
+    while (((unsigned int)iBufSz > (int)sizeof(LsShmPktHdr))
+        && ((unsigned int)iBufSz >= ((LsShmPktHdr *)pBuf)->m_iSize))
     {
         pPkt = (LsMcTidPkt *)pBuf;
         if (pPkt->m_hdr.m_tid <= pTidMgr->getLastTid())
         {
             LS_ERROR(
-                "Unable to insert Tid(%lld) out of sequence! last=(%lld).\n",
+                "Unable to insert Tid(%llu) out of sequence! last=(%llu).\n",
                 pPkt->m_hdr.m_tid, pTidMgr->getLastTid());
             break;
         }
@@ -921,7 +1040,7 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
     pHash->unlock();
     if (isAutoLock)
         pHash->enableLock();
-    LS_DBG_M("tidSetItems: cnt=%d, [%lld-%lld].\n", cnt, tidStrt, tidEnd);
+    LS_DBG_M("tidSetItems: cnt=%d, [%llu-%llu].\n", cnt, tidStrt, tidEnd);
     return (pBuf - pStrt);
 }
 
@@ -943,7 +1062,7 @@ int LsMemcache::delTidItem(LsShmHash *pHash, LsMcTidPkt *pPkt,
     LsShmTidTblBlk *pBlk = NULL;
     if (pPkt->m_del.m_tid == TIDDEL_FLUSHALL)
     {
-        LS_DBG_M("setTidItem: FLUSHALL lastTid=%lld.\n",
+        LS_DBG_M("setTidItem: FLUSHALL lastTid=%llu.\n",
                  pTidMgr->getLastTid());
         pHash->clear();
     }
@@ -953,8 +1072,8 @@ int LsMemcache::delTidItem(LsShmHash *pHash, LsMcTidPkt *pPkt,
         {
             LsShmHElem *pElem = pHash->offset2iterator(off);
             LsMcTidPkt *pNxtPkt = (LsMcTidPkt *)pBuf;
-            if ((iBufSz <= sizeof(LsShmPktHdr))
-                || (iBufSz < pNxtPkt->m_hdr.m_iSize)
+            if (((unsigned int)iBufSz <= sizeof(LsShmPktHdr))
+                || ((unsigned int)iBufSz < pNxtPkt->m_hdr.m_iSize)
                 || (pNxtPkt->m_hdr.m_type != LSSHM_PKTADD)
                 || (memcmp(pNxtPkt->m_add.m_data, pElem->getKey(),
                     pElem->getKeyLen()) != 0))
@@ -1009,15 +1128,14 @@ int LsMemcache::tidDelPktSize()
 }
 
 
-int LsMemcache::doCmdTest1(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdTest1(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
-    char *tokPtr;
     int tokLen;
     char *pIndx;
     uint64_t tid = 0;
     uint32_t indx = 0;
-    pStr = pThis->advToken(pStr, &pIndx, &tokLen);
+    pThis->advToken(pInput->key.ptr, pInput->key.ptr + pInput->key.len,
+                    &pIndx, &tokLen);
     if (tokLen > 0)
     {
         pThis->myStrtoul(pIndx, &indx);
@@ -1026,8 +1144,6 @@ int LsMemcache::doCmdTest1(LsMemcache *pThis,
 
     int cnt = 0;
     int size;
-    LsShmOffset_t keyOff;
-    LsShmOffset_t valOff;
     uint8_t *p;
     LsMcTidPkt *pPkt;
     union
@@ -1048,18 +1164,18 @@ int LsMemcache::doCmdTest1(LsMemcache *pThis,
             pPkt = (LsMcTidPkt *)p;
             if (pPkt->m_hdr.m_type == LSSHM_PKTADD)
             {
-                fprintf(stdout, "(%lld)ADD[%.*s]/[%.*s]\n",
+                fprintf(stdout, "(%lu)ADD[%.*s]/[%.*s]\n",
                     pPkt->m_hdr.m_tid,
                     pPkt->m_hdr.m_iKeySz, (char *)pPkt->m_add.m_data,
-                    pPkt->m_add.m_iValSz
-                      - sizeof(LsMcDataItem) - sizeof(uint64_t),
+                    (int)(pPkt->m_add.m_iValSz
+                      - sizeof(LsMcDataItem) - sizeof(uint64_t)),
                     (char *)pPkt->m_add.m_data + pPkt->m_hdr.m_iKeySz
                       + sizeof(LsMcDataItem) + sizeof(uint64_t)
                 );
             }
             else // if (pPkt->m_hdr.type == LSSHM_PKTDEL)
             {
-                fprintf(stdout, "(%lld)DEL[%lld]\n",
+                fprintf(stdout, "(%lu)DEL[%lu]\n",
                     pPkt->m_hdr.m_tid,
                     pPkt->m_del.m_tid
                 );
@@ -1081,21 +1197,22 @@ int LsMemcache::doCmdTest1(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdTest2(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdTest2(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
     int tokLen;
     char *pVal;
     uint32_t which;
+    char *pStr = pInput->key.ptr;
+    char *pStrEnd = pStr + pInput->key.len;
 
-    pStr = pThis->advToken(pStr, &pVal, &tokLen);
+    pStr = pThis->advToken(pStr, pStrEnd, &pVal, &tokLen);
     if ((tokLen <= 0) || !pThis->myStrtoul(pVal, &which))
     {
         pThis->respond("usage: test2 which [addr]" "\r\n");
         return 0;
     }
-    pStr = pThis->advToken(pStr, &tokPtr, &tokLen);
+    pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);
     if (tokLen <= 0)
         tokPtr = NULL;
     if (pThis->setSliceDst((int)which, tokPtr) != LS_OK)
@@ -1121,16 +1238,16 @@ int LsMemcache::doCmdTest2(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdPrintTids(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdPrintTids(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     const int maxOutBuf = 1024;
-    char *tokPtr, outBuf[maxOutBuf];
+    char outBuf[maxOutBuf];
     int tokLen, curOutLen = 0;
     char *pIndx;
     uint64_t tid = 0;
     uint32_t indx = 0;
-    pStr = pThis->advToken(pStr, &pIndx, &tokLen);
+    pThis->advToken(pInput->key.ptr, pInput->key.ptr + pInput->key.len,
+                    &pIndx, &tokLen);
     if (tokLen > 0)
     {
         pThis->myStrtoul(pIndx, &indx);
@@ -1138,8 +1255,6 @@ int LsMemcache::doCmdPrintTids(LsMemcache *pThis,
 
     int cnt = 0;
     int size;
-    LsShmOffset_t keyOff;
-    LsShmOffset_t valOff;
     uint8_t *p;
     LsMcTidPkt *pPkt;
     union
@@ -1160,11 +1275,11 @@ int LsMemcache::doCmdPrintTids(LsMemcache *pThis,
             {
                 curOutLen +=
                     snprintf(outBuf + curOutLen, maxOutBuf - curOutLen,
-                             "(%lld)ADD[%.*s]/[%.*s]\n",
+                             "(%lu)ADD[%.*s]/[%.*s]\n",
                              pPkt->m_hdr.m_tid,
                              pPkt->m_hdr.m_iKeySz, (char *)pPkt->m_add.m_data,
-                             pPkt->m_add.m_iValSz
-                             - sizeof(LsMcDataItem) - sizeof(uint64_t),
+                             (int)(pPkt->m_add.m_iValSz
+                             - sizeof(LsMcDataItem) - sizeof(uint64_t)),
                              (char *)pPkt->m_add.m_data + pPkt->m_hdr.m_iKeySz
                              + sizeof(LsMcDataItem) + sizeof(uint64_t)
                     );
@@ -1173,7 +1288,7 @@ int LsMemcache::doCmdPrintTids(LsMemcache *pThis,
             {
                 curOutLen +=
                     snprintf(outBuf + curOutLen, maxOutBuf - curOutLen,
-                             "(%lld)DEL[%lld]\n",
+                             "(%lu)DEL[%lu]\n",
                                 pPkt->m_hdr.m_tid,
                                 pPkt->m_del.m_tid
                     );
@@ -1208,47 +1323,65 @@ int LsMemcache::doCmdPrintTids(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdGet(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+void LsMemcache::clearKeyList()
+{
+    if (m_keyList.size() <= 0)
+        return;
+
+    m_keyPool.recycle((void **)m_keyList.begin(), m_keyList.size());
+    m_keyList.clear();
+}
+
+
+int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     LsShmHash::iteroffset iterOff;
     LsShmHElem *iter;
     LsMcDataItem *pItem;
     int valLen;
     uint8_t *valPtr;
-    int cnt = 0;
     pThis->m_noreply = false;
+    char *pStr = pInput->key.ptr;
+    char *pStrEnd = pStr + pInput->key.len;
     // memcached compatibility: check: if any key is bad, return no results.
-    char *tokPtr;
-    int tokLen;
-    char *ptr = pStr;
+    ls_str_t *pTok, **tokIter;
+    // NOTICE: The list should never have any entries prior to this function.
+    // If that is the case, there is an error somewhere.
+    assert(pThis->m_keyList.size() == 0);
     while (1)
     {
-        ptr = pThis->advToken(ptr, &tokPtr, &tokLen);
-        if ((tokLen <= 0) || (tokLen > KEY_MAXLEN))
+        pTok = pThis->m_keyPool.get();
+        pStr = pThis->advToken(pStr, pStrEnd, &pTok->ptr, &pTok->len);
+        if ((pTok->len <= 0) || (pTok->len > KEY_MAXLEN))
+        {
+            pThis->m_keyPool.recycle(pTok);
             break;
-        ++cnt;
+        }
+        pThis->m_keyList.push_back(pTok);
     }
-    if (tokLen > KEY_MAXLEN)
+    if (pTok->len > KEY_MAXLEN)
     {
         pThis->respond(badCmdLineFmt);
+        pThis->clearKeyList();
         return 0;
     }
-    if (cnt == 0) // no keys
+    if (pThis->m_keyList.size() == 0) // no keys
     {
         pThis->respond(errorStr);
         return 0;
     }
-    while (1)
+    tokIter = pThis->m_keyList.begin();
+    for (; tokIter < pThis->m_keyList.end(); ++tokIter)
     {
-        pStr = pThis->advToken(pStr, &pThis->m_parms.key.ptr,
-                               &pThis->m_parms.key.len);
-        if (pThis->m_parms.key.len <= 0)
-            break;
+        pTok = *tokIter;
+        pThis->m_parms.key.ptr = pTok->ptr;
+        pThis->m_parms.key.len = pTok->len;
 
-        pThis->setSlice(pThis->m_parms.key.ptr, pThis->m_parms.key.len);
+        pThis->setSlice(pTok->ptr, pTok->len);
         pThis->lock();
-        if ((iterOff = pThis->m_pHash->findIterator(&pThis->m_parms)).m_iOffset != 0)
+        iterOff = pThis->m_pHash->findIteratorWithKey(pThis->m_hkey,
+                                                        &pThis->m_parms);
+        if (iterOff.m_iOffset != 0)
         {
             iter = pThis->m_pHash->offset2iterator(iterOff);
             pItem = mcIter2data(iter, pThis->m_mcparms.m_usecas, &valPtr, &valLen);
@@ -1262,10 +1395,10 @@ int LsMemcache::doCmdGet(LsMemcache *pThis,
             {
                 pThis->statGetHit();
                 pThis->sendResult("VALUE %.*s %d %d %llu\r\n",
-                  iter->getKeyLen(), iter->getKey(),
-                  pItem->x_flags,
-                  valLen,
-                  (pThis->m_mcparms.m_usecas ? pItem->x_data->withcas.cas : (uint64_t)0)
+                    iter->getKeyLen(), iter->getKey(),
+                    pItem->x_flags,
+                    valLen,
+                    (pThis->m_mcparms.m_usecas ? pItem->x_data->withcas.cas : (uint64_t)0)
                 );
                 pThis->binRespond(valPtr, valLen);  // data could be binary
                 pThis->binRespond((uint8_t *)"\r\n", 2);
@@ -1274,9 +1407,9 @@ int LsMemcache::doCmdGet(LsMemcache *pThis,
             {
                 pThis->statGetHit();
                 pThis->sendResult("VALUE %.*s %d %d\r\n",
-                  iter->getKeyLen(), iter->getKey(),
-                  pItem->x_flags,
-                  valLen
+                    iter->getKeyLen(), iter->getKey(),
+                    pItem->x_flags,
+                    valLen
                 );
                 pThis->binRespond(valPtr, valLen);  // data could be binary
                 pThis->binRespond((uint8_t *)"\r\n", 2);
@@ -1286,6 +1419,7 @@ int LsMemcache::doCmdGet(LsMemcache *pThis,
             pThis->statGetMiss();
         pThis->unlock();
     }
+    pThis->clearKeyList();
     if (pThis->getVerbose() > 1)
     {
         LS_INFO(">%d END\n", pThis->m_pConn->getfd());
@@ -1295,16 +1429,17 @@ int LsMemcache::doCmdGet(LsMemcache *pThis,
 }
 
 
-LsShmHash::iteroffset LsMemcache::doHashInsert(ls_strpair_t *pParms, LsMcUpdOpt *pOpt)
+LsShmHash::iteroffset LsMemcache::doHashInsert(ls_strpair_t *pParms,
+                                               LsMcUpdOpt *pOpt)
 {
-    LsShmHash::iteroffset iterOff = m_pHash->findIterator(pParms);
+    LsShmHash::iteroffset iterOff = m_pHash->findIteratorWithKey(m_hkey, pParms);
     if (iterOff.m_iOffset != 0)
     {
         if (LsMemcache::isExpired(
             (LsMcDataItem *)m_pHash->offset2iteratorData(iterOff)))
         {
             pOpt->m_iRetcode = UPDRET_DONE;
-            iterOff = m_pHash->setIterator(pParms);
+            iterOff = m_pHash->doSet(iterOff, m_hkey, pParms);
         }
         else
         {
@@ -1313,13 +1448,14 @@ LsShmHash::iteroffset LsMemcache::doHashInsert(ls_strpair_t *pParms, LsMcUpdOpt 
         }
         return iterOff;
     }
-    return m_pHash->insertIterator(pParms);
+    return m_pHash->doInsert(iterOff, m_hkey, pParms);
 }
 
 
-LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms, LsMcUpdOpt *pOpt)
+LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
+                                               LsMcUpdOpt *pOpt)
 {
-    LsShmHash::iteroffset iterOff = m_pHash->findIterator(pParms);
+    LsShmHash::iteroffset iterOff = m_pHash->findIteratorWithKey(m_hkey, pParms);
     if (iterOff.m_iOffset == 0)
     {
         pOpt->m_iRetcode = UPDRET_NOTFOUND;
@@ -1387,12 +1523,11 @@ LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms, LsMcUpdOpt 
     }
 
 
-    return m_pHash->updateIterator(pParms);
+    return m_pHash->doUpdate(iterOff, m_hkey, pParms);
 }
 
 
-int LsMemcache::doCmdUpdate(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
     int tokLen;
@@ -1408,8 +1543,12 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis,
     LsMcUpdOpt updOpt;
     McBinStat ret;
     LsMcHashSlice *pSlice;
+    char *pStr = pInput->key.ptr;
+    char *pStrEnd = pStr + pInput->key.len;
+    char *pNxt = pInput->val.ptr;
+    int iLen = pInput->val.len;
 
-    pStr = pThis->advToken(pStr, &pThis->m_parms.key.ptr,
+    pStr = pThis->advToken(pStr, pStrEnd, &pThis->m_parms.key.ptr,
                            &pThis->m_parms.key.len);
     if ((pSlice = pThis->canProcessNow(
         pThis->m_parms.key.ptr, pThis->m_parms.key.len)) == NULL)
@@ -1417,9 +1556,9 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis,
         return -1;  // cannot process now
     }
 
-    pStr = pThis->advToken(pStr, &pFlags, &tokLen);
-    pStr = pThis->advToken(pStr, &pExptime, &tokLen);
-    pStr = pThis->advToken(pStr, &pLength, &tokLen);
+    pStr = pThis->advToken(pStr, pStrEnd, &pFlags, &tokLen);
+    pStr = pThis->advToken(pStr, pStrEnd, &pExptime, &tokLen);
+    pStr = pThis->advToken(pStr, pStrEnd, &pLength, &tokLen);
     badcmdline = ((tokLen <= 0)
         || (!pThis->myStrtoul(pFlags, &flags))
         || (!pThis->myStrtoul(pExptime, &exptime))
@@ -1427,7 +1566,7 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis,
         || (pThis->m_parms.key.len > KEY_MAXLEN));
     if (arg & LSMC_WITHCAS)
     {
-        pStr = pThis->advToken(pStr, &pCas, &tokLen);
+        pStr = pThis->advToken(pStr, pStrEnd, &pCas, &tokLen);
         if ((tokLen <= 0) || (!pThis->myStrtoull(pCas, &cas)))
             badcmdline = true;
         else
@@ -1437,9 +1576,9 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis,
     {
         updOpt.m_cas = 0;
     }
-    pStr = pThis->advToken(pStr, &tokPtr, &tokLen);     // optional noreply
+    pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);     // optional noreply
     pThis->m_noreply = chkNoreply(tokPtr, tokLen);
-    if (badcmdline || (length < 0) || ((length + 2) < 0))   // watch wrap!
+    if (badcmdline || (length < 0) || (length > (INT_MAX - 2)))   // watch wrap!
     {
         pThis->respond(badCmdLineFmt);
         return 0;
@@ -1506,7 +1645,8 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis,
             pThis->m_retcode = UPDRET_DONE;
             break;
         case MC_BINCMD_SET:
-            pThis->m_iterOff = pThis->m_pHash->setIterator(&pThis->m_parms);
+            pThis->m_iterOff = pThis->m_pHash->setIteratorWithKey(pThis->m_hkey,
+                                                           &pThis->m_parms);
             pThis->m_retcode = UPDRET_DONE;
             break;
         case MC_BINCMD_REPLACE:
@@ -1552,7 +1692,8 @@ McBinStat LsMemcache::chkMemSz(int arg)
         LsShmHash::iteroffset iterOff;
         if (arg == MC_BINCMD_SET)
         {
-            if ((iterOff = m_pHash->findIterator(&m_parms)).m_iOffset != 0)
+            if ((iterOff = m_pHash->findIteratorWithKey(m_hkey,
+                                                    &m_parms)).m_iOffset != 0)
                 m_pHash->eraseIterator(iterOff);
         }
         return MC_BINSTAT_E2BIG;
@@ -1591,8 +1732,8 @@ McBinStat LsMemcache::chkMemSz(int arg)
 }
 
 
-int LsMemcache::doCmdArithmetic(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdArithmetic(LsMemcache *pThis, ls_strpair_t *pInput,
+                                int arg)
 {
     char *tokPtr;
     int tokLen;
@@ -1601,8 +1742,11 @@ int LsMemcache::doCmdArithmetic(LsMemcache *pThis,
     LsMcUpdOpt updOpt;
     char numBuf[ULL_MAXLEN+2+1];
     LsMcHashSlice *pSlice;
+    char *pStr = pInput->key.ptr;
+    char *pStrEnd = pStr + pInput->key.len;
+    char *pNxt = pInput->val.ptr;
 
-    pStr = pThis->advToken(pStr, &pThis->m_parms.key.ptr,
+    pStr = pThis->advToken(pStr, pStrEnd, &pThis->m_parms.key.ptr,
                            &pThis->m_parms.key.len);
     if ((pSlice = pThis->canProcessNow(
         pThis->m_parms.key.ptr, pThis->m_parms.key.len)) == NULL)
@@ -1610,7 +1754,7 @@ int LsMemcache::doCmdArithmetic(LsMemcache *pThis,
         return -1;  // cannot process now
     }
 
-    pStr = pThis->advToken(pStr, &pDelta, &tokLen);
+    pStr = pThis->advToken(pStr, pStrEnd, &pDelta, &tokLen);
     if ((tokLen <= 0) || (pThis->m_parms.key.len > KEY_MAXLEN))
     {
         pThis->respond(badCmdLineFmt);
@@ -1625,7 +1769,7 @@ int LsMemcache::doCmdArithmetic(LsMemcache *pThis,
     if (pThis->fwdToRemote(pSlice, pNxt))
         return 0;
 
-    pStr = pThis->advToken(pStr, &tokPtr, &tokLen);     // optional noreply
+    pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);     // optional noreply
     pThis->m_noreply = chkNoreply(tokPtr, tokLen);
     pThis->m_parms.val.ptr = NULL;
     pThis->m_parms.val.len = pThis->parmAdjLen(0);
@@ -1671,15 +1815,17 @@ int LsMemcache::doCmdArithmetic(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdDelete(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdDelete(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
     int tokLen;
     LsShmHash::iteroffset iterOff;
     bool expired;
     LsMcHashSlice *pSlice;
-    pStr = pThis->advToken(pStr, &pThis->m_parms.key.ptr,
+    char *pStr = pInput->key.ptr;
+    char *pStrEnd = pStr + pInput->key.len;
+    char *pNxt = pInput->val.ptr;
+    pStr = pThis->advToken(pStr, pStrEnd, &pThis->m_parms.key.ptr,
                            &pThis->m_parms.key.len);
     if ((pThis->m_parms.key.len <= 0)
         || (pThis->m_parms.key.len > KEY_MAXLEN))
@@ -1693,19 +1839,19 @@ int LsMemcache::doCmdDelete(LsMemcache *pThis,
         return -1;  // cannot process now
     }
 
-    pStr = pThis->advToken(pStr, &tokPtr, &tokLen);     // optional
+    pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);     // optional
     if ((tokLen == 1) && (tokPtr[0] == '0'))            // hold_is_zero???
-        pStr = pThis->advToken(pStr, &tokPtr, &tokLen);
+        pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);
     if (tokLen > 0)
     {
         bool err = false;
         pThis->m_noreply = chkNoreply(tokPtr, tokLen);
-        pStr = pThis->advToken(pStr, &tokPtr, &tokLen);
+        pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);
         if (pThis->m_noreply == false)
         {
             err = true;
             if ((pThis->m_noreply = chkNoreply(tokPtr, tokLen)) == true)
-                pThis->advToken(pStr, &tokPtr, &tokLen);
+                pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);
         }
         if (tokLen > 0)
         {
@@ -1723,7 +1869,8 @@ int LsMemcache::doCmdDelete(LsMemcache *pThis,
         return 0;
 
     pThis->lock();
-    if ((iterOff = pThis->m_pHash->findIterator(&pThis->m_parms)).m_iOffset != 0)
+    if ((iterOff = pThis->m_pHash->findIteratorWithKey(pThis->m_hkey,
+                                            &pThis->m_parms)).m_iOffset != 0)
     {
         expired = pThis->isExpired(
             (LsMcDataItem *)pThis->m_pHash->offset2iteratorData(iterOff));
@@ -1746,8 +1893,7 @@ int LsMemcache::doCmdDelete(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdTouch(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdTouch(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
     int tokLen;
@@ -1755,9 +1901,12 @@ int LsMemcache::doCmdTouch(LsMemcache *pThis,
     uint32_t exptime;
     LsMcHashSlice *pSlice;
     LsShmHash::iteroffset iterOff;
-    pStr = pThis->advToken(pStr, &pThis->m_parms.key.ptr,
+    char *pStr = pInput->key.ptr;
+    char *pStrEnd = pStr + pInput->key.len;
+    char *pNxt = pInput->val.ptr;
+    pStr = pThis->advToken(pStr, pStrEnd, &pThis->m_parms.key.ptr,
                            &pThis->m_parms.key.len);
-    pStr = pThis->advToken(pStr, &pExptime, &tokLen);
+    pStr = pThis->advToken(pStr, pStrEnd, &pExptime, &tokLen);
     if ((tokLen <= 0) || (pThis->m_parms.key.len > KEY_MAXLEN))
     {
         pThis->respond(badCmdLineFmt);
@@ -1774,14 +1923,15 @@ int LsMemcache::doCmdTouch(LsMemcache *pThis,
         pThis->respond("CLIENT_ERROR invalid exptime argument" "\r\n");
         return 0;
     }
-    pStr = pThis->advToken(pStr, &tokPtr, &tokLen);     // optional noreply
+    pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);     // optional noreply
     pThis->m_noreply = chkNoreply(tokPtr, tokLen);
 
     if (pThis->fwdToRemote(pSlice, pNxt))
         return 0;
 
     pThis->lock();
-    if ((iterOff = pThis->m_pHash->findIterator(&pThis->m_parms)).m_iOffset != 0)
+    if ((iterOff = pThis->m_pHash->findIteratorWithKey(pThis->m_hkey,
+                                            &pThis->m_parms)).m_iOffset != 0)
     {
         LsShmHElem *iter = pThis->m_pHash->offset2iterator(iterOff);
         LsMcDataItem *pItem = (LsMcDataItem *)iter->getVal();
@@ -1805,17 +1955,17 @@ int LsMemcache::doCmdTouch(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdStats(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdStats(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
     int tokLen;
+    char *pStr = pInput->key.ptr;
     if (pThis->m_iHdrOff == 0)
     {
         pThis->respond("SERVER_ERROR no statistics" "\r\n");
         return 0;
     }
-    pStr = pThis->advToken(pStr, &tokPtr, &tokLen);
+    pStr = pThis->advToken(pStr, pStr + pInput->key.len, &tokPtr, &tokLen);
     if (tokLen > 0)
     {
         if (strcmp(tokPtr, "detail") == 0)
@@ -1935,7 +2085,7 @@ int LsMemcache::multiStatFunc(LsMcHashSlice *pSlice, void *pArg)
     pTotal->get_cmds += pStats->get_cmds;
     pTotal->set_cmds += pStats->set_cmds;
     pTotal->touch_cmds += pStats->touch_cmds;
-    pTotal->flush_cmds += pStats->flush_cmds;
+    pTotal->flush_cmds = pStats->flush_cmds;
     pTotal->get_hits += pStats->get_hits;
     pTotal->get_misses += pStats->get_misses;
     pTotal->touch_hits += pStats->touch_hits;
@@ -1974,12 +2124,14 @@ int LsMemcache::multiStatResetFunc(LsMcHashSlice *pSlice, void *pArg)
 
 
 // TODO: currently does not handle future expiration times
-int LsMemcache::doCmdFlush(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdFlush(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
     int tokLen;
-    pStr = pThis->advToken(pStr, &tokPtr, &tokLen);     // opt delay or noreply
+    char *pStr = pInput->key.ptr;
+    char *pStrEnd = pStr + pInput->key.len;
+    char *pNxt = pInput->val.ptr;
+    pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);     // opt delay or noreply
     if (tokLen > 0)
     {
         if ((pThis->m_noreply = chkNoreply(tokPtr, tokLen)) == false)
@@ -1989,11 +2141,11 @@ int LsMemcache::doCmdFlush(LsMemcache *pThis,
                 pThis->respond(badCmdLineFmt);
                 return 0;
             }
-            pStr = pThis->advToken(pStr, &tokPtr, &tokLen);
+            pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);
             pThis->m_noreply = chkNoreply(tokPtr, tokLen);
         }
     }
-    if (!pThis->chkEndToken(pStr))
+    if (!pThis->chkEndToken(pStr, pStrEnd))
     {
         pThis->respond(badCmdLineFmt);
         return 0;
@@ -2050,7 +2202,7 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, void *pArg)
         LsMemcache *pThis = (LsMemcache *)pArg;
         char buf[64];
         int len = snprintf(buf, sizeof(buf), "clear %d\r\n",
-            pSlice - pThis->m_pHashMulti->indx2hashSlice(0));
+            (int)(pSlice - pThis->m_pHashMulti->indx2hashSlice(0)));
         if (pThis->getVerbose() > 1)
         {
             LS_INFO(">%d (fwd) %.*s", pSlice->m_pConn->getfd(), len, buf);
@@ -2066,10 +2218,10 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, void *pArg)
 }
 
 
-int LsMemcache::doCmdVersion(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdVersion(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
-    if (!pThis->chkEndToken(pStr))
+    if (!pThis->chkEndToken(pInput->key.ptr,
+                            pInput->key.ptr + pInput->key.len))
         pThis->respond(badCmdLineFmt);
     else
         pThis->respond("VERSION " VERSION "\r\n");
@@ -2077,10 +2229,10 @@ int LsMemcache::doCmdVersion(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdQuit(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdQuit(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
-    if (!pThis->chkEndToken(pStr))
+    if (!pThis->chkEndToken(pInput->key.ptr,
+                            pInput->key.ptr + pInput->key.len))
     {
         pThis->respond(badCmdLineFmt);
         return 0;
@@ -2089,14 +2241,16 @@ int LsMemcache::doCmdQuit(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdVerbosity(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdVerbosity(LsMemcache *pThis, ls_strpair_t *pInput,
+                               int arg)
 {
     char *tokPtr;
     int tokLen;
     char *pVerbose;
     uint32_t verbose;
-    pStr = pThis->advToken(pStr, &pVerbose, &tokLen);
+    char *pStr = pInput->key.ptr;
+    char *pStrEnd = pStr + pInput->key.len;
+    pStr = pThis->advToken(pStr, pStrEnd, &pVerbose, &tokLen);
     if (tokLen <= 0)
     {
         pThis->respond(badCmdLineFmt);
@@ -2107,10 +2261,10 @@ int LsMemcache::doCmdVerbosity(LsMemcache *pThis,
         pThis->respond("CLIENT_ERROR invalid verbosity argument" "\r\n");
         return 0;
     }
-    pStr = pThis->advToken(pStr, &tokPtr, &tokLen);     // optional noreply
+    pStr = pThis->advToken(pStr, pStrEnd, &tokPtr, &tokLen);     // optional noreply
     pThis->m_noreply = chkNoreply(tokPtr, tokLen);
 
-    if (!pThis->chkEndToken(pStr))
+    if (!pThis->chkEndToken(pStr, pStrEnd))
     {
         pThis->respond(badCmdLineFmt);
     }
@@ -2123,14 +2277,13 @@ int LsMemcache::doCmdVerbosity(LsMemcache *pThis,
 }
 
 
-int LsMemcache::doCmdClear(LsMemcache *pThis,
-    char *pStr, char *pNxt, int iLen, int arg)
+int LsMemcache::doCmdClear(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
-    char *tokPtr;
     int tokLen;
     char *pWhich;
     uint32_t which;
-    pStr = pThis->advToken(pStr, &pWhich, &tokLen);
+    pThis->advToken(pInput->key.ptr, pInput->key.ptr + pInput->key.len,
+                    &pWhich, &tokLen);
     if ((tokLen <= 0) || !pThis->myStrtoul(pWhich, &which))
     {
         LS_ERROR("SERVER_ERROR Invalid clear argument!\n");
@@ -2152,7 +2305,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
     LsMcUpdOpt updOpt;
     bool doTouch;
 
-    if (iLen < sizeof(*pHdr))
+    if (iLen < (int)sizeof(*pHdr))
         return -1;  // need more data
     pHdr = (McBinCmdHdr *)pBinBuf;
     if ((consumed = sizeof(*pHdr) + ntohl(pHdr->totbody)) > iLen)
@@ -2225,7 +2378,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
         case MC_BINCMD_SET:
             // locked in setup
             statSetCmd();
-            m_iterOff = m_pHash->setIterator(&m_parms);
+            m_iterOff = m_pHash->setIteratorWithKey(m_hkey, &m_parms);
             doBinDataUpdate(pVal, pHdr);
             break;
         case MC_BINCMD_ADD:
@@ -2532,7 +2685,8 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch)
                 m_parms.key.len, m_parms.key.ptr);
     }
     lock();
-    if ((m_iterOff = m_pHash->findIterator(&m_parms)).m_iOffset != 0)
+    if ((m_iterOff = m_pHash->findIteratorWithKey(m_hkey,
+                                                  &m_parms)).m_iOffset != 0)
     {
         LsShmHElem *iter;
         LsMcDataItem *pItem;
@@ -2636,7 +2790,8 @@ int LsMemcache::doBinDataUpdate(uint8_t *pBuf, McBinCmdHdr *pHdr)
 void LsMemcache::doBinDelete(McBinCmdHdr *pHdr)
 {
     lock();
-    if ((m_iterOff = m_pHash->findIterator(&m_parms)).m_iOffset != 0)
+    if ((m_iterOff = m_pHash->findIteratorWithKey(m_hkey, 
+                                                  &m_parms)).m_iOffset != 0)
     {
         LsMcDataItem *pItem =
             (LsMcDataItem *)m_pHash->offset2iteratorData(m_iterOff);
@@ -2718,7 +2873,8 @@ void LsMemcache::doBinArithmetic(
             m_parms.val.len = parmAdjLen(
                 snprintf(numBuf, sizeof(numBuf), "%llu",
                   (unsigned long long)ntohll(pReqX->incrdecr.initval)));
-            if ((m_iterOff = m_pHash->insertIterator(&m_parms)).m_iOffset != 0)
+            if ((m_iterOff = m_pHash->insertIteratorWithKey(m_hkey,
+                                                    &m_parms)).m_iOffset != 0)
             {
                 m_retcode = UPDRET_NONE;
                 doBinDataUpdate((uint8_t *)numBuf, pHdr);
@@ -2754,7 +2910,6 @@ void LsMemcache::doBinArithmetic(
 // TODO: currently does not handle future expiration times
 void LsMemcache::doBinFlush(McBinCmdHdr *pHdr)
 {
-    uint8_t resBuf[sizeof(McBinCmdHdr)];
     if ((pHdr->extralen > 0) && (m_item.x_exptime != 0))
     {
         binErrRespond(pHdr, MC_BINSTAT_EINVAL);
@@ -3121,16 +3276,22 @@ void LsMemcache::binErrRespond(McBinCmdHdr *pHdr, McBinStat err)
 }
 
 
-char *LsMemcache::advToken(char *pStr, char **pTokPtr, int *pTokLen)
+char *LsMemcache::advToken(char *pStr, char *pStrEnd, char **pTokPtr, int *pTokLen)
 {
-    char c;
-    while (*pStr ==  ' ')
+    while ((pStr < pStrEnd) && (*pStr ==  ' '))
        ++pStr;
+    if (pStr >= pStrEnd)
+    {
+        *pTokPtr = pStrEnd;
+        *pTokLen = 0;
+        return pStrEnd;
+    }
     *pTokPtr = pStr;
-    while (((c = *pStr) != ' ') && (c != '\0'))
-        ++pStr;
+    pStr = (char *)memchr(pStr, ' ', pStrEnd - pStr);
+    if (pStr == NULL)
+        pStr = pStrEnd;
     *pTokLen = pStr - *pTokPtr;
-    if (c == ' ')
+    if (*pStr == ' ')
         ++pStr;
     return pStr;
 }

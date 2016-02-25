@@ -26,14 +26,37 @@
 time_t  MemcacheConn::s_curTime;
 int     MemcacheConn::s_ConnTimeout = 30;
 
+    int             m_iConnState;
+    long            m_iLastActiveTime;
+    
+    AutoStr         m_peerAddr;
+    int             m_iSSPort;
+    GSockAddr       _ClientIP;
+        
+    int             m_iMaxBufferSize;
+    LoopBuf         m_bufOutgoing;
+    LoopBuf         m_bufIncoming;
+    uint8_t         _Protocol;      // binary or ascii
+    uint8_t         _ConnFlags;
+    
+    Multiplexer *   m_pMultiplexer;
+    LsMcSasl *     _pSasl;
+    MemcacheConn *  _pLink;
+
+
 
 MemcacheConn::MemcacheConn()
     : m_iConnState(CS_DISCONNECTED)
+    , m_iLastActiveTime(0)
+    , m_iSSPort(0)
+    , m_iMaxBufferSize(0)
+    , m_bufIncoming(4096)
+    , _Protocol(MC_UNKNOWN)
+    , _ConnFlags(0)
+    , m_pMultiplexer(NULL)
     , _pSasl(NULL)
     , _pLink(NULL)
-    , _Protocol(MC_UNKNOWN)
-    , m_bufIncoming(4096)
-    , _ConnFlags(0)
+
 {
 }
 
@@ -399,7 +422,7 @@ int MemcacheConn::SendEx(const char *msg, int len, int flags)
                 continue;
             else if ( errno != EAGAIN )
             {
-                const char * pErrorStr = strerror( errno );
+                //const char * pErrorStr = strerror( errno );
                 m_iConnState = CS_CLOSING;
             }
         }

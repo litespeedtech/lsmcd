@@ -168,9 +168,7 @@ void ReplGroup::getJsonStatus(AutoBuf &rAutoBuf)
 {
     bool isLeader, isSync;
     Addr2SvrConnMap_t::const_iterator mitr;
-    //Addr2SvrConnMap_t &clntConnMap = m_pSockConnMgr->getAcptConnMap();
     const NodeInfo *pPeerNode;
-    //ServerConn *pConn;
     const char *Ip;
 
     ConfWrapper &replConf       = ConfWrapper::getInstance();
@@ -196,8 +194,8 @@ void ReplGroup::getJsonStatus(AutoBuf &rAutoBuf)
         pPeerNode = getNodeInfoMgr()->getNodeInfo(Ip);
         pPeerNode->cmpLeaderNode(pLeaderNode, isLeader, isSync);
                 rAutoBuf.append(",\n");
-                m_pStatusFormater->init(Ip, false, isLeader, false, isSync, pPeerNode);
-                m_pStatusFormater->mkJson(rAutoBuf);
+        m_pStatusFormater->init(Ip, false, isLeader, false, isSync, pPeerNode);
+        m_pStatusFormater->mkJson(rAutoBuf);
 
         /*for (mitr = clntConnMap.begin(); mitr != clntConnMap.end();
              mitr = clntConnMap.next(mitr) )

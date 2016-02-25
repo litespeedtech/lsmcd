@@ -117,21 +117,22 @@ void StaticNodeInfo::DEBUG() const
 int StaticNodeInfo::setHashKey(const char *pAddr)
 {
     AutoStr str; 
-    m_hashKey = getIpOfAddr(pAddr, str);      
+    m_hashKey = getIpOfAddr(pAddr, str);
+    return LS_OK;
 }
 
 LcNodeInfo::LcNodeInfo(int iContCount, const char *pAddr)
                 : NodeInfo(pAddr) 
                 , m_iContCount(iContCount)
 {
-    m_pContId   = new uint32_t[m_iContCount];
-    m_pCurrTid  = new uint64_t[m_iContCount];
-    m_pPriority = new uint32_t[m_iContCount];
-    m_pTidNum   = new uint32_t[m_iContCount];
-    m_pRole     = new uint16_t[m_iContCount];
-    m_pFsync    = new uint16_t[m_iContCount]; 
+    m_pContId   = new uint32_t[m_iContCount]();
+    m_pCurrTid  = new uint64_t[m_iContCount]();
+    m_pPriority = new uint32_t[m_iContCount]();
+    m_pTidNum   = new uint32_t[m_iContCount]();
+    m_pRole     = new uint16_t[m_iContCount]();
+    m_pFsync    = new uint16_t[m_iContCount](); 
     
-    for (int i=0; i < m_iContCount ; ++i)
+    for (int i=0; i < (int)m_iContCount ; ++i)
     {
         m_pContId[i] = i+1;
         m_pRole[i]   = R_SLAVE;
@@ -244,7 +245,7 @@ LcNodeInfo * LcNodeInfo::deserialize(char *pBuf, int dataLen, const char* pClntA
 void LcNodeInfo::DEBUG() const
 {
     char pBuf[32];
-    for (int i = 0; i < m_iContCount; ++i)
+    for (int i = 0; i < (int)m_iContCount; ++i)
     {
         LS_INFO (  "\tcontID[%d]=%d, currTid[%d]=%lld, priority[%d]=%d,role[%d]=%s, didFrepl[%d]:%s"
             , i, getContID(i), i, getCurrTid(i), i, getPriority(i)
@@ -290,7 +291,7 @@ void  LcNodeInfo::setRole(int idx, uint16_t role)
     
 void  LcNodeInfo::setAllRole(uint16_t role)
 {
-    for (int i = 0; i < m_iContCount ; ++i)
+    for (int i = 0; i < (int)m_iContCount ; ++i)
     {
         setRole(i, role);
     }            
@@ -354,7 +355,7 @@ void StNodeInfoMgr::delNodeInfo(const char* pAddr)
     HashStringMap< StaticNodeInfo *>::iterator itr = m_hNodeInfoMap.find(Ip);
     if (itr != m_hNodeInfoMap.end())
     {
-        itr = m_hNodeInfoMap.remove(Ip);
         delete  itr.second();    
+        m_hNodeInfoMap.remove(Ip);
     }
 }

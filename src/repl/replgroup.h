@@ -10,7 +10,6 @@
 #include <util/dlinkqueue.h>
 #include <util/hashstringmap.h>
 #include <util/stringlist.h>
-// #include <util/tsingleton.h>
 #include <util/autobuf.h>
 #include <edio/multiplexer.h>
 #include <time.h>
@@ -31,7 +30,7 @@ public:
     virtual ~ReplGroup();
     
     virtual int  initReplConn()=0;
-    virtual int  connAllListenSvr(Multiplexer* pMultiplexer) = 0;
+    virtual int  connGroupLstnrs() = 0;
     virtual int  clearClntOnClose(const char *pAddr)=0;
     virtual int  onTimer1s() = 0;
     virtual int  onTimer30s() = 0;
@@ -62,6 +61,8 @@ public:
     NodeInfoMgr *getNodeInfoMgr()               {       return m_pNodeInfoMgr;  }
     SockConnMgr *getSockConnMgr()               {       return m_pSockConnMgr;  }
     IncReplAuditor & getIncReplAuditor()        {       return m_replSyncAuditor;     }
+    
+    void setMultiplexer(Multiplexer * pMlr)     {       m_pMultiplexer = pMlr;  }
     Multiplexer * getMultiplexer()              {       return m_pMultiplexer;  }
 
 private:

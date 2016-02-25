@@ -29,7 +29,7 @@ public:
     void delClntInfoAll(const char *sockAddr);
     
     virtual int  initReplConn();
-    virtual int  connAllListenSvr(Multiplexer* pMultiplexer);
+    virtual int  connGroupLstnrs();
     virtual int  clearClntOnClose(const char *pAddr);
     virtual bool isFullReplNeeded(uint32_t contId, const NodeInfo *pLocalInfo, const NodeInfo *pPeerInfo);
     void setR2cEventRef( LsRepl2CacheEvent * pR2cEventArr)      {       m_pR2cEventArr = pR2cEventArr;  }
@@ -40,7 +40,6 @@ public:
     virtual int onTimer30s();
     int setNewMstrClearOthers(const char* pSockAddr, uint32_t iContID);
     StNodeInfoMgr * getStNodeInfoMgr()  {       return m_pStNodeInfoMgr;  }
-    bool initReplRegistry(Multiplexer* pMultiplexer);
     void DEBUG();
 
 private:
@@ -54,7 +53,7 @@ private:
     void reorderClientHBFreq(int connCount);
     uint64_t getClientsMaxTid(const StringList &inlist, int idx, uint64_t myTid, StringList &outlist);
     
-    int  monitorRoles();    
+    void  monitorRoles();    
 private:
     StNodeInfoMgr       *m_pStNodeInfoMgr;
     LsRepl2CacheEvent   * m_pR2cEventArr;

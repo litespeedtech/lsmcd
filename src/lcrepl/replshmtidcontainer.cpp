@@ -14,16 +14,6 @@ ReplShmTidContainer::ReplShmTidContainer (int id,
 ReplShmTidContainer::~ReplShmTidContainer()
 {}
 
-ReplShmTidContainer& ReplShmTidContainer::operator= ( const ReplShmTidContainer& other )
-{
-    return *this;
-}
-
-bool ReplShmTidContainer::operator== ( const ReplShmTidContainer& other ) const
-{
-///TODO: return ...;
-}
-
 int ReplShmTidContainer::addAndUpdateData ( uint8_t * pData, int dataLen, int iUpdate ) 
 {
     int idx = getId() - 1;
@@ -53,22 +43,22 @@ int ReplShmTidContainer::purgeExpired()
 
 int ReplShmTidContainer::verifyObj( char * pBuf, int bufLen )
 {
-    uint32_t nPacket = 0 ;
-    ReplPacker::unpack ( pBuf, nPacket);
-    LS_DBG_M(   "verifyObj nPacket=%d\n", nPacket);    
-    if( nPacket == 0 ) 
+    uint32_t packetCnt = 0 ;
+    ReplPacker::unpack ( pBuf, packetCnt);
+    LS_DBG_M(   "verifyObj nPacket=%d\n", packetCnt);    
+    if( packetCnt == 0 ) 
         return LS_FAIL;
     
     uint32_t ipackSize;
     int iTotSize  = sizeof(uint32_t);
     
     char *pTempBuf = pBuf + sizeof(uint32_t);
-    for(int i=0 ; i < nPacket ; ++i)
+    for(int i=0 ; i < (int)packetCnt ; ++i)
     {
         ReplPacker::unpack ( pTempBuf, ipackSize);
         iTotSize += ipackSize;
         pTempBuf += ipackSize;    
     }
-    return iTotSize == bufLen ? nPacket : LS_FAIL;    
+    return iTotSize == bufLen ? packetCnt : LS_FAIL;    
     
 }

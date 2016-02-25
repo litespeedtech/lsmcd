@@ -82,7 +82,7 @@ typedef HashStringMap<NodeInfo *>   Ip2NodeInfoMap_t;
 class NodeInfoMgr
 {
 public:
-    virtual ~NodeInfoMgr(){}
+    virtual ~NodeInfoMgr();
     virtual int  addNodeInfo(NodeInfo *pNodeInfo);
     int  updateNodeInfo (NodeInfo & nodeInfo);
     int  updateNodeInfo (const char *pClntAddr, int contId, int count);

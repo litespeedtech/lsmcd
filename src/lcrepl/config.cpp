@@ -23,10 +23,11 @@ bool KeyValPair::setValue(const char *pKey, const char *pValue)
 }
 
 Config::Config()
-    : m_sFileName("")
-    , m_sError("")
-    , m_pFileHandle(0)
+    : m_iLineCount(0)
     , m_sDelim("=")
+    , m_sFileName("")
+    , m_pFileHandle(NULL)
+    , m_sError("")
 {
 
 }
@@ -253,6 +254,7 @@ bool Config::setConfig(const char *pchKey, const char *pchValue)
         pPair->setValue(pchKey, pchValue);
         m_mapConfig.insert(pPair->getKey(), pPair);
     }
+    return true;
 }
 
 bool Config::isFinish()

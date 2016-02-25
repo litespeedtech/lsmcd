@@ -29,18 +29,17 @@ static void sigchild(int sig)
     s_iSigChild = 1;
 }
 
-static void sig_broadcast(int sig)
+static void sig_term(int sig)
 {
     //printf( "sig_broadcast(%d)!\n", sig );
-    kill(s_pid, sig);
-    if (sig == SIGTERM)
-        s_iRunning = false;
+    s_iRunning = false;
 }
 
 static void init()
 {
-    SignalUtil::signal(SIGTERM, sig_broadcast);
-    SignalUtil::signal(SIGHUP, sig_broadcast);
+    SignalUtil::signal(SIGTERM, sig_term);
+    SignalUtil::signal(SIGINT, sig_term);
+    SignalUtil::signal(SIGHUP, sig_term);
     SignalUtil::signal(SIGCHLD, sigchild);
 }
 
@@ -198,7 +197,8 @@ int CrashGuard::guardCrash(int workers)
             }
 
         }
-        ::sleep(1);
+        else
+            ::sleep(1);
         if (s_iSigChild)
         {
             s_iSigChild = 0;

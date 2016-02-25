@@ -94,6 +94,7 @@ int LcReplReceiver::processPacket ( ReplConn * pConn, ReplPacketHeader * header,
         break;        
         
     }
+    return LS_OK;
 }
 
 
@@ -129,7 +130,7 @@ int LcReplReceiver::handleData ( ReplConn *pConn, ReplPacketHeader * header,
     pPeerNode->setCurrTid(contId -1, iPeerTid);
     
     int dataLen = header->getPackLen() - sizeof ( *header ) - sizeof(uint64_t);
-    LS_DBG_M("LcReplReceiver::handleData idx:%d, iPeerTid:%lld, data len:%d", contId -1, iPeerTid, dataLen);
+    LS_DBG_M("LcReplReceiver::handleData idx:%d, iPeerTid:%lld, dataLen:%d", contId -1, iPeerTid, dataLen);
     saveDataToContainer ( pReplContainer, pConn, header, pData + sizeof(uint64_t)
         , dataLen, iBulk); 
     return LS_OK;
@@ -140,16 +141,15 @@ int LcReplReceiver::saveDataToContainer ( ReplContainer* pReplContainer, ReplCon
 {
     if ( pReplContainer->addAndUpdateData ( ( uint8_t * )(pData), dataLen, 0) == 0 )
     {
-        LS_DBG_M(  "add_And_Update_Obj to container %d successfully  i=%d, iBulk=%d",
+        LS_DBG_M(  "add_And_Update_Obj to container %d successfully isBulk=%d, dataLen=%d",
                         header->getContID(), iBulk, dataLen ) ;
         respondPacket(pReplNode, header, RT_ACK, iBulk);
     }
     else
     {
-        LS_NOTICE(  "add_And_Update_Obj to container %d failed, Object already exists  i=%d, iBulk=%d\n",
+        LS_NOTICE(  "add_And_Update_Obj to container %d failed, Object already exists isBulk=%d, dataLen=%d",
                         header->getContID(), iBulk, dataLen);  
         respondPacket(pReplNode, header, RT_REJECT, iBulk);
-        
     }
     return 0;
 }
@@ -220,7 +220,7 @@ int LcReplReceiver::clntHandleJoinSvrResp(ReplConn* pReplNode, ReplPacketHeader*
     StaticNodeInfo::getSvrAddr(pPeerStatus->getShmSvrIp(), pPeerStatus->getShmSvrPort(), pSockAddr, 64);
     LS_DBG_M(  "set all cached slices to pointing to master addr[%s]", pSockAddr);
       
-    for (int idx=0; idx < pLocalStatus->getContCount(); ++idx)
+    for (int idx = 0; idx < (int)(pLocalStatus->getContCount()); ++idx)
     {
         if (R_SLAVE == pLocalStatus->getRole(idx))
             LcReplGroup::getInstance().notifyRoleChange(idx, pSockAddr, strlen(pSockAddr));
@@ -364,10 +364,6 @@ int LcReplReceiver::handleNewElectedMaster(ReplConn *pConn, ReplPacketHeader * h
     
     LS_DBG_M(  "LcReplReceiver::handleNewElectedMaster,contID=%d, SequenceNum=%d from %s\n",
           iContID, header->getSequenceNum(), pConn->getPeerAddr() );
-
-    int dataLen = header->getPackLen() - sizeof(ReplPacketHeader);
-    LcNodeInfo *pPeerStatus = LcNodeInfo::deserialize (
-        pData, dataLen, pConn->getPeerAddr());
 
     ReplRegistry& RegObj = ReplRegistry::getInstance();
     ReplShmTidContainer* pReplShmTidContainer = ( ReplShmTidContainer* ) RegObj.get ( iContID );

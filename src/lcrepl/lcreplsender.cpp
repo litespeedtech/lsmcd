@@ -96,6 +96,7 @@ int LcReplSender::bcastNewMstrElectDone(uint32_t iContID)
     {
         LcReplSender::getInstance().newMstrElectDone(itr.second(), iContID);
     }
+    return LS_OK;
 }
 
 static int sendTidHashDataFn(void * cbData, void *pUData1, void *pUData2)

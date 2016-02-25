@@ -81,7 +81,7 @@ start()
 
 stop()
 {
-	kill -9 $PID
+	kill -TERM $PID
 	ret=$?
     	if  [ $ret -eq 0 ]; then
 		echo "[OK] $DESC: stopped."

@@ -269,6 +269,7 @@ int ServerConn::onWriteSuccess()
 
 SockConnMgr::~SockConnMgr()
 {
+    m_hClntConnMap.release_objects();
 }
 
 ClientConn *SockConnMgr::addClntNode(const char *pSockAddr)

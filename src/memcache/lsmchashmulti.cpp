@@ -63,7 +63,6 @@ int LsMcHashMulti::init(int iCnt, const char **ppPathName, const char *pHashName
     char *pShmName;
     LsShm *pShm;
     LsShmPool *pGPool;
-    LsShmHash *pHash;
     LsMcHashSlice *pSlice;
     char buf[4096];
 
@@ -83,7 +82,7 @@ int LsMcHashMulti::init(int iCnt, const char **ppPathName, const char *pHashName
         if ((pShmName = strrchr((char *)*ppPathName, '/')) != NULL)
         {
             int cnt;
-            if ((cnt = pShmName - *ppPathName) > (sizeof(buf) - 1))
+            if ((cnt = pShmName - *ppPathName) > (int)(sizeof(buf) - 1))
             {
                 LS_ERROR("LsShmHashMulti::init Name too big! [%.64s...]!\n",
                     *ppPathName);

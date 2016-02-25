@@ -44,23 +44,24 @@ void LcReplGroup::initSelfStatus ()
 
 int LcReplGroup::notifyRoleChange(int idx,  const char *pAddr, int len)
 {
-    int ret, len2;
-    char pStr[64];
-    LsRepl2CacheEvent *pTmpEv, *pEvent;
+    LsRepl2CacheEvent *pEvent;
     RoleMemCache::getInstance().addUpdateRole(idx, pAddr);
 
-    pTmpEv        = m_pR2cEventArr;
-    pEvent      = NULL;
-    int cnt = getReplConf()->getSubFileNum();
-    while (--cnt >= 0)
-    {
-        if (pTmpEv->getIdx() == idx)
-        {
-            pEvent = pTmpEv;
-            break;
-        }
-        ++pTmpEv;
-    }
+//     pTmpEv      = m_pR2cEventArr;
+//     pEvent      = NULL;
+//     int cnt     = getReplConf()->getSubFileNum();
+//     while (--cnt >= 0)
+//     {
+//         if (pTmpEv->getIdx() == idx)
+//         {
+//             pEvent = pTmpEv;
+//             break;
+//         }
+//         ++pTmpEv;
+//     }
+    pEvent = m_pR2cEventArr;
+    while (idx-- > 0)
+        pEvent++;
     assert (pEvent != NULL);
     pEvent->notify();
     return LS_OK;
@@ -126,18 +127,19 @@ int LcReplGroup::onTimer1s()
     if (time(NULL) - lastTm < 1)
         return LS_OK;
     lastTm = time(NULL);
-    
+
     if (!isLstnrProc())
         return LS_OK;
- 
+
     static int s_timeOut = 4;
     s_timeOut --;
     if ( !s_timeOut )
     {
         s_timeOut = 4;
-        connAllListenSvr(getMultiplexer());
+        connGroupLstnrs();
         monitorRoles();
     }
+
     return LS_OK;   
 }
 
@@ -150,9 +152,9 @@ int  LcReplGroup::onTimer30s()
     return LS_OK;
 }
 
-int LcReplGroup:: monitorRoles()
+void LcReplGroup:: monitorRoles()
 {
-    //2)process incoming connection
+    LS_DBG_M("monitorRoles");
     int inNum  = getSockConnMgr()->getAcptedConnCnt();
     int outNum = getSockConnMgr()->getActvLstnrConnCnt();
     if ( !inNum && !outNum)
@@ -204,7 +206,6 @@ int LcReplGroup:: monitorRoles()
             reorderClientHBFreq(inNum);
         }
     }
-
 }
 
 int LcReplGroup::flipSelfBeMstr()
@@ -227,48 +228,36 @@ int LcReplGroup::flipSelfBeMstr()
     return LS_OK;
 }
 
-bool LcReplGroup::initReplRegistry(Multiplexer* pMultiplexer)
-{
-    m_pMultiplexer = pMultiplexer;
-
-    TReplicableAllocator<ReplicableShmTid> * pAllocator1 =
-        new TReplicableAllocator<ReplicableShmTid>();
-
-    ReplRegistry& RegObj = ReplRegistry::getInstance();
-
-    LcReplGroup::getInstance().initSelfStatus();
-    LcNodeInfo *pLocalInfo = LcReplGroup::getInstance().getLocalNodeInfo();
-    int subNum = getReplConf()->getSubFileNum();
-    for (int idx = 0; idx < subNum; ++idx)
-    {
-        ReplShmTidContainer * pContainer1 = new ReplShmTidContainer (
-            idx+1, pAllocator1 );
-        RegObj.add ( idx + 1, pContainer1 );
-        ReplShmHelper::getInstance().readShmDBTid(idx, pLocalInfo);
-    }
-    return true;
-}
-
 //each IP is the initial leader in that group (containerID), which is connected from other IPs.
 //each group is represented as channnel to replicate one of shm file
 int LcReplGroup::initReplConn()
 {
     StringList &sl = ConfWrapper::getInstance()->getLBAddrs();
     StringList::iterator itr;
-    ClientConn * pConn;
     for ( itr = sl.begin(); itr != sl.end(); itr++ )
     {
         if (strcmp( ( *itr )->c_str(),
             ConfWrapper::getInstance()->getLisenSvrAddr() ))
         {
-            pConn = new ClientConn() ;
-	    char *pSockAddr = strdup(( *itr )->c_str());
-            m_pSockConnMgr->addClntNode(pSockAddr);
+            m_pSockConnMgr->addClntNode(( *itr )->c_str());
         }
     }
+    
+    initSelfStatus();
+    LcNodeInfo *pLocalInfo = getLocalNodeInfo();
+    int subNum = getReplConf()->getSubFileNum();
+    for (int idx = 0; idx < subNum; ++idx)
+    {
+        ReplShmTidContainer * pContainer1 = new ReplShmTidContainer (
+            idx + 1, NULL );
+        ReplRegistry::getInstance().add ( idx + 1, pContainer1 );
+        ReplShmHelper::getInstance().readShmDBTid(idx, pLocalInfo);
+    }
+    
+    return LS_OK;
 }
 
-int LcReplGroup::connAllListenSvr(Multiplexer* pMultiplexer)
+int LcReplGroup::connGroupLstnrs()
 {
     Addr2ClntConnMap_t::iterator itr;
     Addr2ClntConnMap_t &lstrMap = m_pSockConnMgr->getClntConnMap();
@@ -281,9 +270,9 @@ int LcReplGroup::connAllListenSvr(Multiplexer* pMultiplexer)
         LS_DBG_M("LcReplGroup::connAllListenSvr addr:%s", sockAddr);
         if (!pConn->isActive() )
         {
-            LS_DBG_M("LcReplGroup::connAllListenSvr is not active,  pMultiplexer:%p", m_pMultiplexer);
+            LS_DBG_M("LcReplGroup::connAllListenSvr is not active,  pMultiplexer:%p", getMultiplexer());
             pConn->closeConnection();
-            pConn->SetMultiplexer(m_pMultiplexer );
+            pConn->SetMultiplexer(getMultiplexer() );
 
             GSockAddr serverAddr;
             serverAddr.set(sockAddr, AF_INET );
@@ -314,8 +303,8 @@ int LcReplGroup::clearClntOnClose(const char *pAddr)
 
 void LcReplGroup::reorderClientHBFreq(int connCount)
 {
-    ReplConn * pConn;
-    HashStringMap<ReplConn *>::iterator itr;
+//     ReplConn * pConn;
+//     HashStringMap<ReplConn *>::iterator itr;
 //     for (itr = m_hOutToListenSvr.begin(); itr != m_hOutToListenSvr.end();
 //             itr = m_hOutToListenSvr.next ( itr ))
 //     {
@@ -450,7 +439,6 @@ uint64_t LcReplGroup::getClientsMaxTid(const StringList &inlist, int idx, uint64
 //the min IP is the one
 bool LcReplGroup::isSelfMinAddr(const StringList &clntlist, const char* pMyAddr)
 {
-    const StaticNodeInfo *pStaticStatus;
     char pSvrAddr[64];
     StringList::const_iterator itr;
     for ( itr = clntlist.begin(); itr != clntlist.end(); itr++ )
@@ -471,7 +459,6 @@ bool LcReplGroup::isLegalClientBeMstr(int idx, uint64_t myTid, uint32_t myPriori
 {
     char pReplSvrAddr[64];
     LcNodeInfo *pPeerStatus = NULL;
-    LcNodeInfo *pHighest = NULL;
     const char *pClntAddr     = NULL;
     StringList slist;
     Ip2NodeInfoMap_t::iterator itr;

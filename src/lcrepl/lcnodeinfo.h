@@ -88,9 +88,6 @@ public:
     
     void        setTidNum(int idx, uint32_t num)          {   m_pTidNum[idx] = num;       }
     uint32_t    getTidNum(int idx) const                  {   return m_pTidNum[idx];      }
-    
-    bool        incTidNum(int idx)                        {   ++m_pTidNum[idx];           }
-    bool        decTidNum(int idx)                        {   --m_pTidNum[idx];           }    
 
     void        setRole(int idx, uint16_t role);
     uint16_t    getRole(int idx) const                    {   return m_pRole[idx];        }

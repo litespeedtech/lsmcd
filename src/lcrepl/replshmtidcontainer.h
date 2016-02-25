@@ -20,11 +20,9 @@ public:
     virtual int purgeExpired();
 
     void clear()                            {}
-    virtual int size()                      {}
-private:
-    ReplShmTidContainer ( const ReplShmTidContainer& other );
-    virtual ReplShmTidContainer& operator= ( const ReplShmTidContainer& other );
-    virtual bool operator== ( const ReplShmTidContainer& other ) const;
+    virtual int size()                      {   return 0;       }
+    
+    LS_NO_COPY_ASSIGN(ReplShmTidContainer)
 };
 
 #endif 

@@ -48,12 +48,15 @@ public:
 
     int  getMultiCnt()
     {   return m_iCnt;  }
+    
+    LsShmHKey getHKey(const void *pKey, int iLen)
+    {   return (*m_fnHashKey)(pKey, iLen);  }
 
     LsMcHashSlice  *indx2hashSlice(int indx)
     {   return (m_pLastSlice = &m_pSlices[indx]);  }
 
-    LsMcHashSlice  *key2hashSlice(const void *pKey, int iLen)
-    {   return (m_pLastSlice = &m_pSlices[key2hashNum(pKey, iLen)]);  }
+    LsMcHashSlice  *key2hashSlice(LsShmHKey hkey)
+    {   return (m_pLastSlice = &m_pSlices[key2hashNum(hkey)]);  }
 
     Multiplexer *getMultiplexer()
     {   return m_pMultiplexer;  }
@@ -69,10 +72,10 @@ private:
     LsMcHashMulti &operator=(const LsMcHashMulti &other);
 
 private:
-    int  key2hashNum(const void *pKey, int iLen)
+    int  key2hashNum(LsShmHKey hkey)
     {
         return ((m_iCnt > 1) ?
-            ((m_iLastHashKey = (*m_fnHashKey)(pKey, iLen)) % m_iCnt) : 0);
+            ((m_iLastHashKey = hkey) % m_iCnt) : 0);
     }
 
     int             m_iCnt;

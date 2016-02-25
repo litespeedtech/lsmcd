@@ -253,8 +253,9 @@ int assignedFn(void * cbData, void *pUData1, void *pUData2)
     IntDArr *pIntDArr = (IntDArr*)cbData;
     Int2IntMap *pInt2IntMap = (Int2IntMap*)pUData1;
     int key, val;
-    pIntDArr->get(0, key);
-    pIntDArr->get(1, val);
+    if ((pIntDArr->get(0, key) == LS_FAIL) 
+        || (pIntDArr->get(1, val) == LS_FAIL))
+        return LS_FAIL;
     pInt2IntMap->addSetVal(key, val);
     return LS_OK;
 }

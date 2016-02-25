@@ -74,10 +74,11 @@ static void sig_usr1( int sig )
 #define WAC_VERSION     "1.1"
 
 LsmcdImpl::LsmcdImpl()
-        : m_iNoCrashGuard( 0 )
-        , m_iNoDaemon( 0 )
-        , m_ReplMasterSvrConn(NULL)
+        : m_ReplMasterSvrConn(NULL)
         , m_pC2rEventArr(NULL)
+        , m_iNoCrashGuard( 0 )
+        , m_iNoDaemon( 0 )
+
 {}
 
 
@@ -90,6 +91,13 @@ LsmcdImpl::~LsmcdImpl()
         delete[] m_pC2rEventArr;
         m_pC2rEventArr = NULL;
     }
+    
+    if ( m_pR2cEventArr )
+    {
+        delete[] m_pR2cEventArr;
+        m_pR2cEventArr = NULL;
+    }
+    
     if ( m_pMultiplexer )
     {
         delete m_pMultiplexer;
@@ -163,7 +171,7 @@ int LsmcdImpl::Init( int argc, char *argv[] )
         return -2;
         
     setReplGroup(new LcReplGroup());
-    LcReplGroup::getInstance().initReplConn();
+    //LcReplGroup::getInstance().initReplConn();
 
     return LS_OK;
 }
@@ -219,8 +227,8 @@ int LsmcdImpl::PreEventLoop()
         pLsShmHash->setEventNotifier(&m_lsShmEvent);
     }
 #endif
-
-    LcReplGroup::getInstance().initReplRegistry(m_pMultiplexer);
+    LcReplGroup::getInstance().setMultiplexer(m_pMultiplexer);
+    LcReplGroup::getInstance().initReplConn();
     return LS_OK;
 }
 
@@ -375,6 +383,7 @@ int LsmcdImpl::ProcessTimerEvent()
     m_pMultiplexer->timerExecute();
     //FIXME
     LcReplGroup::getInstance().onTimer1s();
+    LsMemcache::getInstance().onTimer();
     return 0;
 }
 
@@ -504,21 +513,18 @@ int Lsmcd::Main(int argc, char **argv)
         {
             snprintf(argv[0], 80, "lsmcd - replicator");
             _pReplSvrImpl->m_pMemcacheListener.Stop();
+            LcReplGroup::getInstance().setMultiplexer(getMultiplexer());
             ::sleep(1);
         }
         else
         {
             snprintf(argv[0], 80, "lsmcd - cached #%02d", ret);
             _pReplSvrImpl->m_pReplListener.Stop();
+            LsMemcache::getInstance().setMultiplexer(getMultiplexer());
             LcReplGroup::getInstance().setR2cEventRef(NULL);
             LcReplGroup::getInstance().setLstnrProc(false);
-#ifdef notdef
-???         _pReplSvrImpl->m_pMultiplexer->remove(&_pReplSvrImpl->m_lsShmEvent);
-#endif
         }
     }
-
-    LS_DBG_M("guardcrash init done");
 
     init_signals();
 

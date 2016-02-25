@@ -23,7 +23,10 @@
 #include <shm/lsshmhash.h>
 #include "lsmchashmulti.h"
 #include "lsmcsasl.h"
+#include <util/tsingleton.h>
 #include <lsr/ls_str.h>
+#include <util/gpointerlist.h>
+#include <util/objpool.h>
 
 #define VERSION         "1.0.0"
 
@@ -231,15 +234,18 @@ typedef struct
     const char *cmd;
     int len;
     int arg;
-    int (*func)(LsMemcache *pThis, char *pStr, char *pNxt, int iLen, int arg);
+    int (*func)(LsMemcache *pThis, ls_strpair_t *pInput, int arg);
 } LsMcCmdFunc;
 
-class LsMemcache
+
+typedef ObjPool<ls_str_t> LsMcStrPool;
+typedef TPointerList<ls_str_t> LsMcStrList;
+class LsMemcache : public TSingleton<LsMemcache>
 {
+    friend class TSingleton<LsMemcache>;
 public:
     ~LsMemcache() {}
 
-    static LsMemcache& getInstance();
     int  initMcShm(int iCnt, const char **ppPathName,
         const char *pHashName, LsMcParms *pParms);
     int  initMcShm(const char *pDirName, const char *pShmName,
@@ -265,6 +271,7 @@ public:
     int  processInternal(uint8_t *pBuf, int iLen);
     void putWaitQ(MemcacheConn *pConn);
     void processWaitQ();
+    void onTimer();
 
     static inline LsMcDataItem *mcIter2data(
         LsShmHElem *iter, int useCas, uint8_t **pValPtr, int *pValLen)
@@ -431,39 +438,39 @@ private:
         m_rescas = (m_mcparms.m_usecas ? pItem->x_data->withcas.cas : 0);
     }
 
-    LsMcCmdFunc *getCmdFunction(char *pCmd, int len);
+    LsMcCmdFunc *getCmdFunction(const char *pCmd, int len);
     void         dataItemUpdate(uint8_t *pBuf);
 
     static int   doCmdTest1(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdTest2(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdPrintTids(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdGet(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdUpdate(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdArithmetic(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdDelete(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdTouch(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdStats(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdFlush(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdVersion(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdQuit(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdVerbosity(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   doCmdClear(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
     static int   notImplemented(LsMemcache *pThis,
-                    char *pStr, char *pNxt, int iLen, int arg);
+                            ls_strpair_t *pInput, int arg);
 
     uint8_t  setupNoreplyCmd(uint8_t cmd);
     uint8_t *setupBinCmd(McBinCmdHdr *pHdr, uint8_t cmd, LsMcUpdOpt *pOpt);
@@ -493,17 +500,18 @@ private:
     void     binOkRespond(McBinCmdHdr *pHdr);
     void     binErrRespond(McBinCmdHdr *pHdr, McBinStat err);
 
-    char    *advToken(char *pStr, char **pTokPtr, int *pTokLen);
+    char    *advToken(char *pStr, char *pStrEnd, char **pTokPtr, int *pTokLen);
     bool     myStrtol(const char *pStr, int32_t *pVal);
     bool     myStrtoul(const char *pStr, uint32_t *pVal);
     bool     myStrtoll(const char *pStr, int64_t *pVal);
     static bool  myStrtoull(const char *pStr, uint64_t *pVal);
+    void     clearKeyList();
 
-    bool     chkEndToken(char *pStr)
+    bool     chkEndToken(char *pStr, char *pStrEnd)
     {
         char *tokPtr;
         int tokLen;
-        advToken(pStr, &tokPtr, &tokLen);
+        advToken(pStr, pStrEnd, &tokPtr, &tokLen);
         return (tokLen <= 0);
     }
 
@@ -523,7 +531,8 @@ private:
 
     LsMcHashSlice *setSlice(const void *pKey, int iLen)
     {
-        m_pCurSlice = m_pHashMulti->key2hashSlice(pKey, iLen);
+        m_hkey = m_pHashMulti->getHKey(pKey, iLen);
+        m_pCurSlice = m_pHashMulti->key2hashSlice(m_hkey);
         m_pHash = m_pCurSlice->m_pHash;
         m_iHdrOff = m_pCurSlice->m_iHdrOff;
         return m_pCurSlice;
@@ -660,7 +669,8 @@ private:
     MemcacheConn           *m_pWaitTail;
     char                   *m_pStrt;    // start of ascii command buffer
     LsShmOffset_t           m_iHdrOff;
-    ls_strpair_t           m_parms;
+    ls_strpair_t            m_parms;
+    LsShmHKey               m_hkey;
     LsMcDataItem            m_item;     // cmd in progress
     LsShmHash::iteroffset   m_iterOff;  // cmd in progress
     uint64_t                m_rescas;   // cmd in progress
@@ -668,6 +678,8 @@ private:
     uint8_t                 m_retcode;
     bool                    m_noreply;
     LsMcParms               m_mcparms;
+    LsMcStrPool             m_keyPool;
+    LsMcStrList             m_keyList;
 };
 
 #endif // LSSHMMEMCACHE_H

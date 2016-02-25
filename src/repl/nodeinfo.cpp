@@ -244,7 +244,7 @@ NodeInfo * NodeInfo::deserialize(const char *pBuf, int bufSz, const char* pAddr)
 
 void NodeInfo::DEBUG() const
 {
-    LS_INFO("nodeinfo debug: syncTime:%d, upTime:%d"
+    LS_INFO("nodeinfo debug: syncTime:%u, upTime:%u"
         , m_syncTime, m_upTime);        
     m_CntId2CntMap.DEBUG();
 }
@@ -296,6 +296,11 @@ const NodeInfo * NodeInfoMgr::getLeaderNode() const
     }
     assert (pNodeInfo != NULL);
     return pNodeInfo;
+}
+
+NodeInfoMgr::~NodeInfoMgr()
+{
+   m_hNodeInfoMap.release_objects(); 
 }
 
 int NodeInfoMgr::addNodeInfo(NodeInfo *pNodeInfo)
@@ -363,8 +368,8 @@ void NodeInfoMgr::delNodeInfo(const char *pAddr)
     HashStringMap< NodeInfo *>::iterator itr = m_hNodeInfoMap.find(Ip);
     if (itr != m_hNodeInfoMap.end())
     {
-        itr = m_hNodeInfoMap.remove(Ip);
         delete  itr.second();    
+        m_hNodeInfoMap.remove(Ip);
     }
 }
 

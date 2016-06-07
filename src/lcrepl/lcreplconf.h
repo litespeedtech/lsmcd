@@ -52,8 +52,9 @@ public:
     const char  *getLogLevel();
     const char  *getLogFile();
     const char  *getTmpDir();
+    const char  *getUser();
+    const char  *getGroup();
 private:
-    
     AutoStr             m_cachedAddr;
     AutoStr             m_shmDir;
     AutoStr             m_shmName;
@@ -65,6 +66,8 @@ private:
     bool                m_useSasl;
     bool                m_noMemFail;
     uint16_t            m_iSubFileNum;
+    AutoStr             m_user;
+    AutoStr             m_group;
     
     int            *m_pPriorities;
     char          **m_pShmFiles;

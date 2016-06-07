@@ -63,6 +63,8 @@ LcReplConf::LcReplConf()
     , m_iSubFileNum(1)
     , m_pPriorities(NULL)
     , m_pShmFiles(NULL)
+    , m_user("nobody")
+    , m_group("nobody")
 {}
 
 LcReplConf::~LcReplConf()
@@ -127,12 +129,14 @@ bool LcReplConf::parse(const char *szFile)
     if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
         m_iSubFileNum = v;
     
-    if ( m_confParser.getConfig("CACHED.SHMDIR")) 
-        m_shmDir = m_confParser.getConfig("CACHED.SHMDIR");
-    if ( m_confParser.getConfig("CACHED.SHMNAME"))
-        m_shmName = m_confParser.getConfig("CACHED.SHMNAME");
-    if (m_confParser.getConfig("CACHED.SHMHASHNAME"))
-        m_shmHashName = m_confParser.getConfig("CACHED.SHMHASHNAME");
+    if ( (ptr = m_confParser.getConfig("CACHED.SHMDIR")) != NULL ) 
+        m_shmDir = ptr;
+
+    if ( (ptr = m_confParser.getConfig("CACHED.SHMNAME")) != NULL)
+        m_shmName = ptr;
+    
+    if ( (ptr = m_confParser.getConfig("CACHED.SHMHASHNAME")) != NULL)
+        m_shmHashName = ptr;
 
     ptr = m_confParser.getConfig("REPL.MAXTIDPACKET");
     m_maxTidPacket = ptr ? atoi(ptr) : DEF_MAXTIDPACKET;
@@ -160,6 +164,12 @@ bool LcReplConf::parse(const char *szFile)
             m_noMemFail = true;        
     }
     
+    if ((ptr = m_confParser.getConfig("User")) != NULL )
+        m_user = ptr;
+    
+    if ((ptr = m_confParser.getConfig("Group")) != NULL )
+        m_group = ptr;
+
     char pBuf[1024], pBuf2[1024];
     uint16_t num  = getSubFileNum();
     m_pPriorities = new int[num];
@@ -291,6 +301,16 @@ const char * LcReplConf::getTmpDir()
         ptr = m_confParser.getConfig("TMPDIR");
     }
     return ptr;
+}
+
+const char * LcReplConf::getUser()
+{
+    return m_user.c_str();
+}
+
+const char * LcReplConf::getGroup()
+{
+    return m_group.c_str();
 }
 
 LcReplConf * getReplConf()

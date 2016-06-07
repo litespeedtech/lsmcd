@@ -1,25 +1,26 @@
 #!/bin/sh
 
-#cd `dirname "$0"`
-
-#If install.sh in admin/misc, need to change directory
-#LSINSTALL_DIR=`dirname "$0"`
-#cd $LSINSTALL_DIR/
 set -x
 
-LSCA_HOME=/usr/local/lsmcd
+LSMCD_HOME=/usr/local/lsmcd
+TMP_DIR=/tmp/lsmcd
 
-rm -rf $LSCA_HOME
+rm -rf $LSMCD_HOME
 
-if [ ! -d ${LSCA_HOME}/bin ]; then
-    mkdir -p ${LSCA_HOME}/bin
+if [ ! -d ${LSMCD_HOME}/bin ]; then
+    mkdir -p ${LSMCD_HOME}/bin
 fi
 
-cp ../src/lsmcd  ${LSCA_HOME}/bin/.
-cp ../dist/bin/lsmcdctrl ${LSCA_HOME}/bin/. 
-cp -r ../dist/conf  ${LSCA_HOME}/conf
+if [ ! -d $TMP_DIR ]; then
+    mkdir -p $TMP_DIR
+fi
+
+cp ../src/lsmcd  ${LSMCD_HOME}/bin/.
+cp ../dist/bin/lsmcdctrl ${LSMCD_HOME}/bin/. 
+cp -r ../dist/conf  ${LSMCD_HOME}/conf
+
 cp ../dist/bin/lsmcd.init /etc/init.d/lsmcd
 chkconfig lsmcd on
 
-echo "Now you have to update ${LSCA_HOME}/conf/example.conf" 
+echo "Now you have to update ${LSMCD_HOME}/conf/node.conf" 
 

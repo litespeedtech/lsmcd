@@ -355,15 +355,15 @@ int LsmcdImpl::ChangeUid()
     struct group * gr;
     struct passwd *pw;
 
-    pw = getpwnam( "nobody" );
+    pw = getpwnam( getReplConf()->getUser() );
     if ( pw == NULL )
     {
-            return -1;
+        return -1;
     }
-    gr = getgrnam( "nobody" );
+    gr = getgrnam( getReplConf()->getGroup() );
     if ( gr == NULL )
     {
-            return -1;
+        return -1;
     }
 
     if ( setgid( gr->gr_gid ) < 0 )
@@ -513,6 +513,7 @@ int Lsmcd::Main(int argc, char **argv)
 
         if (ret == 0) //replicator
         {
+            _pReplSvrImpl->ChangeUid();
             snprintf(argv[0], 80, "lsmcd - replicator");
             _pReplSvrImpl->m_pMemcacheListener.Stop();
             LcReplGroup::getInstance().setMultiplexer(getMultiplexer());
@@ -520,6 +521,7 @@ int Lsmcd::Main(int argc, char **argv)
         }
         else
         {
+            _pReplSvrImpl->ChangeUid();
             snprintf(argv[0], 80, "lsmcd - cached #%02d", ret);
             _pReplSvrImpl->m_pReplListener.Stop();
             LsMemcache::getInstance().setMultiplexer(getMultiplexer());

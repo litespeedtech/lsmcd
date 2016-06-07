@@ -39,7 +39,7 @@ class IncReplAuditor
 {
 public:    
     IncReplAuditor();
-    ~IncReplAuditor();
+    virtual ~IncReplAuditor();
     void        start(bool bInitiator, time_t freqTm, time_t cutoffTm);
     void        setCutOffTm(uint32_t tm);                
     void        continueAudit(const ClientConn * pConn);

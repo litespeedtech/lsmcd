@@ -43,7 +43,7 @@ char *StringTool::strnupper(const char *pSrc, char *pDest, int &n)
     {
         char *p1 = pDest;
         char *p2 = pDest + n;
-        while ((*pSrc) && (p1 < p2))
+        while (p1 < p2 && (*pSrc))
             *p1++ = toupper(*pSrc++);
         if (p1 < p2)
             *p1 = 0;
@@ -76,7 +76,7 @@ char *StringTool::strnlower(const char *pSrc, char *pDest, int &n)
     {
         char *p1 = pDest;
         char *p2 = pDest + n;
-        while ((*pSrc) && (p1 < p2))
+        while (p1 < p2 && (*pSrc))
             *p1++ = tolower(*pSrc++);
         if (p1 < p2)
             *p1 = 0;

@@ -41,20 +41,20 @@ int KQueuer::allocateChangeBuf(int capacity)
     struct kevent *pEvents = (struct kevent *) realloc(m_pChanges,
                              capacity * sizeof(struct kevent));
     if (!pEvents)
-        return -1;
+        return LS_FAIL;
     if (capacity > m_changeCapacity)
         memset(pEvents + m_changeCapacity, 0,
                sizeof(struct kevent) * (capacity - m_changeCapacity));
     m_pChanges = pEvents;
     m_changeCapacity = capacity;
-    return 0;
+    return LS_OK;
 }
 
 int KQueuer::deallocateChangeBuf()
 {
     if (m_pChanges)
         free(m_pChanges);
-    return 0;
+    return LS_OK;
 }
 
 
@@ -62,15 +62,15 @@ int KQueuer::deallocateChangeBuf()
 int KQueuer::init(int capacity)
 {
     if (m_reactorIndex.allocate(capacity) == -1)
-        return -1;
+        return LS_FAIL;
     if (allocateChangeBuf(64) == -1)
-        return -1;
+        return LS_FAIL;
     m_fdKQ = kqueue();
     if (m_fdKQ == -1)
-        return -1;
+        return LS_FAIL;
     s_fdKQ = m_fdKQ;
     ::fcntl(m_fdKQ, F_SETFD, FD_CLOEXEC);
-    return 0;
+    return LS_OK;
 }
 
 
@@ -89,13 +89,13 @@ int KQueuer::addEvent(EventReactor *pHandler, short mask)
     if (mask & POLLOUT)
         appendEvent(pHandler, EVFILT_WRITE, EV_ADD | EV_ENABLE);
     pHandler->setMask2(mask);
-    return 0;
+    return LS_OK;
 }
 
 int KQueuer::add(EventReactor *pHandler, short mask)
 {
     if (!pHandler)
-        return -1;
+        return LS_FAIL;
     pHandler->setPollfd();
     m_reactorIndex.set(pHandler->getfd(), pHandler);
     return addEvent(pHandler, mask);
@@ -114,7 +114,7 @@ int KQueuer::remove(EventReactor *pHandler)
     }
     pHandler->setMask2(0);
     m_reactorIndex.set(pHandler->getfd(), NULL);
-    return 0;
+    return LS_OK;
 }
 
 void KQueuer::processAioEvent(struct kevent *pEvent)
@@ -280,7 +280,7 @@ int KQueuer::processEvents()
     struct kevent *p;
     int ret = m_pResEnd - m_pResCur;
     if (ret <= 0)
-        return 0;
+        return LS_OK;
     while (m_pResCur < m_pResEnd)
     {
         p = m_pResCur++;

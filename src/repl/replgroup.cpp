@@ -8,6 +8,8 @@
 #include "lruhashreplbridge.h"
 #include "replreceiver.h"
 #include "replpacket.h"
+#include "jsonstatus.h"
+
 #include <sys/socket.h>
 #include <edio/multiplexerfactory.h>
 #include <log4cxx/logger.h>
@@ -31,8 +33,12 @@ ReplGroup::ReplGroup()
     , m_pNodeInfoMgr(NULL)
     , m_pSockConnMgr(new SockConnMgr())
     , m_pStatusFormater(NULL)
+    , m_pReplSyncAuditor(NULL)
     , m_pMultiplexer(NULL)
 {
+    if (ConfWrapper::getInstance()->isIncSync())
+        m_pReplSyncAuditor = new IncReplAuditor();
+        
 }
 
 //sockAdd:ip:port
@@ -42,6 +48,7 @@ ReplGroup::~ReplGroup ()
         m_pStatusFormater->removeStatusFile();
     delete m_pNodeInfoMgr;
     delete m_pSockConnMgr;
+    delete m_pReplSyncAuditor;
 }
 
 int ReplGroup::reinitMultiplexer()
@@ -72,9 +79,9 @@ void ReplGroup::FReplDoneCallBack(ServerConn *pConn, uint32_t startTm, uint32_t 
 
 void ReplGroup::firstLegAuditDone(ServerConn *pConn, uint32_t startTm, uint32_t endTm)
 {
-    m_replSyncAuditor.doneOneAudit(endTm);
+    getIncReplAuditor()->doneOneAudit(endTm);
     syncBulkReplTime(pConn, startTm, endTm);
-    if (!m_replSyncAuditor.isInitiator()) //void dead loop
+    if (!getIncReplAuditor()->isInitiator()) //void dead loop
         startSecLegAudit(pConn);    
 }
 
@@ -85,7 +92,7 @@ void ReplGroup::startSecLegAudit(ServerConn *pConn)
     ClientConn *pClntConn = getSockConnMgr()->getActvLstnrByAddr(pAddr);//sAddr.c_str(), len);
     assert(pClntConn != NULL  && isLstnrProc());
 
-    AutoBuf *pAutoBuf = m_replSyncAuditor.getSelfLstRTHash();
+    AutoBuf *pAutoBuf = getIncReplAuditor()->getSelfLstRTHash();
     assert (pAutoBuf->size() > 0);
     getReplSender()->clntSendSelfRTHash(pClntConn, pAutoBuf);
 }
@@ -117,19 +124,22 @@ int ReplGroup::refreshStatusFile()
     if (!isLstnrProc())
         return LS_OK;
     AutoBuf autoBuf;
-    getJsonStatus(autoBuf);
+    m_pNodeInfoMgr->getGroupJsonStatus(getSockConnMgr(), m_pStatusFormater, autoBuf);
     return m_pStatusFormater->writeStatusFile(autoBuf);
 }
 
 int ReplGroup::incSyncRepl()
 {
+    if (getIncReplAuditor() == NULL)
+        return LS_OK;
+
     FullReplAuditor &fRAuditor = getReplGroup()->getFullReplAuditor();
     if ( !fRAuditor.isFReplDone())
         return LS_FAIL;
 
     Addr2ClntConnMap_t activeLstnrs;
     m_pSockConnMgr->getAllActvLstnr(activeLstnrs);
-    if (!isLstnrProc() || activeLstnrs.size() == 0 || !getIncReplAuditor().isInitiator())
+    if (!isLstnrProc() || activeLstnrs.size() == 0 || !getIncReplAuditor()->isInitiator())
         return LS_FAIL;    
     if (activeLstnrs.size() != 1)
     {
@@ -155,66 +165,13 @@ int ReplGroup::incSyncRepl()
                 && isEqualIpOfAddr (pLstnrAddr, mitr.first()))
             {
                 LS_DBG_M("incSyncRepl listener svr %s match the accepted client addr:%s", pLstnrAddr, mitr.first());
-                m_replSyncAuditor.continueAudit((const ClientConn*)itr.second());
+                getIncReplAuditor()->continueAudit((const ClientConn*)itr.second());
                 break;
             }
         }    
     }
     activeLstnrs.clear();
     return LS_OK;
-}
-
-void ReplGroup::getJsonStatus(AutoBuf &rAutoBuf)
-{
-    bool isLeader, isSync;
-    Addr2SvrConnMap_t::const_iterator mitr;
-    const NodeInfo *pPeerNode;
-    const char *Ip;
-
-    ConfWrapper &replConf       = ConfWrapper::getInstance();
-    const NodeInfo *pLeaderNode = m_pNodeInfoMgr->getLeaderNode();
-    const char * localSvrIp     = replConf->getLocalLsntnrIp();
-    //1)local Json
-    rAutoBuf.append("{\n");
-    NodeInfo *pLocalInfo = m_pNodeInfoMgr->getLocalNodeInfo();
-    pLocalInfo->cmpLeaderNode(pLeaderNode, isLeader, isSync); 
-    
-    m_pStatusFormater->init(localSvrIp, true, isLeader, false, isSync, pLocalInfo);
-    m_pStatusFormater->mkJson(rAutoBuf);
-    
-    //2)acccepted node Json
-    Ip2NodeInfoMap_t::iterator itr;
-    Ip2NodeInfoMap_t &pNodeInfoMap = m_pNodeInfoMgr->getNodeInfoMap();
-    for (itr = pNodeInfoMap.begin(); itr != pNodeInfoMap.end(); 
-         itr = pNodeInfoMap.next(itr) )
-    {
-        if (itr.second() == m_pNodeInfoMgr->getLocalNodeInfo())
-            continue;
-        Ip = itr.first();
-        pPeerNode = getNodeInfoMgr()->getNodeInfo(Ip);
-        pPeerNode->cmpLeaderNode(pLeaderNode, isLeader, isSync);
-                rAutoBuf.append(",\n");
-        m_pStatusFormater->init(Ip, false, isLeader, false, isSync, pPeerNode);
-        m_pStatusFormater->mkJson(rAutoBuf);
-
-        /*for (mitr = clntConnMap.begin(); mitr != clntConnMap.end();
-             mitr = clntConnMap.next(mitr) )
-        {
-            pConn = mitr.second();
-            assert(pConn != NULL);
-            if (pConn->isConnected() // only one active connection per LB 
-                && isEqualIpOfAddr(Ip, pConn->getPeerAddr())) 
-            {
-                pPeerNode = itr.second();
-                pPeerNode->cmpLeaderNode(pLeaderNode, isLeader, isSync);
-                rAutoBuf.append(",\n");
-                m_pStatusFormater->init(Ip, false, isLeader, false, isSync, pPeerNode);
-                m_pStatusFormater->mkJson(rAutoBuf);
-                break;
-            }
-        }*/    
-    }
-    rAutoBuf.append("}\n");
 }
 
 int ReplGroup::addReplTaskByRtHash(time_t startTm, time_t endTm
@@ -228,7 +185,7 @@ int ReplGroup::addReplTaskByRtHash(time_t startTm, time_t endTm
     int ret = cmpRTReplHash(localRtHash, localLen, peerRtHash, peerLen, diffRtHash);
     if (ret > 0)
     {
-        m_replSyncAuditor.addBReplTask(pConn, diffRtHash);
+        getIncReplAuditor()->addBReplTask(pConn, diffRtHash);
     }
     else
     {

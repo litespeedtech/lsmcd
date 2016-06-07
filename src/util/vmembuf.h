@@ -96,11 +96,13 @@ public:
     off_t getCurWOffset() const
     {   return m_pCurWBlock ? (m_curWBlkPos - ((*m_pCurWBlock)->getBufEnd() - m_pCurWPos)) : 0;   }
     int write(const char *pBuf, int size);
+    int write(VMemBuf *pBuf, off_t offset, int size);
     bool isMmaped() const {   return m_type >= VMBUF_ANON_MAP;  }
     //int  seekRPos( size_t pos );
     //int  seekWPos( size_t pos );
     void rewindWriteBuf();
     void rewindReadBuf();
+    int  seekWritePos(off_t offset);
     void rewindWOff(off_t rewind);
     int setROffset(off_t offset);
     int getfd() const               {   return m_fd;            }

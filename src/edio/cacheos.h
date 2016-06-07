@@ -20,7 +20,7 @@ public:
     CacheOS() {}
     virtual ~CacheOS() {}
     //        pRet return total bytes written to output stream
-    // return -1 if error occure
+    // return LS_FAIL if error occure
     //        other total bytes cached and written to output stream
 
     virtual int cacheWrite(const char *pBuf, int size,

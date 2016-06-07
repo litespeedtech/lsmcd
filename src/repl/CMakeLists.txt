@@ -2,6 +2,7 @@
     repldef.cpp
     lruhashreplbridge.cpp
     replprgrsstrkr.cpp
+    jsonstatus.cpp
     nodeinfo.cpp
     repllistener.cpp
     replconn.cpp

@@ -8,9 +8,9 @@
 #define OBJPOOL_H
 
 
-#include <util/gpointerlist.h>
 
 #include <assert.h>
+#include "gpointerlist.h"
 typedef int (*ObjFun)(void *pObj, void *param);
 
 class GObjPool
@@ -43,6 +43,7 @@ public:
 
     void recycle(void *pObj)
     {
+        assert(m_freeList.find(pObj) == m_freeList.end());
         if (pObj)
             m_freeList.safe_push_back(pObj);
     }
@@ -60,6 +61,7 @@ public:
 
     void recycle(void **pObj, int n)
     {
+        assert(!m_freeList.full());
         if (pObj)
             m_freeList.safe_push_back(pObj, n);
     }

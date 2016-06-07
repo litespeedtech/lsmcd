@@ -87,15 +87,15 @@ static inline int signalfd(int ufc, sigset_t const *mask, int flag)
     return syscall(__NR_signalfd, ufc, mask, SIZEOF_SIGSET);
 }
 
-static int s_useSignalfd = 0;
+static int s_noSignalfd = 0;
 
 #endif //defined(linux) || defined(__linux) || defined(__linux__) || defined(__gnu_linux__)
 
 int SigEventDispatcher::processSigEvent()
 {
 #if defined(linux) || defined(__linux) || defined(__linux__) || defined(__gnu_linux__)
-    if (s_useSignalfd)
-        return 0;
+    if (!s_noSignalfd)
+        return LS_OK;
 #endif //defined(linux) || defined(__linux) || defined(__linux__) || defined(__gnu_linux__)
 
 #ifdef LS_AIO_USE_SIGNAL
@@ -116,7 +116,7 @@ int SigEventDispatcher::processSigEvent()
         ((AioEventHandler *)si.si_value.sival_ptr)->onAioEvent();
     }
 #endif
-    return 0;
+    return LS_OK;
 }
 
 int SigEventDispatcher::init()
@@ -132,12 +132,14 @@ int SigEventDispatcher::init()
     if (pReactor->getfd() != -1)
     {
         MultiplexerFactory::getMultiplexer()->add(pReactor, POLLIN);
-        s_useSignalfd = 1;
     }
     else
+    {
+        s_noSignalfd = 1;
         delete pReactor;
+    }
 #endif
-    return 0;
+    return LS_OK;
 }
 
 
@@ -160,24 +162,24 @@ int SigEventDispatcher::handleEvents(short event)
     int i, readCount = 0;
     signalfd_siginfo si[5];
     if (!(event & POLLIN))
-        return 0;
+        return LS_OK;
     do
     {
         if ((readCount = read(getfd(), &si, sizeof(signalfd_siginfo) * 5)) < 0)
         {
             if (errno == EAGAIN)
                 break;
-            return -1;
+            return LS_FAIL;
         }
         else if (readCount == 0)
-            return 0;
+            return LS_OK;
         readCount /= sizeof(signalfd_siginfo);
         for (i = 0; i < readCount; ++i)
             ((AioEventHandler *)si[i].ssi_ptr)->onAioEvent();
     }
     while (readCount == 5);
 #endif
-    return 0;
+    return LS_OK;
 }
 
 #endif //defined(LS_AIO_USE_SIGNAL)

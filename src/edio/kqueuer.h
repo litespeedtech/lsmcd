@@ -43,21 +43,22 @@ class KQueuer : public Multiplexer
                     unsigned short flags)
     {
         if (fd == -1)
-            return 0;
+            return LS_OK;
         if (m_curChange == m_changeCapacity)
         {
             if (allocateChangeBuf(m_changeCapacity + 64) == -1)
-                return -1;
+                return LS_FAIL;
         }
         struct kevent *pEvent = m_pChanges + m_curChange++;
         pEvent->ident  = fd;
         pEvent->filter = filter;
         pEvent->flags  = flags;
         pEvent->udata  = pHandler;
-        return 0;
+        return LS_OK;
     }
     void processAioEvent(struct kevent *pEvent);
     void processSocketEvent(struct kevent *pEvent);
+    int  processEvents();
 
 public:
     KQueuer();
@@ -69,7 +70,6 @@ public:
     virtual int waitAndProcessEvents(int iTimeoutMilliSec);
     virtual void timerExecute();
     virtual void setPriHandler(EventReactor::pri_handler handler);
-    virtual int processEvents();
 
     virtual void continueRead(EventReactor *pHandler);
     virtual void suspendRead(EventReactor *pHandler);

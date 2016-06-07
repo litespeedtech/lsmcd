@@ -26,20 +26,20 @@ int FdIndex::allocate(int capacity)
     unsigned short *pIndexes = (unsigned short *) realloc(m_pIndexes,
                                capacity * sizeof(short));
     if (!pIndexes)
-        return -1;
+        return LS_FAIL;
     if (capacity > m_capacity)
         memset(pIndexes + m_capacity, -1,
                sizeof(short) * (capacity - m_capacity));
     m_pIndexes = pIndexes;
     m_capacity = capacity;
-    return 0;
+    return LS_OK;
 }
 
 int FdIndex::deallocate()
 {
     if (m_pIndexes)
         free(m_pIndexes);
-    return 0;
+    return LS_OK;
 }
 
 

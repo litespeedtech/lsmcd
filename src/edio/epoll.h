@@ -15,14 +15,19 @@
   *@author George Wang
   */
 struct epoll_event;
+template< typename T >
+class TObjArray;
+
 
 class epoll : public Multiplexer
 {
-    int                  m_epfd;
+    int                 m_epfd;
     struct epoll_event *m_pResults;
     struct epoll_event *m_pResEnd;
     struct epoll_event *m_pResCur;
-    ReactorIndex         m_reactorIndex;
+    ReactorIndex        m_reactorIndex;
+    TObjArray<int>     *m_pUpdates;
+    
     int updateEvents(EventReactor *pHandler, short mask);
 
     void addEvent(EventReactor *pHandler, short mask)
@@ -43,8 +48,17 @@ class epoll : public Multiplexer
             updateEvents(pHandler, mask);
         }
     }
+    
+    int addEx(int fd, short mask);
+    int removeEx(int fd);
+    int updateEventsEx(int fd, short mask);
+    
     int reinit();
 
+    void applyEvents();
+    void appendEvent(int fd);
+    int  processEvents();
+    
 public:
     epoll();
     ~epoll();
@@ -56,8 +70,6 @@ public:
     virtual void timerExecute();
     virtual void setPriHandler(EventReactor::pri_handler handler) {};
 
-    virtual int processEvents();
-
     virtual void continueRead(EventReactor *pHandler);
     virtual void suspendRead(EventReactor *pHandler);
     virtual void continueWrite(EventReactor *pHandler);
@@ -65,6 +77,7 @@ public:
     virtual void switchWriteToRead(EventReactor *pHandler);
     virtual void switchReadToWrite(EventReactor *pHandler);
 
+    LS_NO_COPY_ASSIGN(epoll);
 
 };
 

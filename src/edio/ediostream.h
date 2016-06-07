@@ -48,8 +48,6 @@ class EdStream : public EventReactor, public EdIS,
 {
     Multiplexer *m_pMplex;
 
-    EdStream(const EdStream &rhs);
-    void operator=(const EdStream &rhs);
     virtual int handleEvents(short event);
     int regist(Multiplexer *pMplx, int event = 0);
 protected:
@@ -143,8 +141,11 @@ public:
 //    virtual bool wantWrite() = 0;
 //    void updateEvents();
     int close();
-    int flush()    {   return 0;    }
+    int flush()    {   return LS_OK;    }
     int getSockError(int32_t *error);
+
+    LS_NO_COPY_ASSIGN(EdStream);
+    
 };
 
 

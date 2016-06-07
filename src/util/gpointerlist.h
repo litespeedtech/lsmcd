@@ -100,6 +100,15 @@ public:
                                int(*compare)(const void *, const void *)) const ;
     const_iterator bfind(const void *pKey,
                          int(*compare)(const void *, const void *)) const;
+                         
+    const_iterator find(const void *obj) const
+    {
+        for (const_iterator iter = begin(); iter < end(); ++iter)
+            if (*iter == obj)
+                return iter;
+        return end();
+    }
+                     
     int for_each(iterator beg, iterator end, gpl_for_each_fn fn);
     int for_each2(iterator beg, iterator end, gpl_for_each_fn2 fn,
                   void *param);

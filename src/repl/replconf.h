@@ -45,7 +45,15 @@ public:
     
     int    getHbFreq() const             {       return m_hbFreq;         }
     void   setHbFreq(int secs);
-    const StringList &getLbLegalIps() const     {       return m_LbLegalIps;            } 
+    
+    void setIncSync(bool b)                     {       m_bIncSync = b;         }
+    bool isIncSync() const                      {       return m_bIncSync;      }
+    
+    void setSockCached(bool b)                  {       m_bSockCached = b;         }
+    bool isSockCached() const                   {       return m_bSockCached;      }
+    
+    
+    const StringList &getLbLegalIps() const     {       return m_LbLegalIps;    } 
 
 protected:
     int                 m_hbTimeout;
@@ -53,6 +61,8 @@ protected:
     AutoStr             m_lsntnrSvrAddr;
     AutoStr             m_lsntnrSvrIp;
     bool                m_bGzipStream;
+    bool                m_bIncSync;
+    bool                m_bSockCached;
     StringList          m_LbPeerAddrs;
     StringList          m_LbLegalIps;
 };

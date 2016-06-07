@@ -396,3 +396,22 @@ int SockConnMgr::getActvLstnrConnCnt()
     }
     return cnt;
 }
+
+bool SockConnMgr::isAceptedIpActv(const char *pAcptedIp)
+{
+    ServerConn *pConn;
+    Addr2SvrConnMap_t::const_iterator mitr;
+    for (mitr = getAcptConnMap().begin();
+            mitr != getAcptConnMap().end();
+            mitr = getAcptConnMap().next(mitr) )
+    {
+        pConn = mitr.second();
+        assert(pConn != NULL);
+        if (pConn->isConnected()
+            && isEqualIpOfAddr(pAcptedIp, pConn->getPeerAddr()))
+        {
+            return true;
+        }
+    }
+    return false;
+}

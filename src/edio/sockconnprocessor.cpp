@@ -3,6 +3,7 @@
  * LITE SPEED PROPRIETARY/CONFIDENTIAL.
  */
 
+#include <lsdef.h>
 
 #include "sockconnprocessor.h"
 #include "socketlistener.h"
@@ -13,9 +14,9 @@
 int SockConnProcessor::setName(const char* pName)
 {
     if ( getListener() == NULL )
-        return -1;
+        return LS_FAIL;
     getListener()->setName( pName );
-    return 0;
+    return LS_OK;
 }
 
 
@@ -30,16 +31,16 @@ const char* SockConnProcessor::getName() const
 int SockConnProcessor::setBinding( unsigned int b )
 {
     if ( getListener() == NULL )
-        return -1;
+        return LS_FAIL;
     getListener()->setBinding( b );
-    return 0;
+    return LS_OK;
 }
 
 
 unsigned int SockConnProcessor::getBinding() const
 {
     if ( getListener() == NULL )
-        return 0;
+        return LS_OK;
     return getListener()->getBinding();
 }
 

@@ -4,10 +4,9 @@
 #include <lsdef.h>
 #include <shm/lsshmhashobserver.h>
 #include <shm/lsshmtypes.h>
-
 #include <openssl/md5.h>
 #include <time.h>
-
+#include "repldef.h"
 class AutoBuf;
 class ReplProgressTrker;
 
@@ -31,17 +30,15 @@ public:
                               AutoBuf & rAutoBuf) const;
 
     time_t hashTillNextTmSlot(time_t tm, time_t endTm, 
-                              AutoBuf &rAutoBuf, uint32_t &count) const;
-
-    void appendKeyVal(uint32_t lruTm, uint32_t uKeyLen
-                      , uint32_t uValLen, const char* pKey
-                      , const char* pVal, AutoBuf &rAutoBuf) const;
+                              AutoBuf &rAutoBuf) const;
 
     time_t getCurrHeadShmTm() const;
     time_t getCurrTailShmTm() const;
     time_t getCurrLruNextTm(time_t tm) const;
     time_t getElmLruTm(LsShmHIterOff offCurr) const;
     int getContId() const       {       return m_contId;        }
+protected:
+    time_t for_each_tmslot(time_t tm, time_t endTm, for_each_fn2 fn, void* pUData1) const;    
 private:
     int m_contId;
     LS_NO_COPY_ASSIGN(LruHashReplBridge);

@@ -8,9 +8,7 @@
 #define FDINDEX_H
 
 
-/**
-  *@author George Wang
-  */
+#include <lsdef.h>
 
 class FdIndex
 {
@@ -33,10 +31,10 @@ public:
             if (new_cap <= fd)
                 new_cap = fd + 1;
             if (allocate(new_cap) == -1)
-                return -1;
+                return LS_FAIL;
         }
         m_pIndexes[fd] = index;
-        return 0;
+        return LS_OK;
     }
 
 };

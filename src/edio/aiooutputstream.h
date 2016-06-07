@@ -18,19 +18,17 @@
 #ifndef AIOOUTPUTSTREAM_H
 #define AIOOUTPUTSTREAM_H
 
+#include <lsdef.h>
 #include <edio/aioeventhandler.h>
-#include <util/autobuf.h>
 
 #include <aio.h>
-#include <signal.h>
-#include <stddef.h>
-#include <stdarg.h>
 #include <sys/types.h>
 
 #ifdef LS_AIO_USE_KQ
 #include <sys/event.h>
 #endif
 
+class AutoBuf;
 
 class AioReq
 {
@@ -42,36 +40,37 @@ private:
 public:
     AioReq();
 
-    inline void *getBuf()
+    void *getBuf()
     {
         void *p = (void *)m_aiocb.aio_buf;
         m_aiocb.aio_buf = NULL;
         return p;
     }
 
-    inline off_t getOffset()
+    off_t getOffset()
     {   return m_aiocb.aio_offset;  }
 
-    inline int getError()
+    int getError()
     {   return aio_error(&m_aiocb);   }
 
     //NOTICE: If the error is EINPROGRESS, the result of this is undefined.
-    inline int getReturn()
+    int getReturn()
     {   return aio_return(&m_aiocb);  }
 
-    inline int read(int fildes, void *buf, int nbytes, int offset,
+    int read(int fildes, void *buf, int nbytes, int offset,
                     AioEventHandler *pHandler)
     {
         setcb(fildes, buf, nbytes, offset, pHandler);
         return aio_read(&m_aiocb);
     }
-    inline int write(int fildes, void *buf, int nbytes, int offset,
+    
+    int write(int fildes, void *buf, int nbytes, int offset,
                      AioEventHandler *pHandler)
     {
         setcb(fildes, buf, nbytes, offset, pHandler);
         return aio_write(&m_aiocb);
     }
-
+    LS_NO_COPY_ASSIGN(AioReq);
 };
 
 class AioOutputStream : public AioEventHandler, private AioReq
@@ -120,6 +119,7 @@ public:
     int append(const char *pBuf, int len);
     virtual int onAioEvent();
     int flush();
+    LS_NO_COPY_ASSIGN(AioOutputStream);
 };
 
 

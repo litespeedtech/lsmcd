@@ -30,59 +30,59 @@ DevPoller::~DevPoller()
 int DevPoller::init(int capacity)
 {
     if (m_reactorIndex.allocate(capacity) == -1)
-        return -1;
+        return LS_FAIL;
     if ((m_fdDP = open("/dev/poll", O_RDWR)) < 0)
-        return -1;
+        return LS_FAIL;
     ::fcntl(m_fdDP, F_SETFD, FD_CLOEXEC);
-    return 0;
+    return LS_OK;
 }
 
 int DevPoller::applyChanges()
 {
     int ret = write(m_fdDP, m_changes, sizeof(struct pollfd) * m_curChanges);
     if (ret != (int)sizeof(struct pollfd) * m_curChanges)
-        return -1;
+        return LS_FAIL;
     m_curChanges = 0;
-    return 0;
+    return LS_OK;
 }
 
 
 int DevPoller::add(EventReactor *pHandler, short mask)
 {
     if (!pHandler)
-        return -1;
+        return LS_FAIL;
     int fd = pHandler->getfd();
     if (m_reactorIndex.get(fd))
     {
         errno = EEXIST;
-        return -1;
+        return LS_FAIL;
     }
     pHandler->setPollfd();
     pHandler->setMask2(mask);
     if (!appendChange(fd, mask))
         m_reactorIndex.set(fd, pHandler);
-    return 0;
+    return LS_OK;
 
 }
 
 int DevPoller::remove(EventReactor *pHandler)
 {
     if (!pHandler)
-        return -1;
+        return LS_FAIL;
     int fd = pHandler->getfd();
     if (!m_reactorIndex.get(fd))
-        return 0;
+        return LS_OK;
     if (!appendChange(fd, POLLREMOVE))
         m_reactorIndex.set(fd, NULL);
     applyChanges();
-    return 0;
+    return LS_OK;
 }
 
 int DevPoller::waitAndProcessEvents(int iTimeoutMilliSec)
 {
     if (m_curChanges)
         if (applyChanges() == -1)
-            return -1;
+            return LS_FAIL;
     struct dvpoll dvp;
     dvp.dp_fds     = m_events;
     dvp.dp_nfds    = MAX_EVENTS;
@@ -129,7 +129,7 @@ int DevPoller::processEvents()
             }
         }
     }
-    return 0;
+    return LS_OK;
 }
 
 void DevPoller::timerExecute()

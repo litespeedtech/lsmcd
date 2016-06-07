@@ -9,116 +9,30 @@
 #include "epoll.h"
 
 #include "log4cxx/logger.h"
+#include <util/objarray.h>
 
 #include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
-#include <sys/syscall.h>
 #include <unistd.h>
 
 #include <sys/types.h>
 
-#if 0
-#ifndef __NR_epoll_create
-
-#define __NR_epoll_create   (254)
-#define __NR_epoll_ctl      (255)
-#define __NR_epoll_wait     (256)
-
-#endif
-
-#ifndef EPOLL_EVENTS
-
-enum EPOLL_EVENTS
-{
-    EPOLLIN = 0x001,
-#define EPOLLIN EPOLLIN
-
-    EPOLLPRI = 0x002,
-#define EPOLLPRI EPOLLPRI
-
-    EPOLLOUT = 0x004,
-#define EPOLLOUT EPOLLOUT
-
-#ifdef __USE_XOPEN
-
-    EPOLLRDNORM = 0x040,
-#define EPOLLRDNORM EPOLLRDNORM
-
-    EPOLLRDBAND = 0x080,
-#define EPOLLRDBAND EPOLLRDBAND
-
-    EPOLLWRNORM = 0x100,
-#define EPOLLWRNORM EPOLLWRNORM
-
-    EPOLLWRBAND = 0x200,
-#define EPOLLWRBAND EPOLLWRBAND
-
-#endif /* #ifdef __USE_XOPEN */
-
-#ifdef __USE_GNU
-    EPOLLMSG = 0x400,
-#define EPOLLMSG EPOLLMSG
-#endif /* #ifdef __USE_GNU */
-
-    EPOLLERR = 0x008,
-#define EPOLLERR EPOLLERR
-
-    EPOLLHUP = 0x010
-#define EPOLLHUP EPOLLHUP
-
-};
-
-/* Valid opcodes ( "op" parameter ) to issue to epoll_ctl() */
-#define EPOLL_CTL_ADD 1 /* Add a file decriptor to the interface */
-#define EPOLL_CTL_DEL 2 /* Remove a file decriptor from the interface */
-#define EPOLL_CTL_MOD 3 /* Change file decriptor epoll_event structure */
-#ifdef HAVE_EPOLL_CTLV
-#define EPOLL_CTLV    4 /* Treat this as an epoll_ctlv call */
-/* In this case the data.u32 field contains the op */
-#endif /* HAVE_EPOLL_CTLV */
-
-typedef union epoll_data
-{
-    void *ptr;
-    int fd;
-    __uint32_t u32;
-    __uint64_t u64;
-} epoll_data_t;
-
-struct epoll_event
-{
-    __uint32_t events; /* Epoll events */
-    epoll_data_t data; /* User data variable */
-};
-
-
-#ifdef HAVE_EPOLL_CTLV
-struct epoll_event_ctlv
-{
-    int op;
-    int fd;
-    long res;
-    struct epoll_event event;
-} EPOLL_PACKED;
-#endif /* HAVE_EPOLL_CTLV */
-
-#endif
-
-#endif
 
 static int s_loop_fd = -1;
 static int s_loop_count = 0;
-static int s_problems = 0;
+//static int s_problems = 0;
 epoll::epoll()
     : m_epfd(-1)
     , m_pResults(NULL)
 {
     setFLTag(O_NONBLOCK | O_RDWR);
-
+    m_pUpdates = new TObjArray<int>();
+    m_pUpdates->alloc(100);
 }
 
 epoll::~epoll()
@@ -127,6 +41,8 @@ epoll::~epoll()
         close(m_epfd);
     if (m_pResults)
         free(m_pResults);
+    if (m_pUpdates)
+        delete m_pUpdates;
 }
 
 #define EPOLL_RESULT_BUF_SIZE   4096
@@ -135,31 +51,30 @@ epoll::~epoll()
 int epoll::init(int capacity)
 {
     if (m_reactorIndex.allocate(capacity) == -1)
-        return -1;
+        return LS_FAIL;
     if (!m_pResults)
     {
         m_pResults = (struct epoll_event *)malloc(EPOLL_RESULT_BUF_SIZE);
         if (!m_pResults)
-            return -1;
+            return LS_FAIL;
         memset(m_pResults, 0, EPOLL_RESULT_BUF_SIZE);
     }
     if (m_epfd != -1)
         close(m_epfd);
-    //m_epfd = (syscall(__NR_epoll_create, capacity ));
     m_epfd = epoll_create(capacity);
     if (m_epfd == -1)
-        return -1;
+        return LS_FAIL;
     ::fcntl(m_epfd, F_SETFD, FD_CLOEXEC);
-    return 0;
+    return LS_OK;
 }
 
 int epoll::reinit()
 {
     struct epoll_event epevt;
     close(m_epfd);
-    m_epfd = (syscall(__NR_epoll_create, m_reactorIndex.getCapacity()));
+    m_epfd = epoll_create(m_reactorIndex.getCapacity());
     if (m_epfd == -1)
-        return -1;
+        return LS_FAIL;
     epevt.data.u64 = 0;
     ::fcntl(m_epfd, F_SETFD, FD_CLOEXEC);
     int n = m_reactorIndex.getUsed();
@@ -171,11 +86,10 @@ int epoll::reinit()
             epevt.data.u64 = 0;
             epevt.data.fd = pHandler->getfd();
             epevt.events = pHandler->getEvents();
-            //(syscall(__NR_epoll_ctl, m_epfd, EPOLL_CTL_ADD, epevt.data.fd, &epevt));
             epoll_ctl(m_epfd, EPOLL_CTL_ADD, epevt.data.fd, &epevt);
         }
     }
-    return 0;
+    return LS_OK;
 }
 /*
 #include <typeinfo>
@@ -187,70 +101,111 @@ void dump_type_info( EventReactor * pHandler, const char * pMsg )
 */
 int epoll::add(EventReactor *pHandler, short mask)
 {
-    struct epoll_event epevt;
     int fd = pHandler->getfd();
     if (fd == -1)
-        return 0;
+        return LS_OK;
     //assert( fd > 1 );
     if (fd > 100000)
-        return -1;
-    memset(&epevt, 0, sizeof(struct epoll_event));
+        return LS_FAIL;
     m_reactorIndex.set(fd, pHandler);
+    LS_DBG_H( "epoll::add( %d, %d )\n", fd, mask);
     pHandler->setPollfd();
     pHandler->setMask2(mask);
     pHandler->clearRevent();
-    epevt.data.u64 = 0;
+    if (addEx(fd, mask) == 0)
+    {
+        pHandler->updateEventSet();
+        return 0;
+    }
+    return -1;
+//     pHandler->addFlag(ERF_ADD);
+//     appendEvent(fd);
+//     return LS_OK;
+}
+
+
+int epoll::addEx(int fd, short mask)
+{
+    struct epoll_event epevt;
+    memset(&epevt, 0, sizeof(struct epoll_event));
     epevt.data.fd = fd;
     epevt.events = mask;
     //if (LS_LOG_ENABLED(LOG4CXX_NS::Level::DBG_LESS) || s_problems )
     //    dump_type_info( pHandler, "added" );
-    //return (syscall(__NR_epoll_ctl, m_epfd, EPOLL_CTL_ADD, fd, &epevt));
     return epoll_ctl(m_epfd, EPOLL_CTL_ADD, fd, &epevt);
 }
 
+
 int epoll::updateEvents(EventReactor *pHandler, short mask)
 {
-    struct epoll_event epevt;
     int fd = pHandler->getfd();
     if (fd == -1)
-        return 0;
+        return LS_OK;
     assert(pHandler == m_reactorIndex.get(fd));
     pHandler->setMask2(mask);
-    //assert( fd > 1 );
+    LS_DBG_H( "epoll::updateEvents( %d, %d )\n", fd, pHandler->getEvents());
+    
+    appendEvent(fd);
+    return LS_OK;
+    //return updateEventsEx(fd, mask);
+}
+
+
+int epoll::updateEventsEx(int fd, short mask)
+{
+    struct epoll_event epevt;
     memset(&epevt, 0, sizeof(struct epoll_event));
-    epevt.data.u64 = 0;
     epevt.data.fd = fd;
     epevt.events = mask;
-    //return (syscall(__NR_epoll_ctl, m_epfd, EPOLL_CTL_MOD, fd, &epevt));
     return epoll_ctl(m_epfd, EPOLL_CTL_MOD, fd, &epevt);
 }
 
+
 int epoll::remove(EventReactor *pHandler)
 {
-    struct epoll_event epevt;
     int fd = pHandler->getfd();
     if (fd == -1)
-        return 0;
+        return LS_OK;
     //assert( pHandler == m_reactorIndex.get( fd ) );
-    pHandler->clearRevent();
+    if (fd <= (int)m_reactorIndex.getUsed())
+    {
+        LS_DBG_H( "epoll::remove( %d )\n", fd);
+        //pHandler->removeFlag(ERF_ADD);
+        pHandler->clearRevent();
+        pHandler->setMask2(0);
+        pHandler->updateEventSet();
+        m_reactorIndex.set(fd, NULL);
+    }
+    return removeEx(fd);
+//    return LS_OK;
+//     }
+//     pHandler->addFlag(ERF_REMOVE);
+//     pHandler->clearRevent();
+//     pHandler->setMask2(0);
+//     appendEvent(pHandler);
+//     return LS_OK;
     //assert( fd > 1 );
+    //return removeEx(fd);
+}    
+    
+
+int epoll::removeEx(int fd)
+{
+    struct epoll_event epevt;
     memset(&epevt, 0, sizeof(struct epoll_event));
 
-    epevt.data.u64 = 0;
     epevt.data.fd = fd;
-    epevt.events = 0;
 
-    if (fd <= (int)m_reactorIndex.getUsed())
-        m_reactorIndex.set(fd, NULL);
     //if (LS_LOG_ENABLED(LOG4CXX_NS::Level::DBG_LESS) || s_problems )
     //    dump_type_info( pHandler, "remove" );
-    //return (syscall(__NR_epoll_ctl, m_epfd, EPOLL_CTL_DEL, fd, &epevt ));
+    LS_DBG_H( "epoll_ctl( DEL, %d ) \n", fd);
     return epoll_ctl(m_epfd, EPOLL_CTL_DEL, fd, &epevt);
 }
 
+
 int epoll::waitAndProcessEvents(int iTimeoutMilliSec)
 {
-    //int ret = (syscall(__NR_epoll_wait, m_epfd, m_pResults, EPOLL_RESULT_MAX, iTimeoutMilliSec ));
+    applyEvents();
     int ret = epoll_wait(m_epfd, m_pResults, EPOLL_RESULT_MAX,
                          iTimeoutMilliSec);
     if (ret <= 0)
@@ -258,6 +213,8 @@ int epoll::waitAndProcessEvents(int iTimeoutMilliSec)
     if (ret == 1)
     {
         int fd = m_pResults->data.fd;
+        //LS_DBG_H( "epoll_event( %d, %d ) \n", fd, m_pResults->events);
+
         EventReactor *pReactor = m_reactorIndex.get(fd);
         if (pReactor && (pReactor->getfd() == fd))
         {
@@ -277,6 +234,8 @@ int epoll::waitAndProcessEvents(int iTimeoutMilliSec)
     while (p < m_pResEnd)
     {
         int fd = p->data.fd;
+        //LS_DBG_H( "epoll_event( %d, %d ) \n", fd, p->events);
+        
         EventReactor *pReactor = m_reactorIndex.get(fd);
         assert(p->events);
         if (pReactor)
@@ -288,40 +247,44 @@ int epoll::waitAndProcessEvents(int iTimeoutMilliSec)
         }
         else
         {
-            //p->data.fd = -1;
-            if ((s_loop_fd == -1) || (s_loop_fd == fd))
-            {
-                if (s_loop_fd == -1)
-                {
-                    s_loop_fd = fd;
-                    s_loop_count = 0;
-                }
-                problem_detected = 1;
-                ++s_loop_count;
-                if (s_loop_count == 10)
-                {
-                    if (p->events & (POLLHUP | POLLERR))
-                        close(fd);
-                    else
-                    {
-                        struct epoll_event epevt;
-                        memset(&epevt, 0, sizeof(struct epoll_event));
-                        epevt.data.u64 = 0;
-                        epevt.data.fd = fd;
-                        epevt.events = 0;
-                        (syscall(__NR_epoll_ctl, m_epfd, EPOLL_CTL_DEL, fd, &epevt));
-                        LS_WARN("[%d] Remove looping fd: %d, event: %d\n", getpid(), fd,
-                                p->events);
-                        ++s_problems;
-                    }
-                }
-                else if (s_loop_count >= 20)
-                {
-                    LS_WARN("Looping fd: %d, event: %d\n", fd, p->events);
-                    assert(p->events);
-                    problem_detected = 0;
-                }
-            }
+            if (removeEx(fd) == -1)
+                if (p->events & (POLLHUP | POLLERR))
+                    close(fd);
+            
+//             //p->data.fd = -1;
+//             if ((s_loop_fd == -1) || (s_loop_fd == fd))
+//             {
+//                 if (s_loop_fd == -1)
+//                 {
+//                     s_loop_fd = fd;
+//                     s_loop_count = 0;
+//                 }
+//                 problem_detected = 1;
+//                 ++s_loop_count;
+//                 if (s_loop_count == 10)
+//                 {
+//                     if (p->events & (POLLHUP | POLLERR))
+//                         close(fd);
+//                     else
+//                     {
+//                         struct epoll_event epevt;
+//                         memset(&epevt, 0, sizeof(struct epoll_event));
+//                         epevt.data.u64 = 0;
+//                         epevt.data.fd = fd;
+//                         epevt.events = 0;
+//                         epoll_ctl(m_epfd, EPOLL_CTL_DEL, fd, &epevt);
+//                         LS_WARN("[%d] Remove looping fd: %d, event: %d\n", getpid(), fd,
+//                                 p->events);
+//                         ++s_problems;
+//                     }
+//                 }
+//                 else if (s_loop_count >= 20)
+//                 {
+//                     LS_WARN("Looping fd: %d, event: %d\n", fd, p->events);
+//                     assert(p->events);
+//                     problem_detected = 0;
+//                 }
+//             }
         }
         ++p;
     }
@@ -333,12 +296,13 @@ int epoll::waitAndProcessEvents(int iTimeoutMilliSec)
     return processEvents();
 }
 
+
 int epoll::processEvents()
 {
     struct epoll_event *p;
     int count = m_pResCur >= m_pResEnd;
     if (count > 0)
-        return 0;
+        return LS_OK;
     while (m_pResCur < m_pResEnd)
     {
         p = m_pResCur++;
@@ -356,89 +320,11 @@ int epoll::processEvents()
     }
 
     memset(m_pResults, 0, (char *)m_pResEnd - (char *)m_pResults);
+    applyEvents();
     return count;
 
 }
 
-/*
-int epoll::waitAndProcessEvents( int iTimeoutMilliSec )
-{
-    int ret = (syscall(__NR_epoll_wait, m_epfd, m_pResults, EPOLL_RESULT_MAX, iTimeoutMilliSec ));
-    if ( ret > 0 )
-    {
-        //if ( ret > EPOLL_RESULT_MAX )
-        //    ret = EPOLL_RESULT_MAX;
-        register int    problem_detected = 1;
-        register struct epoll_event * m_pResEnd= m_pResults + ret;
-        register struct epoll_event * p = m_pResults;
-        while( p < m_pResEnd )
-        {
-            int fd = p->data.fd;
-            EventReactor * pReactor = m_reactorIndex.get( fd );
-            if ( pReactor && (pReactor->getfd() == fd ) )
-            {
-                pReactor->handleEvents( p->events );
-                problem_detected = 0;
-            }
-            else if ( !pReactor )
-            {
-
-                if (( s_loop_fd == -1 )||( s_loop_fd == fd ))
-                {
-                    s_loop_fd = fd;
-                    ++s_loop_count;
-                    if ( s_loop_count == 10 )
-                    {
-                        struct epoll_event epevt;
-                        memset( &epevt, 0, sizeof( struct epoll_event ) );
-                        epevt.data.u64 = 0;
-                        epevt.data.fd = fd;
-                        epevt.events = 0;
-                        (syscall(__NR_epoll_ctl, m_epfd, EPOLL_CTL_DEL, fd, &epevt ));
-                        LS_WARN( "Remove looping fd: %d, event: %d\n", fd, p->events ));
-                    }
-                    else if ( s_loop_count >= 20 )
-                    {
-                        LS_WARN( "Looping fd: %d, event: %d\n", fd, p->events ));
-                        //close( fd );
-                        //char achCmd[100];
-                        //snprintf( achCmd, 100, "lsof -p %d 1>&2", getpid() );
-                        //system( achCmd );
-                        //abort();
-                        problem_detected = 0;
-                    }
-                }
-
-                //struct epoll_event epevt;
-                //memset( &epevt, 0, sizeof( struct epoll_event ) );
-
-                //epevt.data.u64 = 0;
-                //epevt.data.fd = fd;
-                //epevt.events = 0;
-
-                //(syscall(__NR_epoll_ctl, m_epfd, EPOLL_CTL_DEL, fd, &epevt ));
-
-                //close( fd );
-                //if ( p->data.u32 != p->data.u64 )
-                //{
-                //    reinit();
-                //    return 0;
-                //}
-                //(syscall(__NR_epoll_ctl, m_epfd, EPOLL_CTL_DEL, fd, m_pResEnd ));
-            }
-            ++p;
-        }
-        if ( !problem_detected && s_loop_count )
-        {
-            s_loop_fd = -1;
-            s_loop_count = 0;
-        }
-        memset( m_pResults, 0, sizeof( struct epoll_event) * ret );
-    }
-    return ret;
-
-}
-*/
 
 void epoll::timerExecute()
 {
@@ -477,6 +363,63 @@ void epoll::switchWriteToRead(EventReactor *pHandler)
 void epoll::switchReadToWrite(EventReactor *pHandler)
 {
     setEvents(pHandler, POLLOUT | POLLHUP | POLLERR);
+}
+
+
+void epoll::applyEvents()
+{
+    int ret;
+    struct epoll_event epevt;
+    memset(&epevt, 0, sizeof(struct epoll_event));
+
+    int *p = m_pUpdates->begin();
+    int *pEnd = m_pUpdates->end();
+    while(p < pEnd)
+    {
+        epevt.data.fd = *p++;
+        LS_DBG_H( "epoll::apply( %d )\n", epevt.data.fd);
+        EventReactor *pReactor = m_reactorIndex.get(epevt.data.fd);
+        m_reactorIndex.setUpdateFlags(epevt.data.fd, 0);
+        if (pReactor)
+        {
+//            int flag = pReactor->getEvtFlag();
+//             if (flag & ERF_ADD)
+//             {
+//                 ret = epoll_ctl(m_epfd, EPOLL_CTL_ADD, epevt.data.fd, &epevt);
+//                 LS_DBG_H( "epoll_ctl( ADD, %d, %d ) return %d\n", epevt.data.fd,
+//                           epevt.events, ret);
+//                 if (ret == 0 || errno != EEXIST)
+//                 {
+//                     pReactor->updateEventSet();
+//                     pReactor->removeFlag(ERF_ADD);
+//                     continue;
+//                 }
+//             }
+            if (pReactor->isApplyEvents())
+            {
+                epevt.events = pReactor->getEvents();
+                ret = epoll_ctl(m_epfd, EPOLL_CTL_MOD, epevt.data.fd, &epevt);
+                LS_DBG_H( "epoll_ctl( MOD, %d, %d ) return %d\n", epevt.data.fd,
+                          epevt.events, ret);
+                if ( ret == 0)
+                {
+                    pReactor->updateEventSet();
+                }
+            }
+        }
+    }
+    m_pUpdates->clear();
+}
+
+
+void epoll::appendEvent(int fd)
+{
+    if (m_reactorIndex.getUpdateFlags(fd) & ERF_UPDATE)
+        return;
+    m_reactorIndex.setUpdateFlags(fd, ERF_UPDATE);
+    int *p = m_pUpdates->newObj();
+    *p = fd;
+    LS_DBG_H( "epoll::appendEvent( %d )\n", fd);
 }
 
 #endif

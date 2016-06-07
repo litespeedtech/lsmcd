@@ -6,12 +6,10 @@
 
 #ifndef POLLFDREACTOR_H
 #define POLLFDREACTOR_H
+
+#include <lsdef.h>
 #include <edio/eventreactor.h>
 
-//#include <assert.h>
-/**
-  *@author George Wang
-  */
 #include <assert.h>
 #include <stddef.h>
 class EventReactor;
@@ -87,7 +85,7 @@ public:
     {
         struct pollfd *pAdd = getAvail();
         if (!pAdd)
-            return -1;
+            return LS_FAIL;
         pReactor->setPollfd(pAdd);
         pAdd->events = mask;
         pAdd->fd = pReactor->getfd();
@@ -101,26 +99,26 @@ public:
     int processEvent(int fd, int index, short revents)
     {
         if ((index >= m_pEnd - m_pfds) || (m_pReactors[index]->getfd() != fd))
-            return -1;
+            return LS_FAIL;
         m_pfds[index].revents |= revents;
 //        revents = m_pfds[index].revents & m_pfds[index].events;
 //        if ( revents )
         m_pReactors[index]->assignRevent(revents);
         m_pReactors[index]->handleEvents(revents);
-        return 0;
+        return LS_OK;
     }
 
     int processEvent(int index, short revents)
     {
         if ((index >= m_pEnd - m_pfds) ||
             (m_pReactors[index]->getfd() != m_pfds[index].fd))
-            return -1;
+            return LS_FAIL;
         m_pfds[index].revents = revents;
 //        revents = m_pfds[index].revents & m_pfds[index].events;
 //        if ( revents )
         m_pReactors[index]->assignRevent(revents);
         m_pReactors[index]->handleEvents(revents);
-        return 0;
+        return LS_OK;
     }
 
 
@@ -153,7 +151,7 @@ public:
                         (*m_priHandler)();
             }
         }
-        return 0;
+        return LS_OK;
     }
 
     void timerExecute()
@@ -171,6 +169,7 @@ public:
     void setPriHandler(EventReactor::pri_handler handler)
     {   m_priHandler = handler; }
 
+    LS_NO_COPY_ASSIGN(PollfdReactor);
 };
 
 #endif

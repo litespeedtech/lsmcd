@@ -60,9 +60,8 @@ public:
     void uninitNotifier(Multiplexer *pMultiplexer);
 
     virtual int onNotified(int count) = 0;
-private:
-    EventNotifier(const EventNotifier &rhs);
-    void operator=(const EventNotifier &rhs);
+
+    LS_NO_COPY_ASSIGN(EventNotifier);
 };
 
 #endif // EVENTNOTIFIER_H

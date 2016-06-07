@@ -18,6 +18,8 @@
 #ifndef AIOEVENTHANDLER_H
 #define AIOEVENTHANDLER_H
 
+#include <signal.h>
+
 #if !(defined(macintosh) || defined(__APPLE__) || defined(__APPLE_CC__))
 #define HS_AIO (SIGRTMIN + 4)
 #endif

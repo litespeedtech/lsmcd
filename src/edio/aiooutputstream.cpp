@@ -17,10 +17,14 @@
 *****************************************************************************/
 
 #include <edio/aiooutputstream.h>
+#include <util/autobuf.h>
 #include <util/ni_fio.h>
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stddef.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -34,7 +38,6 @@
 #include <edio/kqueuer.h>
 #endif
 
-
 void AioReq::setcb(int fildes, void *buf, size_t nbytes, int offset,
                    void *pHandler)
 {
@@ -42,13 +45,12 @@ void AioReq::setcb(int fildes, void *buf, size_t nbytes, int offset,
     m_aiocb.aio_buf = (volatile void *)buf;
     m_aiocb.aio_nbytes = nbytes;
     m_aiocb.aio_offset = offset;
-#if defined(LS_AIO_USE_KQ)
-    m_aiocb.aio_sigevent.sigev_value.sigval_ptr = pHandler;
-    m_aiocb.aio_sigevent.sigev_notify_kqueue = KQueuer::getFdKQ();
-#else
     m_aiocb.aio_sigevent.sigev_value.sival_ptr = pHandler;
+#if defined(LS_AIO_USE_KQ)
+    m_aiocb.aio_sigevent.sigev_notify_kqueue = KQueuer::getFdKQ();
 #endif
 }
+
 
 AioReq::AioReq()
 {
@@ -63,6 +65,7 @@ AioReq::AioReq()
 #endif
 }
 
+
 int AioOutputStream::open(const char *pathname, int flags, mode_t mode)
 {
     if (m_closeRequested)
@@ -72,10 +75,11 @@ int AioOutputStream::open(const char *pathname, int flags, mode_t mode)
     return getfd();
 }
 
+
 int AioOutputStream::close()
 {
     if (getfd() == -1)
-        return 0;
+        return LS_OK;
     if (m_pRecv)
         flush();
     if (m_pSend)
@@ -87,8 +91,9 @@ int AioOutputStream::close()
         m_closeRequested = 0;
         m_flushRequested = 0;
     }
-    return 0;
+    return LS_OK;
 }
+
 
 int AioOutputStream::syncWrite(const char *pBuf, int len)
 {
@@ -109,13 +114,13 @@ int AioOutputStream::syncWrite(const char *pBuf, int len)
         fcntl(getfd(), F_SETLK, &lock);
     }
     return ret;
-
 }
+
 
 int AioOutputStream::append(const char *pBuf, int len)
 {
     if (getfd() == -1)
-        return -1;
+        return LS_FAIL;
     if (!m_async)
     {
 #ifdef AIOSTREAM_DEBUG
@@ -132,6 +137,7 @@ int AioOutputStream::append(const char *pBuf, int len)
     return m_pRecv->append(pBuf, len);
 }
 
+
 #define LS_AIO_MAXBUF 4096
 int AioOutputStream::onAioEvent()
 {
@@ -141,30 +147,31 @@ int AioOutputStream::onAioEvent()
         return flush();
     if (m_closeRequested)
         return close();
-    return 0;
+    return LS_OK;
 }
+
 
 int AioOutputStream::flush()
 {
 #if defined(LS_AIO_USE_AIO)
     if (!m_pRecv)
-        return 0;
+        return LS_OK;
     else if (m_pSend)
     {
         m_flushRequested = 1;
-        return 0;
+        return LS_OK;
     }
     else if (getfd() == -1)
-        return -1;
+        return LS_FAIL;
 
     m_pSend = m_pRecv;
     m_pRecv = NULL;
     if (write(getfd(), m_pSend->begin(), m_pSend->size(),
               0, (AioEventHandler *)this))
-        return -1;
+        return LS_FAIL;
     m_flushRequested = 0;
 #endif // defined(LS_AIO_USE_AIO)
-    return 0;
+    return LS_OK;
 }
 
 

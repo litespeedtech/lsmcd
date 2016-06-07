@@ -266,11 +266,12 @@ int ReplRegistry::getContNameMD5Lst(AutoBuf &rAutoBuf)
 }
 
 //compare container name MD5 string 
-int ReplRegistry::cmpContNameMD5Lst(const char *pLocalMD5Lst, int len1, const char *pPeerMD5Lst, int len2) const
+int ReplRegistry::cmpContNameMD5Lst(const char *pLocalMD5Lst, int len1, 
+                                    const char *pPeerMD5Lst, int len2) const
 {
     if (len1 != len2)
     {
-        LS_ERROR("HA replication config len is different, unable to replicate correctly");
+        LS_WARN("HA configures are inconsistent between boxes, full replicaton can't proceed");
         return LS_FAIL;
     }
     int cnt = len1 / 16;
@@ -279,7 +280,7 @@ int ReplRegistry::cmpContNameMD5Lst(const char *pLocalMD5Lst, int len1, const ch
     {
         if (memcmp( (pLocalMD5Lst + 16 * i), (pPeerMD5Lst + 16 * i), 16))
         {
-            LS_ERROR("HA replication config MD5 is different, unable to replicate correctly");
+            LS_WARN("HA configures are inconsistent between boxes, full replicaton can't proceed");
             return LS_FAIL;
         }
     }

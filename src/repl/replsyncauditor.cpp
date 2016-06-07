@@ -36,7 +36,7 @@
 int cmpRTReplHash(const char *pBuf1, int len1
     , const char *pBuf2, int len2, AutoBuf &diffBuf)
 {
-    LS_DBG_M("IncReplAuditor::cmpRTReplHash local len:%d, peer len:%d", len1, len2);
+    //LS_DBG_M("IncReplAuditor::cmpRTReplHash local len:%d, peer len:%d", len1, len2);
     int localContCnt, peerContCnt, moreTmCnt, diffNum;
     int  localTmCnt, peerTmCnt, localContId, peerContId, curSize;
     diffNum     = 0;
@@ -60,11 +60,10 @@ int cmpRTReplHash(const char *pBuf1, int len1
         peerContId = *(int *)pBuf2;
         pBuf2       += sizeof(int); len2 -=sizeof(int); 
         
-        LS_DBG_M("IncReplAuditor::cmpRTReplHash,localTmCnt:%d,localContId:%d, len1:%d , peerTmCnt:%d,peerContId:%d, len2:%d",
-                 localTmCnt,localContId, len1, peerTmCnt,peerContId, len2);
+        //LS_DBG_M("IncReplAuditor::cmpRTReplHash,localTmCnt:%d,localContId:%d, len1:%d , peerTmCnt:%d,peerContId:%d, len2:%d",
+        //         localTmCnt,localContId, len1, peerTmCnt,peerContId, len2);
         assert(localContId == peerContId);
         
-        //char *ptr       = diffBuf.end();
         curSize         = diffBuf.size();
         moreTmCnt       = 0;
         diffBuf.append((const char*)&moreTmCnt, sizeof(int));
@@ -140,13 +139,6 @@ uint32_t cmpTimeHashList(int localCount, const char *pBuf1
         localCount--;
         pBuf1 += sizeof(uint32_t) + 32;
     }
-    /*while (peerCount > 0)
-    {
-        tm2 = *(uint32_t *)pBuf2;
-        peerOnly.append((const char*)&tm2, sizeof(uint32_t));
-        peerCount--;
-        pBuf2 += sizeof(uint32_t) + 32;
-    }*/
     LS_DBG_M("IncReplAuditor::cmpTimeHashList return tm count:%d", (localOnly.size() - sz0)/sizeof(uint32_t));
     return (localOnly.size() - sz0)/sizeof(uint32_t);
 }

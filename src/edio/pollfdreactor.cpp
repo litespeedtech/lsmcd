@@ -25,10 +25,12 @@ PollfdReactor::PollfdReactor()
 {
 }
 
+
 PollfdReactor::~PollfdReactor()
 {
     deallocate();
 }
+
 
 /** No descriptions */
 int PollfdReactor::allocate(int capacity)
@@ -36,12 +38,12 @@ int PollfdReactor::allocate(int capacity)
     EventReactor **clients = (EventReactor **) realloc(m_pReactors,
                              capacity * sizeof(EventReactor *));
     if (!clients)
-        return -1;
+        return LS_FAIL;
     m_pReactors = clients;
     struct pollfd *pfds = (struct pollfd *) realloc(m_pfds,
                           capacity * sizeof(struct pollfd));
     if (!pfds)
-        return -1;
+        return LS_FAIL;
     m_pCur = pfds + (m_pCur - m_pfds);
     m_pEnd = pfds + (m_pEnd - m_pfds);
     m_pfds = pfds;
@@ -54,8 +56,9 @@ int PollfdReactor::allocate(int capacity)
     pfds = m_pEnd;
     while (pfds < m_pStoreEnd)
         (pfds++)->fd = -1;
-    return 0;
+    return LS_OK;
 }
+
 
 /** No descriptions */
 int PollfdReactor::deallocate()
@@ -72,8 +75,9 @@ int PollfdReactor::deallocate()
         free(m_pfds);
         m_pfds = NULL;
     }
-    return 0;
+    return LS_OK;
 }
+
 
 int PollfdReactor::grow()
 {
@@ -103,7 +107,7 @@ int PollfdReactor::remove(EventReactor *pHandler)
         if (pRm == m_pEnd - 1)
         {
             --m_pEnd;
-            while ((m_pEnd > m_pfds) && (m_pEnd[-1].fd == -1))
+            while (m_pEnd > m_pfds && m_pEnd[-1].fd == -1)
                 --m_pEnd;
         }
         else
@@ -111,10 +115,8 @@ int PollfdReactor::remove(EventReactor *pHandler)
             pRm->events = m_iFirstRecycled;
             m_iFirstRecycled = pRm - m_pfds;
         }
-        return 0;
+        return LS_OK;
     }
-    return -1;
+    return LS_FAIL;
 }
-
-
 

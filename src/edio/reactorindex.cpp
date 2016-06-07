@@ -25,23 +25,23 @@ ReactorIndex::~ReactorIndex()
 
 int ReactorIndex::allocate(int capacity)
 {
-    EventReactor **pIndexes = (EventReactor **) realloc(m_pIndexes,
-                              capacity * sizeof(EventReactor *));
+    ReactorHolder *pIndexes = (ReactorHolder *) realloc(m_pIndexes,
+                              capacity * sizeof(ReactorHolder));
     if (!pIndexes)
-        return -1;
+        return LS_FAIL;
     if ((unsigned)capacity > m_capacity)
         memset(pIndexes + m_capacity, 0,
-               sizeof(EventReactor *) * (capacity - m_capacity));
+               sizeof(ReactorHolder) * (capacity - m_capacity));
     m_pIndexes = pIndexes;
     m_capacity = capacity;
-    return 0;
+    return LS_OK;
 }
 
 int ReactorIndex::deallocate()
 {
     if (m_pIndexes)
         free(m_pIndexes);
-    return 0;
+    return LS_OK;
 }
 
 
@@ -51,21 +51,22 @@ int ReactorIndex::deallocate()
 
 void ReactorIndex::timerExec()
 {
-    int i;
-    while (((m_iUsed) > 0) && (m_pIndexes[m_iUsed] == NULL))
+    unsigned int i;
+    while (((m_iUsed) > 0) && (m_pIndexes[m_iUsed].m_pReactor == NULL))
         --m_iUsed;
-    for (i = 0; i <= (int)m_iUsed; ++i)
+    for (i = 0; i <= m_iUsed; ++i)
     {
-        if (m_pIndexes[i])
+        EventReactor *pReactor = m_pIndexes[i].m_pReactor;
+        if (pReactor)
         {
-            if (m_pIndexes[i]->getfd() == i)
-                m_pIndexes[i]->onTimer();
+            if (pReactor->getfd() == (int)i)
+                pReactor->onTimer();
             else
             {
 //                LS_ERROR( "[%d] ReactorIndex[%d]=%p, getfd()=%d, type: %s", getpid(), i, m_pIndexes[i], m_pIndexes[i]->getfd(),
 //                typeid( *m_pIndexes[i] ).name() ));
 
-                m_pIndexes[i] = NULL;
+                m_pIndexes[i].m_pReactor = NULL;
             }
         }
     }

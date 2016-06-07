@@ -35,10 +35,10 @@ class DevPoller : public Multiplexer
     {
         if (m_curChanges >= MAX_CHANGES)
             if (applyChanges() == -1)
-                return -1;
+                return LS_FAIL;
         m_changes[m_curChanges].fd       = fd;
         m_changes[m_curChanges++].events = mask;
-        return 0;
+        return LS_OK;
     }
     void setEvent(EventReactor *pHandler, short mask)
     {
@@ -68,6 +68,7 @@ class DevPoller : public Multiplexer
             appendChange(pHandler->getfd(), pHandler->getEvents());
         }
     }
+    int processEvents();
 
 public:
     DevPoller();
@@ -80,7 +81,6 @@ public:
     virtual int waitAndProcessEvents(int iTimeoutMilliSec);
     virtual void timerExecute();
     virtual void setPriHandler(EventReactor::pri_handler handler);
-    virtual int processEvents();
 
     virtual void continueRead(EventReactor *pHandler);
     virtual void suspendRead(EventReactor *pHandler);
@@ -93,6 +93,7 @@ public:
     virtual void switchReadToWrite(EventReactor *pHandler)
     {   setEvent(pHandler, POLLOUT | POLLERR | POLLHUP);  }
 
+    LS_NO_COPY_ASSIGN(DevPoller);
 };
 
 #endif //defined(sun) || defined(__sun)

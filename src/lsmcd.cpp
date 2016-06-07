@@ -190,9 +190,9 @@ int LsmcdImpl::PreEventLoop()
 
     m_pReplListener.SetListenerAddr(getReplConf()->getLisenSvrAddr());
 
-    if ( m_pReplListener.Start(-1) == LS_FAIL )
+    if ( m_pReplListener.Start(-1) != LS_OK )
     {
-        LS_ERROR(  "listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
+        LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
         return LS_FAIL;;
     }
 
@@ -200,9 +200,11 @@ int LsmcdImpl::PreEventLoop()
 
     m_pMemcacheListener.SetListenerAddr ( getReplConf()->getMemCachedAddr() );
 
-    if ( m_pMemcacheListener.Start() == LS_FAIL )
+    if ( m_pMemcacheListener.Start() != LS_OK )
+    {
+        LS_DBG_M("Memcache Listener failed to start");
         return LS_FAIL;
-
+    }
     int cnt = getReplConf()->getSubFileNum();
     LsCache2ReplEvent *pC2rEventPtrs[cnt];
     LsRepl2CacheEvent *pR2cEventPtrs[cnt];

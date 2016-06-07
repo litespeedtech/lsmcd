@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "vmembuf.h"
 
 #define _RELEASE_MMAP
 //#define _NO_ANON_POOL
@@ -587,10 +588,36 @@ int VMemBuf::setROffset(off_t offset)
     off_t roffset = getCurROffset();
     if (offset < roffset)
         rewindReadBuf();
-    while (offset > m_curRBlkPos)
+    while (offset >= m_curRBlkPos)
         mapNextRBlock();
     m_pCurRPos = (*m_pCurRBlock)->getBuf() + offset - (m_curRBlkPos
                  - (*m_pCurRBlock)->getBlockSize());
+    return 0;
+}
+
+
+int VMemBuf::seekWritePos(off_t offset)
+{
+    struct stat st;
+    m_curTotalSize = fstat(getfd(), &st);
+    off_t target_size = (offset + s_iBlockSize - 1) & ~(s_iBlockSize - 1);
+    if (target_size > st.st_size)
+    {
+        if (ftruncate(getfd(), target_size) == -1)
+            return -1;
+        m_curTotalSize = target_size;
+    }
+    off_t block_pos = offset & ~(s_iBlockSize - 1);
+    while(m_bufList.size() < m_curTotalSize / s_iBlockSize)
+    {
+        m_bufList.push_back(new MmapBlockBuf(NULL, s_iBlockSize));
+    }
+    m_pCurWBlock = &m_bufList[block_pos / s_iBlockSize];
+    if (remapBlock(*m_pCurWBlock, block_pos) == -1)
+        return -1;
+    
+    m_curWBlkPos = block_pos + s_iBlockSize;
+    m_pCurWPos = (*m_pCurWBlock)->getBuf() + (offset - block_pos);
     return 0;
 }
 
@@ -725,11 +752,6 @@ int VMemBuf::mapNextRBlock()
 #ifdef _RELEASE_MMAP
         if (m_type == VMBUF_FILE_MAP)
         {
-            if (!(*(m_pCurRBlock + 1))->getBuf())
-            {
-                if (remapBlock(*(m_pCurRBlock + 1), m_curRBlkPos) == -1)
-                    return -1;
-            }
             if (m_pCurWBlock != m_pCurRBlock)
                 releaseBlock(*m_pCurRBlock);
         }
@@ -737,7 +759,14 @@ int VMemBuf::mapNextRBlock()
         ++m_pCurRBlock;
     }
     else
+    {
         m_pCurRBlock = m_bufList.begin();
+    }
+    if (!(*m_pCurRBlock)->getBuf())
+    {
+        if (remapBlock(*m_pCurRBlock, m_curRBlkPos) == -1)
+            return -1;
+    }
     m_curRBlkPos += (*m_pCurRBlock)->getBlockSize();
     m_pCurRPos = (*m_pCurRBlock)->getBuf();
     return 0;
@@ -805,6 +834,34 @@ int VMemBuf::write(const char *pBuf, int size)
     }
     while (true);
 }
+
+
+int VMemBuf::write(VMemBuf *pBuf, off_t offset, int size)
+{
+    if (pBuf->setROffset(offset) == -1)
+        return -1;
+    int total = 0;
+    while(total < size)
+    {
+        size_t len;
+        const char * p = pBuf->getReadBuffer(len);
+        if (len > size - total)
+            len = size - total;
+        if (!p)
+            break;
+        int ret = write(p, len);
+        if (ret > 0)
+        {
+            total += ret;
+            pBuf->readUsed(ret);
+        }
+        else
+            break;
+    }
+    return total;
+}
+
+
 
 int VMemBuf::exactSize(off_t *pSize)
 {

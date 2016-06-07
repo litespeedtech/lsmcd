@@ -26,7 +26,6 @@ class HttpFetch;
 class HttpFetchDriver : public EventReactor
 {
     HttpFetch *m_pHttpFetch;
-    time_t m_tmStart;
     HttpFetchDriver(const HttpFetchDriver &other);
 
 public:

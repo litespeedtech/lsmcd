@@ -11,7 +11,7 @@
 #include <shm/lsshmhash.h>
 #include <util/datetime.h>
 #include <util/stringtool.h>
-
+    
 LruHashReplBridge::LruHashReplBridge(LsShmHash *pHash, int contId)
     : LsShmHashObserver(pHash)
     , m_contId(contId)
@@ -25,7 +25,8 @@ LruHashReplBridge::~LruHashReplBridge()
 int LruHashReplBridge::onNewEntry(const void *pKey, int keyLen, const void *pVal, 
                            int valLen, uint32_t lruTm)
 {
-    getReplSender()->sendLruHashData(m_contId, lruTm, (unsigned char *)pKey, keyLen, 
+    if (getReplSender())
+        getReplSender()->sendLruHashData(m_contId, lruTm, (unsigned char *)pKey, keyLen, 
                            (unsigned char *)pVal, valLen);
     return LS_OK;
 }
@@ -40,17 +41,19 @@ uint32_t LruHashReplBridge::getLruHashTmHash(time_t startTm, time_t endTm, AutoB
 {
     if (!getHash())
         return 0;
-    uint32_t count = 0;
+    uint32_t tmCnt = 0;
     startTm--;
     getHash()->lock();
     while ( startTm <= endTm ) 
     {
-        startTm = hashTillNextTmSlot(startTm, endTm, autoBuf, count);
+        startTm = hashTillNextTmSlot(startTm, endTm, autoBuf);
+        if (startTm <= endTm)
+            tmCnt++;
     }
     getHash()->unlock();
-    LS_DBG_L("LruHashReplBridge::getLruHashTmHash, read count %d, endTm=%d, nextTm=%d "
-        , count, endTm, startTm);    
-    return count;
+    //LS_DBG_L("LruHashReplBridge::getLruHashTmHash, read tmCnt=%d, endTm=%d, nextTm=%d "
+    //    , tmCnt, endTm, startTm);    
+    return tmCnt;
 }
 
 
@@ -60,7 +63,7 @@ int LruHashReplBridge::readShmKeyVal(int contId, ReplProgressTrker &replTmSlotLs
         return 0;
     uint32_t currTm, endTm;
 
-    replTmSlotLst.getBReplTmRange(contId, currTm, endTm); //getBReplSslSessTmSlot(currTm, endTm);
+    replTmSlotLst.getBReplTmRange(contId, currTm, endTm);
     //currTm--;
     getHash()->lock();
     while ( !replTmSlotLst.isReplDone(contId) && (uint32_t)rAutoBuf.size() < availSize )
@@ -69,37 +72,33 @@ int LruHashReplBridge::readShmKeyVal(int contId, ReplProgressTrker &replTmSlotLs
         replTmSlotLst.advBReplTmSlot(contId, currTm);
     }
     getHash()->unlock();
-    LS_DBG_L("Bulk Replication LruHashReplBridge::readShmKeyVal2 currTm:%d, endTm:%d, contId:%d, read bytes:%d"
+    LS_DBG_L("Bulk Replication LruHashReplBridge::readShmKeyVal currTm:%d, endTm:%d, contId:%d, read bytes:%d"
         , currTm, endTm, contId, rAutoBuf.size());
     return rAutoBuf.size();
 }
 
 //input: 99,99,100,100,100,100,100,103,103,105  
 //if passing 99, the function reads 5 of 100, and return tm 100
-time_t LruHashReplBridge::readTillNextTmSlot(time_t tm, time_t endTm, AutoBuf & rAutoBuf) const
+time_t LruHashReplBridge::for_each_tmslot(time_t tm, time_t endTm, for_each_fn2 fn, void* pUData1) const
 {
-    int count=0;
+    int cnt = 0;
     LsShmHash::iterator iter;
     LsShmHash::iteroffset iterOff;
     time_t nextTm;
     iterOff = getHash()->nextTmLruIterOff(tm);
     if (iterOff.m_iOffset == 0 )
     {
-        LS_DBG_L("LruHashReplBridge::readTillNextTmSlot retun iterOff=0, tm=%d", tm);
-        return time(NULL) + 1;
+        nextTm = time(NULL) > endTm ? (time(NULL) + 1) : (endTm + 1);
+        LS_DBG_L("LruHashReplBridge::for_each_tmslot retun 0 byte at tm=%d, return time=%d", tm, nextTm);
+        return nextTm;
     }
     iter        = getHash()->offset2iterator(iterOff);
     nextTm      = iter->getLruLasttime();
     if (nextTm > endTm)
         return nextTm;
-    
-    appendKeyVal((uint32_t)nextTm
-        , (uint32_t)iter->getKeyLen()
-        , (uint32_t)iter->getValLen()
-        , (const char*)iter->getKey()
-        , (const char*)iter->getVal()
-        , rAutoBuf);
-    count++;
+
+    fn(iter, &nextTm, pUData1);
+    cnt++;
     while (1)
     {
         iterOff = getHash()->nextLruIterOff(iterOff);
@@ -110,74 +109,64 @@ time_t LruHashReplBridge::readTillNextTmSlot(time_t tm, time_t endTm, AutoBuf & 
         {
             break;
         }
-        appendKeyVal((uint32_t)nextTm
-            , (uint32_t)iter->getKeyLen()
-            , (uint32_t)iter->getValLen()
-            , (const char*)iter->getKey()
-            , (const char*)iter->getVal()
-            , rAutoBuf);
-        count++;
-
+        fn(iter, &nextTm, pUData1);
+        cnt++;
     }
-    LS_DBG_L("LruHashReplBridge::readTillNextTmSlot, input tm=%d, read current tm=%d, count:%d, size=%d"
-        , tm, nextTm, count, rAutoBuf.size());
+    //LS_DBG_L("LruHashReplBridge::for_each_tmslot, read entry Count:%d, input time from %d to %d"
+    //    , cnt, tm, nextTm);
     return nextTm;
+}
+
+int readTillNextTmSlotFn(void * cbData, void* pUData1, void* pUData2)
+{
+    LsShmHash::iterator iter    = (LsShmHash::iterator)cbData;
+    time_t *pLruTm              = (time_t *)pUData1;
+    AutoBuf *pAutoBuf           = (AutoBuf*)pUData2;
+    
+    uint32_t lruTm              = *pLruTm;
+    uint32_t uKeyLen            = iter->getKeyLen();
+    uint32_t uValLen            = iter->getValLen();
+    
+    pAutoBuf->append((const char*)&lruTm, sizeof(uint32_t));
+    pAutoBuf->append((const char*)&uKeyLen, sizeof(uint32_t));
+    pAutoBuf->append((const char*)&uValLen, sizeof(uint32_t));
+    pAutoBuf->append((const char*)iter->getKey(), uKeyLen * sizeof(uint8_t));
+    pAutoBuf->append((const char*)iter->getVal(), uValLen * sizeof(uint8_t));
+    return LS_OK;
+}
+
+inline time_t LruHashReplBridge::readTillNextTmSlot(time_t tm, time_t endTm, AutoBuf & rAutoBuf) const
+{
+    return for_each_tmslot(tm, endTm, readTillNextTmSlotFn, &rAutoBuf);
 }
 
 //starting from the next of tm
-time_t LruHashReplBridge::hashTillNextTmSlot(time_t tm, time_t endTm, AutoBuf & rAutoBuf, uint32_t &count) const
+int hashTillNextTmSlotFn(void * cbData, void *pUData1, void *pUData2)
 {
-    //LS_DBG_L("LruHashReplBridge::hashTillNextTmSlot read data at time [%d, %d]", tm, endTm);
-    time_t      nextTm;
-    unsigned char buf[16];
-    MD5_CTX     md5_ctx;
-    LsShmHash::iterator         iter;
-    LsShmHash::iteroffset       iterOff;
-    iterOff = getHash()->nextTmLruIterOff(tm);
-    if (iterOff.m_iOffset == 0 )
-    {
-        LS_DBG_L("LruHashReplBridge::hashTillNextTmSlot retun 0 byte at tm=%d, return time=%d", tm, time(NULL) + 1);
-        return time(NULL) +1;
-    }
-    iter = getHash()->offset2iterator(iterOff);
-    nextTm  = iter->getLruLasttime();
-    if (nextTm > endTm)
-        return nextTm;
-    count++;
-    MD5_Init(&md5_ctx);
-    MD5_Update(&md5_ctx, (const char*)iter->getKey(), (uint32_t)iter->getKeyLen());
-    while (1)
-    {
-        iterOff = getHash()->nextLruIterOff(iterOff);
-        if( iterOff.m_iOffset == 0 )
-            break;
-        iter = getHash()->offset2iterator(iterOff);
-        if (nextTm != iter->getLruLasttime())
-        {
-            break;
-        }
-        MD5_Update(&md5_ctx, (const char*)iter->getKey(), (uint32_t)iter->getKeyLen());
-    }
-    MD5_Final(buf, &md5_ctx);
-    
-    char achAsc[33];
-    StringTool::hexEncode((const char *)buf, 16, achAsc);
-    rAutoBuf.append((const char*)&nextTm, sizeof(uint32_t));
-    rAutoBuf.append(achAsc, 32);
-    //LS_DBG_L("LruHashReplBridge::hashTillNextTmSlot read achAsc=%s, at tm:%d, count:%d"
-    //    , achAsc, nextTm, count );
-    return nextTm;
+    LsShmHash::iterator iter    = (LsShmHash::iterator)cbData;
+    MD5_CTX *pCtx               = (MD5_CTX*)pUData2;
+
+    MD5_Update(pCtx, (const char*)iter->getKey(), (uint32_t)iter->getKeyLen());
+    return LS_OK;
 }
 
-
-void LruHashReplBridge::appendKeyVal(uint32_t lruTm, uint32_t uKeyLen, uint32_t uValLen, const char* pKey
-    , const char* pVal, AutoBuf &rAutoBuf) const
+time_t LruHashReplBridge::hashTillNextTmSlot(time_t tm, time_t endTm, AutoBuf & rAutoBuf) const
 {
-    rAutoBuf.append((const char*)&lruTm, sizeof(uint32_t));
-    rAutoBuf.append((const char*)&uKeyLen, sizeof(uint32_t));
-    rAutoBuf.append((const char*)&uValLen, sizeof(uint32_t));
-    rAutoBuf.append(pKey, uKeyLen * sizeof(uint8_t));
-    rAutoBuf.append(pVal, uValLen * sizeof(uint8_t));
+    MD5_CTX     md5_ctx;
+    MD5_Init(&md5_ctx);
+    time_t nextTm = for_each_tmslot(tm, endTm, hashTillNextTmSlotFn,&md5_ctx);
+    
+    if (nextTm <= endTm)
+    {
+        unsigned char buf[16];
+        char achAsc[33];
+
+        MD5_Final(buf, &md5_ctx);
+        StringTool::hexEncode((const char *)buf, 16, achAsc);
+        rAutoBuf.append((const char*)&nextTm, sizeof(uint32_t));
+        rAutoBuf.append(achAsc, 32);
+    }
+    return nextTm;
 }
 
 time_t LruHashReplBridge::getCurrHeadShmTm() const

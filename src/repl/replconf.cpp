@@ -30,6 +30,8 @@ ReplConf::ReplConf()
     , m_hbFreq(30)
     , m_lsntnrSvrAddr("127.0.0.1:12340")
     , m_bGzipStream(true)
+    , m_bIncSync(true)
+    , m_bSockCached(false)
 {
 }
 
@@ -47,7 +49,7 @@ bool ReplConf::setLBAddrs(const char* pEntry)
     StringList lbAddrs;
     if (pEntry == NULL)
     {
-        LS_ERROR("HA replication configuration is invalid");
+        LS_INFO("HA replication configuration is not setup or invalid");
         return false;
     }
     lbAddrs.split(pEntry, pEntry + strlen(pEntry), ",");
@@ -58,7 +60,7 @@ bool ReplConf::setLBAddrs(const char* pEntry)
         pAddr = (*itr)->c_str();
         if (!strncmp(pAddr, "*:", 2) || sockAddr.set(pAddr, 0))
         {
-            LS_ERROR("HA replication configuration Address %s is invalid", pAddr);
+            LS_INFO("HA replication configuration Address %s is invalid", pAddr);
             return false;
         }
         sockAddr.toString(pSockAddr, 64);
@@ -151,6 +153,7 @@ void   ReplConf::setHbFreq(int secs)
         m_hbFreq = 60;
 
 } 
+
 
 ConfWrapper::ConfWrapper()
     : m_pConf(NULL)

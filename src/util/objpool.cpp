@@ -36,6 +36,7 @@ int GObjPool::allocate(int size)
     {
         return -1;
     }
+    assert(m_freeList.capacity() >= m_poolSize);
     return 0;
 }
 

@@ -126,7 +126,7 @@ protected:
     GzipStream     *m_pInfZipStream;
     
     AutoStr         m_hashKey;
-    WaitAckCache    m_waitAckCache;
+    WaitAckCache   *m_pWaitAckCache;
 };
 
 #endif

@@ -195,7 +195,8 @@ int HttpFetch::startReq(const char *pURL, int nonblock, int enableDriver,
 
     if (enableDriver)
         m_pHttpFetchDriver = new HttpFetchDriver(this);
-
+    m_tmStart = time(NULL);
+    
     if (m_pProxyServerAddr)
         return startProcessReq(nonblock, *m_pProxyServerAddr);
     else
@@ -259,6 +260,25 @@ int HttpFetch::buildReq(const char *pMethod, const char *pURL,
 
 }
 
+
+int HttpFetch::selectEvent(int evt, int timeoutSecs)
+{
+    fd_set          readfds;
+    fd_set         *pRead = NULL, *pWrite = NULL;
+    struct timeval  timeout;
+    FD_ZERO(&readfds);
+    FD_SET(m_fdHttp, &readfds);
+    timeout.tv_sec = timeoutSecs;
+    timeout.tv_usec = 0;
+    if (evt & POLLIN)
+        pRead = &readfds;
+    if (evt & POLLOUT)
+        pWrite = &readfds;
+    return select(m_fdHttp + 1, pRead, pWrite, NULL, &timeout);
+    
+}
+
+
 int HttpFetch::startProcessReq(int nonblock, const GSockAddr &sockAddr)
 {
     m_reqState = 0;
@@ -274,13 +294,7 @@ int HttpFetch::startProcessReq(int nonblock, const GSockAddr &sockAddr)
 
     if (!nonblock)
     {
-        fd_set          readfds;
-        struct timeval  timeout;
-        FD_ZERO(&readfds);
-        FD_SET(m_fdHttp, &readfds);
-        timeout.tv_sec = m_connTimeout;
-        timeout.tv_usec = 0;
-        if ((ret = select(m_fdHttp + 1, &readfds, &readfds, NULL, &timeout)) != 1)
+        if ((ret = selectEvent(POLLIN|POLLOUT, m_connTimeout)) != 1)
         {
             closeConnection();
             return -1;
@@ -459,6 +473,9 @@ int HttpFetch::recvResp()
     char achBuf[8192];
     while (m_statusCode != -1)
     {
+        ret = selectEvent(POLLIN, 1);
+        if (ret != 1)
+            break;
         ret = ::nio_read(m_fdHttp, achBuf, 8192);
         if (m_iEnableDebug)
             m_pLogger->debug("HttpFetch[%d]::recvResp fd=%d ret=%d", getLoggerId(),
@@ -589,7 +606,8 @@ int HttpFetch::process()
 {
     while ((m_fdHttp != -1) && (m_reqState < 4))
         sendReq();
-    while ((m_fdHttp != -1) && (m_reqState < 7))
+    while ((m_fdHttp != -1) && (m_reqState < 7) 
+        && m_tmStart + m_iTimeoutSec < time(NULL))
         recvResp();
     return (m_reqState == 7) ? 0 : -1;
 }

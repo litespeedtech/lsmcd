@@ -1,0 +1,53 @@
+#!/bin/sh
+#
+# Startup script for the lsmcd
+#
+# chkconfig: - 95 25
+# description: LiteSpeed Memcache Compatible Persistent HA replication Cache Server 
+# processname: lsmcd
+
+LSMCD_CTRL="/usr/local/lsmcd/bin/lsmcdctrl"
+
+ret=0
+case "$1" in 
+	start)
+		"$LSMCD_CTRL" start 2>/dev/null 1>&2
+		ret=$?
+		if [ "x`uname -s`" = "xFreeBSD" ]; then
+			if [ $ret -eq 0 ]; then
+				echo -n " lslb"
+			fi
+		fi
+		;;
+	stop)
+		"$LSMCD_CTRL" stop 2>/dev/null 1>&2
+		ret=$?
+		if [ "x`uname -s`" = "xFreeBSD" ]; then
+			if [ $ret -eq 0 ]; then
+				echo -n " lslb"
+			fi
+		fi
+		;;
+	restart)
+		"$LSMCD_CTRL" restart 2>/dev/null 1>&2
+		ret=$?
+		;;
+	reload)
+		"$LSMCD_CTRL" reload 2>/dev/null 1>&2
+		ret=$?
+		;;
+	*)
+	echo $"Usage: $PROG {start|stop|restart|reload|help}"
+	cat <<EOF
+
+start    - start lsmcd
+stop     - stop lsmcd
+restart  - restart (stop then start) load balancer
+help     - this screen
+		
+EOF
+
+		ret=2
+		;;
+esac
+exit $ret

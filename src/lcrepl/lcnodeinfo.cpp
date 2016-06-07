@@ -355,7 +355,8 @@ void StNodeInfoMgr::delNodeInfo(const char* pAddr)
     HashStringMap< StaticNodeInfo *>::iterator itr = m_hNodeInfoMap.find(Ip);
     if (itr != m_hNodeInfoMap.end())
     {
-        delete  itr.second();    
-        m_hNodeInfoMap.remove(Ip);
+        StaticNodeInfo *p = itr.second();    
+        m_hNodeInfoMap.erase(itr);
+        delete p;
     }
 }

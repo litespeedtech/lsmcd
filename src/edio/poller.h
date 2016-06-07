@@ -31,8 +31,8 @@ public:
     virtual void timerExecute();
     virtual void setPriHandler(EventReactor::pri_handler handler)
     {   m_pfdReactors.setPriHandler(handler);     }
-    virtual int processEvents()
-    {   return m_pfdReactors.processEvents();   }
+
+    LS_NO_COPY_ASSIGN(Poller);
 };
 
 #endif

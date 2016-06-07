@@ -5,7 +5,7 @@
 
 
 #include "bufferedos.h"
-#include "util/iovec.h"
+#include <util/iovec.h>
 //#include <http/httplog.h>
 
 #include <stdio.h>
@@ -17,6 +17,7 @@ BufferedOS::BufferedOS(OutputStream *pOS, int initSize)
     , m_buf(initSize)
 {}
 
+
 BufferedOS::~BufferedOS()
 {}
 
@@ -26,11 +27,13 @@ int BufferedOS::write(const char *pBuf, int size)
     return writeEx(pBuf, size, 1);
 }
 
+
 int BufferedOS::writev(const struct iovec *vector, int len)
 {
     IOVec iov(vector, len);
     return writevEx(iov, 1);
 }
+
 
 int BufferedOS::writeEx(const char *pBuf, int size, int avoidCache)
 {
@@ -102,6 +105,7 @@ int BufferedOS::writevEx(IOVec &vec, int avoidCache)
     return ret;
 }
 
+
 int BufferedOS::flush()
 {
     assert(m_pOS != NULL);
@@ -124,6 +128,7 @@ int BufferedOS::flush()
     }
     return ret;
 }
+
 
 int BufferedOS::close()
 {

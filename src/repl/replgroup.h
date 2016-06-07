@@ -22,7 +22,7 @@ enum
 };
 
 class ReplContainer;
-
+class JsonStatus;
 class ReplGroup
 {
 public:
@@ -35,10 +35,11 @@ public:
     virtual int  onTimer1s() = 0;
     virtual int  onTimer30s() = 0;
     virtual bool isFullReplNeeded(uint32_t contId, const NodeInfo *pLocalInfo, const NodeInfo *pPeerInfo)=0;
+    virtual int  reinitMultiplexer();
+
     bool isLstnrProc()                  {       return m_isLstnrProc;   }
     void setLstnrProc(bool f)           {       m_isLstnrProc = f;      }
 
-    int  reinitMultiplexer();
     int  closeListener();
     ReplListener *getListener()         {   return &m_replListener;     }
 
@@ -60,7 +61,7 @@ public:
     FullReplAuditor &getFullReplAuditor()       {       return m_fullReplAuditor;     }
     NodeInfoMgr *getNodeInfoMgr()               {       return m_pNodeInfoMgr;  }
     SockConnMgr *getSockConnMgr()               {       return m_pSockConnMgr;  }
-    IncReplAuditor & getIncReplAuditor()        {       return m_replSyncAuditor;     }
+    IncReplAuditor *getIncReplAuditor()         {       return m_pReplSyncAuditor;     }
     
     void setMultiplexer(Multiplexer * pMlr)     {       m_pMultiplexer = pMlr;  }
     Multiplexer * getMultiplexer()              {       return m_pMultiplexer;  }
@@ -68,7 +69,6 @@ public:
 private:
     int  notifyFRelStepDone(ServerConn *pConn, uint32_t now);
     int  syncBulkReplTime(ServerConn *pConn, uint32_t startTm, uint32_t endTm);
-    void getJsonStatus(AutoBuf &rAutoBuf);
 
     void startSecLegAudit(ServerConn *pConn);
 protected:
@@ -81,7 +81,7 @@ protected:
 
     JsonStatus         *m_pStatusFormater;
     
-    IncReplAuditor      m_replSyncAuditor;
+    IncReplAuditor     *m_pReplSyncAuditor;
     FullReplAuditor     m_fullReplAuditor;
     int                 m_ProcState;
     Multiplexer         *m_pMultiplexer;

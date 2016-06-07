@@ -8,9 +8,7 @@
 #define BUFFEREDOS_H
 
 
-/**
-  *@author George Wang
-  */
+#include <lsdef.h>
 
 #include <edio/outputstream.h>
 #include <edio/outputbuf.h>
@@ -62,7 +60,8 @@ public:
     {   return writev(vector);    }
     virtual int flush();
     virtual int close();
-
+    
+    LS_NO_COPY_ASSIGN(BufferedOS);
 };
 
 #endif

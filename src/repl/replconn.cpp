@@ -24,6 +24,7 @@ ReplConn::ReplConn()
     : m_iConnState( CS_DISCONNECTED )
     , m_bufOutgoing(4096 )
     , m_bufIncoming(4096 )
+    
 {
     if (ConfWrapper::getInstance()->isGzipStream())
     {
@@ -35,6 +36,13 @@ ReplConn::ReplConn()
         m_pDefZipStream = NULL;
         m_pInfZipStream = NULL;
     }
+    
+    if (ConfWrapper::getInstance()->isSockCached())
+    {
+        m_pWaitAckCache = new WaitAckCache();
+    }
+    else 
+        m_pWaitAckCache = NULL;
 }
 
 
@@ -44,6 +52,8 @@ ReplConn::~ReplConn()
         delete m_pDefZipStream;
     if (m_pInfZipStream != NULL)
         delete m_pInfZipStream;
+    if (m_pWaitAckCache != NULL)
+        delete m_pWaitAckCache;
 }
 
 
@@ -218,8 +228,6 @@ int ReplConn::processIncoming()
             
         }
         consumed = header.unpack( m_bufIncoming.begin(), m_bufIncoming.size() );
-        //LS_DBG_M (  "ReplConn::processIncoming size=%d, consumed=%d\n", m_bufIncoming.size(), consumed );
-
         if ( consumed > 0 )
         {
             getReplReceiver()->processPacket( this, &header, m_bufIncoming.begin() + sizeof( header ) );
@@ -227,16 +235,14 @@ int ReplConn::processIncoming()
         }
         else if (consumed == 0 )
         {
-            LS_INFO( "ReplConn::processIncoming received packet with invalid protocol, and cloing client socket now\n");
+            LS_INFO( "ReplConn::processIncoming received packet with invalid protocol, \
+                and cloing client socket now\n");
             closeConnection();
-            //delet
-            //reconnect to peer.
-            
         }
     }while( consumed > 0 );
+    
     if ( !m_bufOutgoing.empty() )
     {
-        LS_DBG_M(  "ReplConn::processIncoming flush\n");
         Flush();
     }
     return 0;
@@ -426,24 +432,42 @@ void  ReplConn::setHashKey(const char* sKey)
 
 int ReplConn::cacheWaitAckData(uint32_t seqNum, int contID, uint32_t lruTm)
 {
-    return m_waitAckCache.addCache(seqNum, contID, lruTm);
+    if (m_pWaitAckCache)
+        return m_pWaitAckCache->addCache(seqNum, contID, lruTm);
+    else
+        return -1;
 }
 
 int ReplConn::clearWaitAckData(uint32_t seqNum)
 {
-    return m_waitAckCache.clearCache(seqNum);
+    if (m_pWaitAckCache)
+        return m_pWaitAckCache->clearCache(seqNum);
+    else
+        return -1;
 }
 
 
 int  ReplConn::getWaitAckCacheSize() const
-{     return m_waitAckCache.size();            }  
+{   
+    if (m_pWaitAckCache)
+        return m_pWaitAckCache->size();            
+    else
+        return -1;
+}  
 
 void ReplConn::clearWaitAckData()
-{     m_waitAckCache.clearCache();     }
+{   
+    if (m_pWaitAckCache)
+        m_pWaitAckCache->clearCache();     
+}
 
 int  ReplConn::getPackedCache(AutoBuf &autoBuf) const 
-{     return m_waitAckCache.getPackedCache(autoBuf);   }  
-
+{     
+    if (m_pWaitAckCache)
+        return m_pWaitAckCache->getPackedCache(autoBuf);
+    else
+        return -1;
+}  
 
 int getPackedCacheFn(void *pKey, void *pVal, void *pUData)
 {

@@ -42,12 +42,20 @@ public:
 
     T *get(int index)
     {
-        if (index < m_size)
+        if (index >= 0 && index < m_size)
             return ((T *)m_pArray) + index;
         else
             return NULL;
     }
 
+    const T *get(int index) const
+    {
+        if (index >= 0 && index < m_size)
+            return ((T *)m_pArray) + index;
+        else
+            return NULL;
+    }
+    
     T *newObj()
     {
         if (m_size >= m_capacity)
@@ -57,17 +65,37 @@ public:
         }
         return ((T *)m_pArray) + m_size++ ;
     }
+    
+    void setSize(int size)      {   m_size = size;      }
 
-    void clear()    {   m_size = 0;     }
+    void clear()                {   m_size = 0;         }
+    void pop()                  {   if (m_size > 0)
+                                        --m_size;       }
 
     T *begin()      {   return (T *)m_pArray;    }
     T *end()        {   return (T *)m_pArray + m_size;   }
 
-    void copy(const TObjArray &other)
+    const T *begin() const      {   return (T *)m_pArray;    }
+    const T *end() const        {   return (T *)m_pArray + m_size;   }
+    
+    void copy(const TObjArray<T> &other)
     {
         alloc(other.capacity());
         m_size = other.m_size;
         memmove(m_pArray, other.m_pArray, m_size * sizeof(T));
+    }
+
+    void swap(TObjArray<T> &rhs)
+    {
+        int t = rhs.m_capacity;
+        rhs.m_capacity = m_capacity;
+        m_capacity = t;
+        t = rhs.m_size;
+        rhs.m_size = m_size;
+        m_size = t;
+        char * p = rhs.m_pArray;
+        rhs.m_pArray = m_pArray;
+        m_pArray = p;
     }
 
 private:

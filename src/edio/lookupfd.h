@@ -7,6 +7,7 @@
 #ifndef LOOKUPFD_H
 #define LOOKUPFD_H
 
+#include <lsdef.h>
 #include <assert.h>
 
 /**
@@ -53,7 +54,7 @@ public:
     {
         m_pIntArray[fd] = -1;
     }
-
+    LS_NO_COPY_ASSIGN(LookUpFD);
 };
 
 #endif

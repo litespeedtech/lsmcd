@@ -24,7 +24,6 @@
 HttpFetchDriver::HttpFetchDriver(HttpFetch *pHttpFetch)
 {
     m_pHttpFetch = pHttpFetch;
-    m_tmStart = time(NULL);
 }
 
 int HttpFetchDriver::handleEvents(short int event)
@@ -37,7 +36,7 @@ void HttpFetchDriver::onTimer()
     if (m_pHttpFetch->getTimeout() < 0)
         return ;
 
-    if (time(NULL) - m_tmStart >= m_pHttpFetch->getTimeout())
+    if (time(NULL) - m_pHttpFetch->getTimeStart() >= m_pHttpFetch->getTimeout())
     {
         m_pHttpFetch->setTimeout(-1);
         m_pHttpFetch->closeConnection();

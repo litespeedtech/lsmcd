@@ -88,6 +88,7 @@ public:
     int  getAcptedConnCnt()     {       return m_hAcptedConnMap.size();} 
     int  getActvLstnrConnCnt();
     void clearAckCache();
+    bool isAceptedIpActv(const char *pAcptedIp);
 private:
     Addr2ClntConnMap_t  m_hClntConnMap;       //out connection
     Addr2SvrConnMap_t   m_hAcptedConnMap;     //in  connection    

@@ -25,13 +25,12 @@ public:
         DEFAULT_CAPACITY = 16
     };
     virtual int getHandle() const          {    return -1;  }
-    virtual int init(int capacity = DEFAULT_CAPACITY) { return 0; };
+    virtual int init(int capacity = DEFAULT_CAPACITY) { return LS_OK; };
     virtual int add(EventReactor *pHandler, short mask) = 0;
     virtual int remove(EventReactor *pHandler) = 0;
     virtual int waitAndProcessEvents(int iTimeoutMilliSec) = 0;
     virtual void timerExecute() = 0;
     virtual void setPriHandler(EventReactor::pri_handler handler) = 0;
-    virtual int processEvents() = 0;
 
     virtual void continueRead(EventReactor *pHandler);
     virtual void suspendRead(EventReactor *pHandler);

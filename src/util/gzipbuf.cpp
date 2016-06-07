@@ -18,6 +18,9 @@
 
 #define DEFAULT_FLUSH_WINDOW    2048
 
+static unsigned char s_gzipHeader[10] = 
+{   0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03   };
+
 GzipBuf::GzipBuf()
 {
     memset(this, 0, sizeof(GzipBuf));
@@ -51,14 +54,17 @@ int GzipBuf::init(int type, int level)
     if (type == GZIP_INFLATE)
         m_type = GZIP_INFLATE;
     else
-        m_type = GZIP_DEFLATE;
-    if (m_type == GZIP_DEFLATE)
+        m_type = type;
+    if (m_type != GZIP_INFLATE)
     {
         if (!m_zstr.state)
-            ret = deflateInit2(&m_zstr, level, Z_DEFLATED, 15 + 16, 8,
+            ret = deflateInit2(&m_zstr, level, Z_DEFLATED, -15, 8,
                                Z_DEFAULT_STRATEGY);
         else
             ret = deflateReset(&m_zstr);
+        m_zstr.adler = 0;
+        m_lastFlush = 0;
+        m_needFullFlush = 0;
     }
     else
     {
@@ -73,11 +79,16 @@ int GzipBuf::init(int type, int level)
 int GzipBuf::reinit()
 {
     int ret;
-    if (m_type == GZIP_DEFLATE)
+    if (m_type != GZIP_INFLATE)
+    {
         ret = deflateReset(&m_zstr);
+        m_zstr.adler = 0;
+        m_crc = 0;
+    }
     else
         ret = inflateReset(&m_zstr);
     m_streamStarted = 1;
+    m_needFullFlush = 0;
     m_lastFlush = 0;
     return ret;
 }
@@ -92,6 +103,9 @@ int GzipBuf::beginStream()
     m_zstr.next_in = NULL;
     m_zstr.avail_in = 0;
 
+    if (m_type == GZIP_DEFLATE || m_type == GZIP_DEFLATE_CHUNK)
+        addGzipHeader();
+
     m_zstr.next_out = (unsigned char *)
                       m_pCompressCache->getWriteBuffer(size);
     m_zstr.avail_out = size;
@@ -102,16 +116,52 @@ int GzipBuf::beginStream()
     return 0;
 }
 
+
+int GzipBuf::addGzipHeader()
+{
+    return (m_pCompressCache->write((char *)s_gzipHeader, 10) == 10);
+}
+
+
+int GzipBuf::addGzipFooter()
+{
+    unsigned char footer[8];
+    unsigned char *p = footer;
+    uint32_t val = m_zstr.adler;
+    *p++ = val & 0xff;
+    val >>= 8;
+    *p++ = val & 0xff;
+    val >>= 8;
+    *p++ = val & 0xff;
+    val >>= 8;
+    *p++ = val & 0xff;
+    val = m_zstr.total_in;
+    *p++ = val & 0xff;
+    val >>= 8;
+    *p++ = val & 0xff;
+    val >>= 8;
+    *p++ = val & 0xff;
+    val >>= 8;
+    *p++ = val & 0xff;
+    return (m_pCompressCache->write((char *)footer, 8) == 8);
+}
+
+
 int GzipBuf::compress(const char *pBuf, int len)
 {
     if (!m_streamStarted)
         return -1;
     m_zstr.next_in = (unsigned char *)pBuf;
     m_zstr.avail_in = len;
+    if (m_type == GZIP_DEFLATE)
+        m_zstr.adler = crc32(m_zstr.adler, m_zstr.next_in, len);
+    else
+        m_crc = crc32(m_crc, m_zstr.next_in, len);
+    m_needFullFlush = 1;
     return process(0);
 }
 
-int GzipBuf::process(int finish)
+int GzipBuf::process(int flush_mode)
 {
     do
     {
@@ -123,10 +173,10 @@ int GzipBuf::process(int finish)
             m_zstr.avail_out = size;
             assert(m_zstr.avail_out);
         }
-        if (m_type == GZIP_DEFLATE)
-            ret = ::deflate(&m_zstr, finish);
+        if (m_type != GZIP_INFLATE)
+            ret = ::deflate(&m_zstr, flush_mode);
         else
-            ret = ::inflate(&m_zstr, finish);
+            ret = ::inflate(&m_zstr, flush_mode);
         if (ret == Z_STREAM_ERROR)
             return -1;
         if (ret == Z_BUF_ERROR)
@@ -148,8 +198,13 @@ int GzipBuf::endStream()
 {
     int ret = process(Z_FINISH);
     m_streamStarted = 0;
+    m_needFullFlush = 0;
     if (ret != Z_STREAM_END)
         return -1;
+    if (m_type == GZIP_DEFLATE || m_type == GZIP_DEFLATE_CHUNK)
+    {
+        addGzipFooter();
+    }
     return 0;
 }
 
@@ -162,6 +217,35 @@ int GzipBuf::resetCompressCache()
                       m_pCompressCache->getWriteBuffer(size);
     m_zstr.avail_out = size;
     return 0;
+}
+
+void GzipBuf::updateNextOut()
+{
+    size_t size;
+    m_zstr.next_out = (unsigned char *)
+                      m_pCompressCache->getWriteBuffer(size);
+    m_zstr.avail_out = size;
+}
+
+
+int GzipBuf::appendPreCompressed(const char *pCompressed, int comp_len, 
+                            int org_len, uint32_t crc32)
+{
+    if (fullFlush() == -1)
+        return -1;
+    if (m_pCompressCache->write(pCompressed, comp_len) < comp_len)
+        return -1;
+    updateZstreamPreCompressed(org_len, crc32);
+    return 0;
+}
+
+
+void GzipBuf::updateZstreamPreCompressed(int org_len, uint32_t crc32)
+{
+    updateNextOut();
+    combineChecksum(crc32, org_len);
+    m_zstr.total_in += org_len;
+    m_lastFlush = m_zstr.total_in;
 }
 
 
@@ -207,5 +291,145 @@ int GzipBuf::processFile(int type, const char *pFileName,
     return ret;
 }
 
+
+int DeflateContext::init(VMemBuf *pBuf, int mode)
+{
+    m_gzip.init(GzipBuf::GZIP_DEFLATE_CHUNK, getGzipLevel(mode));
+    m_gzip.setCompressCache(pBuf);
+    m_gzip.beginStream();
+    newChunk(mode);
+    return 0;
+}
+
+
+int DeflateContext::newChunk(int mode)
+{
+    if (m_pCurChunk != NULL)
+        return -1;
+    if (m_curMode != mode)
+    {
+        m_curMode = mode;
+        m_gzip.setLevel(getGzipLevel(mode));
+    }
+    m_pCurChunk = m_chunks.newObj();
+    m_pCurChunk->mode = mode;
+    m_pCurChunk->offset = m_gzip.getCompressCache()->getCurWOffset();
+    m_pCurChunk->org_len = m_gzip.getTotalIn();
+    m_pCurChunk->crc32 = 0;
+    m_pCurChunk->gzip_len = 0;
+    return 0;
+}
+
+
+int DeflateContext::append(const char *pBuf, int len)
+{
+    return m_gzip.write(pBuf, len);
+}
+
+
+int DeflateContext::endChunk()
+{
+    if (m_pCurChunk)
+    {
+        m_pCurChunk->org_len = m_gzip.getTotalIn() - m_pCurChunk->org_len;
+        if (m_pCurChunk->org_len > 0)
+        {
+            m_gzip.flush(Z_FULL_FLUSH);
+            m_pCurChunk->gzip_len = m_gzip.getCompressCache()->getCurWOffset() - m_pCurChunk->offset;
+            m_pCurChunk->crc32 = m_gzip.getChunkChecksum();
+            m_gzip.combineChecksum(m_pCurChunk->crc32, m_pCurChunk->org_len);
+            m_gzip.resetChecksum();
+        }
+        else
+        {
+            m_chunks.pop();
+        }
+        m_pCurChunk = NULL;
+    }
+    return 0;
+}
+
+
+const DeflateChunkInfo *DeflateContext::getChunk(int n) const
+{
+    if (n >= m_chunks.size())
+        return NULL;
+    return m_chunks.get(n);
+}
+
+
+void DeflateContext::done()
+{
+    endChunk();
+    m_gzip.endStream();
+        
+}
+
+
+int DeflateChunks::save(VMemBuf *pBuf)
+{
+    int32_t s[2];
+    s[1] = size();
+    s[0] = sizeof(DeflateChunkInfo) * s[1] + 4;
+    pBuf->write((char *)s, sizeof(s));
+    pBuf->write((char *)begin(), sizeof(DeflateChunkInfo)*s[1]);
+    return 0;
+}
+
+
+int DeflateChunks::save(int fd, off_t offset)
+{
+    int32_t s[2];
+    s[1] = size();
+    s[0] = sizeof(DeflateChunkInfo) * s[1] + 4;
+    if (pwrite(fd, (char *)s, sizeof(s), offset) == (ssize_t)sizeof(s))
+    {
+        offset += sizeof(s);
+        if (pwrite(fd, (char *)begin(), sizeof(DeflateChunkInfo) * s[1], offset)
+            == (ssize_t)sizeof(DeflateChunkInfo) * s[1])
+            return 0;
+    }
+    return -1;
+}
+
+
+int DeflateChunks::load(int fd, off_t offset)
+{
+    int32_t s[2];
+    if (pread(fd, (char *)s, 8, offset) == 8)
+    {
+        offset += 8;
+        if (s[0] != (ssize_t)sizeof(DeflateChunkInfo) * s[1] + 4)
+            return -1;
+        alloc(s[1]);
+        if (pread(fd, (char *)begin(), sizeof(DeflateChunkInfo) * s[1], offset)
+            == (ssize_t)sizeof(DeflateChunkInfo) * s[1])
+        {
+            setSize(s[1]);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+
+int DeflateChunks::load(VMemBuf *pBuf, off_t offset)
+{
+    int32_t s[2];
+    if (pBuf->copyToBuf((char *)s, offset, 8) == 8)
+    {
+        offset += 8;
+        if (s[0] != (ssize_t)sizeof(DeflateChunkInfo) * s[1] + 4)
+            return -1;
+        alloc(s[1]);
+        if (pBuf->copyToBuf((char *)begin(), offset, sizeof(DeflateChunkInfo) * s[1])
+            == (ssize_t)sizeof(DeflateChunkInfo) * s[1])
+        {
+            setSize(s[1]);
+            return 0;
+        }
+    }
+    return -1;
+}
 
 

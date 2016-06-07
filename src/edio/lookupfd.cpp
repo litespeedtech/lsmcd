@@ -26,7 +26,7 @@ int LookUpFD::allocate(int capacity)
     m_pIntArray = pn;
 
     m_iCapacity = capacity;
-    return 0;
+    return LS_OK;
 
 }
 /** No descriptions */
@@ -38,7 +38,7 @@ int LookUpFD::deallocate()
         m_pIntArray = NULL;
         m_iCapacity = 0;
     }
-    return 0;
+    return LS_OK;
 }
 /** No descriptions */
 int LookUpFD::grow(int fd)

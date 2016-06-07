@@ -92,6 +92,7 @@ int SocketListener::setSockAttr( int fd, GSockAddr &addr )
     int nodelay = 1;
     ::setsockopt( fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof( int ) );
 #ifdef TCP_DEFER_ACCEPT
+    nodelay = 30;
     ::setsockopt( fd, IPPROTO_TCP, TCP_DEFER_ACCEPT, &nodelay, sizeof( int ) );
 #endif
     m_iPort = addr.getPort();
@@ -126,7 +127,7 @@ int SocketListener::start()
     GSockAddr addr;
     SockConnProcessor *pProc;
     if (( pProc = getConnProc()) == NULL )
-        return -1;
+        return LS_FAIL;
     if ( addr.set( getAddrStr(), 0 ))
         return errno;
     if (( ret = pProc->startListening( addr, fd )) != 0 )
@@ -154,7 +155,7 @@ int SocketListener::addConns( struct conn_data * pBegin,
         ++pCur;
     }
     if ( n <= 0 )
-        return 0;
+        return LS_OK;
     pCur = pBegin;
     flag = MultiplexerFactory::getMultiplexer()->getFLTag();
     while( pCur < pEnd )
@@ -164,14 +165,14 @@ int SocketListener::addConns( struct conn_data * pBegin,
             m_pProcessor->addNewConn( pCur, flag );
         ++pCur;
     }
-    return 0;
+    return LS_OK;
 }
 
 
 int SocketListener::handleEvents(short event)
 {
     if ( !connProcIsSet())
-        return -1;
+        return LS_FAIL;
 
     static struct conn_data conns[SLCONN_BATCH_SIZE];
     struct conn_data * pEnd = &conns[SLCONN_BATCH_SIZE];
@@ -206,7 +207,7 @@ int SocketListener::handleEvents(short event)
 
     m_pProcessor->updateStats( iCount);
     LS_DBG_H( "[%s] %d connection(s) accepted!", getAddrStr(), iCount );
-    return 0;
+    return LS_OK;
 }
 
 
@@ -218,7 +219,7 @@ int SocketListener::stop()
         MultiplexerFactory::getMultiplexer()->remove( this );
         close( getfd() );
         setfd( -1 );
-        return 0;
+        return LS_OK;
     }
     return EBADF;
 }

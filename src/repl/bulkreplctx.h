@@ -26,6 +26,7 @@
 #include <shm/lsshm.h>
 #include <log4cxx/logger.h>
 class ReplContainer;
+class ServerConn;
 
 class BulkReplCtx 
 {

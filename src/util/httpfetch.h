@@ -56,6 +56,7 @@ class HttpFetch
     char        m_achResHeaderBuf[1024];
 
     HttpFetchDriver *m_pHttpFetchDriver;
+    time_t      m_tmStart;
     int         m_iTimeoutSec;
     int         m_iReqInited;
     Logger     *m_pLogger;
@@ -67,6 +68,7 @@ class HttpFetch
     int getLine(char *&p, char *pEnd,
                 char *&pLineBegin, char *&pLineEnd);
     int allocateBuf(const char *pSaveFile);
+    int selectEvent(int evt, int timeoutSecs);
     int buildReq(const char *pMethod, const char *pURL,
                  const char *pContentType = NULL);
     int startProcessReq(int nonblock, const GSockAddr &sockAddr);
@@ -108,9 +110,10 @@ public:
 
     void closeConnection();
     void setTimeout(int timeoutSec)         {   m_iTimeoutSec = timeoutSec; }
-    int getTimeout()                        {   return m_iTimeoutSec;   }
+    int getTimeout() const                  {   return m_iTimeoutSec;   }
     void writeLog(const char *s)            {   m_pLogger->info("HttpFetch[%d]: %s", getLoggerId(), s); }
-    void enableDebug(int d)               {   m_iEnableDebug = d;     }
+    void enableDebug(int d)                 {   m_iEnableDebug = d;     }
+    time_t getTimeStart() const             {   return m_tmStart;       }
 };
 
 

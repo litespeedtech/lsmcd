@@ -28,7 +28,7 @@ int EdStream::regist(Multiplexer *pMultiplexer, int events)
 {
     if (pMultiplexer)
         return pMultiplexer->add(this, events);
-    return 0;
+    return LS_OK;
 }
 
 int EdStream::close()
@@ -36,12 +36,14 @@ int EdStream::close()
     if (getfd() != -1)
     {
         if (m_pMplex)
+        {
             m_pMplex->remove(this);
+        }
         //::shutdown( getfd(), SHUT_RDWR );
         ::close(getfd());
         setfd(-1);
     }
-    return 0;
+    return LS_OK;
 }
 
 
@@ -82,7 +84,7 @@ int EdStream::handleEvents(short event)
     {
         ret = onHangup();
         if (!getAssignedRevent())
-            return 0;
+            return LS_OK;
     }
     if ((ret != -1) && (event & POLLOUT))
     {
@@ -94,12 +96,12 @@ int EdStream::handleEvents(short event)
     {
         ret = onError();
         if (!getAssignedRevent())
-            return 0;
+            return LS_OK;
     }
 EVENT_DONE:    
     if (ret != -1)
         onEventDone(event);
-    return 0;
+    return LS_OK;
 }
 
 int EdStream::read(char *pBuf, int size)
@@ -110,10 +112,10 @@ int EdStream::read(char *pBuf, int size)
     if (!ret)
     {
         errno = ECONNRESET;
-        return -1;
+        return LS_FAIL;
     }
     if ((ret == -1) && ((errno == EAGAIN) || (errno == EINTR)))
-        return 0;
+        return LS_OK;
     return ret;
 }
 
@@ -123,13 +125,13 @@ int EdStream::readv(struct iovec *vector, size_t count)
     if (!ret)
     {
         errno = ECONNRESET;
-        return -1;
+        return LS_FAIL;
     }
     if (ret == -1)
     {
         resetRevent(POLLIN);
         if ((errno == EAGAIN) || (errno == EINTR))
-            return 0;
+            return LS_OK;
     }
     return ret;
 
@@ -139,7 +141,7 @@ int EdStream::readv(struct iovec *vector, size_t count)
 int EdStream::onHangup()
 {
     //::shutdown( getfd(), SHUT_RD );
-    return 0;
+    return LS_OK;
 }
 
 /** No descriptions */
@@ -154,7 +156,7 @@ int EdStream::write(LoopBuf *pBuf)
     if (pBuf == NULL)
     {
         errno = EFAULT;
-        return -1;
+        return LS_FAIL;
     }
     IOVec iov;
     pBuf->getIOvec(iov);

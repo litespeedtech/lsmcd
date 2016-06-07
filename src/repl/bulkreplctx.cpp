@@ -108,7 +108,7 @@ uint32_t BulkReplCtx::getUsedSecs() const
 void BulkReplCtx::resumeBulkRepl(ServerConn *pConn)
 {
     //ReplGroup &group = ReplGroup::getInstance();    
-    LS_ERROR("Replication resumed by client addr=%s", pConn->getPeerAddr());
+    LS_DBG_L("Replication resumed by client addr=%s", pConn->getPeerAddr());
     if (isAllReplDone())
     {
         unlinkBReplCtx();
@@ -127,16 +127,11 @@ void BulkReplCtx::resumeBulkRepl(ServerConn *pConn)
     }
     else
     {
-        int contId, availSize, bytes;//, count;
-        //ReplSender &sender = ReplSender::getInstance();
+        int contId, availSize, bytes;
         
         contId = m_replPrgrssTcker.trackNextCont();
         assert(contId > 0);
         AutoBuf autoBuf;
-        //const NodeInfo &localInfo = group.getLocalNodeInfo();
-        //count = localInfo.geCntId2CntMap().getVal(contId);
-        //autoBuf.append((const char*)&count, sizeof(int));
-        
         availSize = FULLREPLBUFSZ - pConn->getOutgoingBufSize() - 100;
         LS_INFO("BulkReplCtx::resumeBulkRepl bufsz=%d", availSize);
         if (availSize <= 0 )
@@ -146,7 +141,7 @@ void BulkReplCtx::resumeBulkRepl(ServerConn *pConn)
         }        
         
         bytes = ReplRegistry::getInstance().get(contId)->readShmKeyVal(m_replPrgrssTcker, availSize, autoBuf);
-        LS_DBG_M("BulkReplCtx::resumeBulkRepl read bytes:%d", bytes);
+        LS_DBG_L("BulkReplCtx one step read bytes:%d to send", bytes);
         if (bytes > 0)
             getReplSender()->sendLruHashBlukData(pConn, contId, autoBuf);
     }

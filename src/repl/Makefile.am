@@ -11,6 +11,6 @@ librepl_a_SOURCES = replprgrsstrkr.cpp gzipstream.cpp replconf.cpp \
         repllistener.cpp nodeinfo.cpp repldef.cpp\
         replpacker.cpp replpacket.cpp replreceiver.cpp \
         replregistry.cpp replsender.cpp bulkreplctx.cpp \
-        replsyncauditor.cpp lruhashreplbridge.cpp
+        replsyncauditor.cpp lruhashreplbridge.cpp jsonstatus.cpp
 
 ####### kdevelop will overwrite this part!!! (end)############

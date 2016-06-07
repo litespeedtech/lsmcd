@@ -21,5 +21,5 @@ cp -r ../dist/conf  ${LSCA_HOME}/conf
 cp ../dist/bin/lsmcd.init /etc/init.d/lsmcd
 chkconfig lsmcd on
 
-echo "Now you have to update ${LSCA_HOME}/conf/node.conf" 
+echo "Now you have to update ${LSCA_HOME}/conf/example.conf" 
 

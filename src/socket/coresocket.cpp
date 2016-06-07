@@ -72,7 +72,6 @@ int  CoreSocket::connect(const GSockAddr &server, int iFLTag, int *fd,
 
 }
 
-
 int CoreSocket::listen(const char *pURL, int backlog, int *fd, int nodelay,
                        int sndBuf, int rcvBuf)
 {
@@ -89,7 +88,6 @@ int CoreSocket::listen(const GSockAddr &server, int backLog, int *fd,
 {
     int ret;
     ret = bind(server, SOCK_STREAM, fd);
-    
     if (ret)
         return ret;
 

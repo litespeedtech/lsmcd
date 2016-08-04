@@ -60,11 +60,13 @@ LcReplConf::LcReplConf()
     : m_useCas(true)
     , m_useSasl(false)
     , m_noMemFail(false)
-    , m_iSubFileNum(1)
-    , m_pPriorities(NULL)
-    , m_pShmFiles(NULL)
+    , m_sliceCnt(1)
+    , m_cachedProcCnt(1)
     , m_user("nobody")
     , m_group("nobody")
+    , m_pPriorities(NULL)
+    , m_pShmFiles(NULL)
+   
 {}
 
 LcReplConf::~LcReplConf()
@@ -108,6 +110,16 @@ bool LcReplConf::parse(const char *szFile)
             , getLocalLsntnrIp());
         return false;
     }
+    //dispatch addr
+    pAddr = m_confParser.getConfig("REPL.DispatchAddr");
+    if ( pAddr == NULL || sockAddr.set(pAddr, 0) )
+    {
+        LS_ERROR ( "LcReplConf fails to load Repl DispatchAddr %s", pAddr);
+        return false;        
+    }
+    sockAddr.toString(pSockAddr, 64);
+    m_dispatchAddr = pSockAddr;
+    
     //MEMCACHEDADDR
     pAddr = m_confParser.getConfig("CACHED.ADDR");
     if (pAddr == NULL || sockAddr.set(pAddr, 0))
@@ -118,16 +130,52 @@ bool LcReplConf::parse(const char *szFile)
     sockAddr.toString(pSockAddr, 64);
     m_cachedAddr = pSockAddr;
     
+    pAddr = m_confParser.getConfig("CACHED.PRIADDR");
+    if (pAddr == NULL || sockAddr.set(pAddr, 0))
+    {
+        LS_ERROR (  "LcReplConf fails to load Repl MemCached SvrAddr %s", pAddr);
+        return false;
+    }
+    sockAddr.toString(pSockAddr, 64);
+    m_cachedPriAddr = pSockAddr;
+    
+    //usock path
+    pAddr = m_confParser.getConfig("RepldSockPath");
+    if (pAddr == NULL)
+    {
+        LS_ERROR (  "LcReplConf fails to load repld sock path %s", pAddr);
+        return false;
+    }
+    m_repldUsPath = pAddr;
+
+    pAddr = m_confParser.getConfig("CachedSockPath");
+    if (pAddr == NULL)
+    {
+        LS_ERROR (  "LcReplConf fails to load cached sock path %s", pAddr);
+        return false;
+    }
+    m_cachedUsPath = pAddr;
+
     //GzipStream
     const char *ptr = m_confParser.getConfig("REPL.GZIPSTREAM");
     if(ptr != NULL && !strcasecmp(ptr, "YES"))
         m_bGzipStream = true;
     
-    //SubFileNum
+    //timeout
     int v;
+    ptr = m_confParser.getConfig("REPL.HEARTBEATREQ");
+    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
+        m_hbFreq = v;
+    LS_DBG_M ("repld heartbeatreq:%d", getHbFreq());
+    
+    ptr = m_confParser.getConfig("REPL.HEARTBEATRETRY");
+    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
+        m_hbTimeout = v;
+    LS_DBG_M ("repld heartbtimeout:%d", getHbTimeout());
+    //SubFileNum
     ptr = m_confParser.getConfig("CACHED.SLICES");
     if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
-        m_iSubFileNum = v;
+        m_sliceCnt = v;
     
     if ( (ptr = m_confParser.getConfig("CACHED.SHMDIR")) != NULL ) 
         m_shmDir = ptr;
@@ -170,8 +218,12 @@ bool LcReplConf::parse(const char *szFile)
     if ((ptr = m_confParser.getConfig("Group")) != NULL )
         m_group = ptr;
 
+    ptr = m_confParser.getConfig("CachedProcCnt");
+    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
+        m_cachedProcCnt = v;
+        
     char pBuf[1024], pBuf2[1024];
-    uint16_t num  = getSubFileNum();
+    uint16_t num  = getSliceCount();
     m_pPriorities = new int[num];
     m_pShmFiles = new char *[num];
     for (int i=0; i < num; ++i)
@@ -184,23 +236,17 @@ bool LcReplConf::parse(const char *szFile)
             m_pPriorities[i] = v;
         }
         snprintf(pBuf, sizeof(pBuf), "CACHED.SHMFILEPATH.%d", i);
-        ptr = m_confParser.getConfig(pBuf);
-        if (ptr != NULL)
-        {
-            snprintf(pBuf2, sizeof(pBuf2), "%s/%s", m_shmDir.c_str(), ptr);
-            m_confParser.setConfig(pBuf, pBuf2);
-            m_pShmFiles[i] = (char*)m_confParser.getConfig(pBuf);
-            LS_DBG_M("%s=%s", pBuf, pBuf2);
-        }
-        else
-        {
-            LS_ERROR ( 
-                "[ERROR] [Configure]: LcReplConf config file, missing required: %s\n", pBuf);
-            return false;               
-        }
+        snprintf(pBuf2, sizeof(pBuf2), "%s/data%d", m_shmDir.c_str(), i);
+        m_confParser.setConfig(pBuf, pBuf2);
+        m_pShmFiles[i] = (char*)m_confParser.getConfig(pBuf);
+        LS_DBG_M("%s=%s", pBuf, pBuf2);
     }
     
     return true;
+}
+const char* LcReplConf::getCachedPriAddr() const
+{
+    return m_cachedPriAddr.c_str();
 }
 
 const char *LcReplConf::getMemCachedAddr() const
@@ -223,14 +269,14 @@ const char *LcReplConf::getShmHashName() const
     return m_shmHashName.c_str();
 }
 
-uint16_t LcReplConf::getSubFileNum() const
+uint16_t LcReplConf::getSliceCount() const
 {
-    return m_iSubFileNum;
+    return m_sliceCnt;
 }
 
 int *LcReplConf::getPriorities(int *count) const
 {
-    *count = getSubFileNum();
+    *count = getSliceCount();
     return m_pPriorities;
 }
 
@@ -313,7 +359,30 @@ const char * LcReplConf::getGroup()
     return m_group.c_str();
 }
 
+uint16_t LcReplConf::getCachedProcCnt() const 
+{
+    return m_cachedProcCnt;
+}
+
+const char  *LcReplConf::getRepldUsPath() const
+{
+    return m_repldUsPath.c_str();
+}
+
+const char  *LcReplConf::getCachedUsPath() const
+{
+    return m_cachedUsPath.c_str();
+}
+
+
+const char *LcReplConf::getDispatchAddr() const
+{
+    return m_dispatchAddr.c_str();
+}
+
 LcReplConf * getReplConf()
 {
     return static_cast<LcReplConf*>(ConfWrapper::getInstance().getConf());
 }
+
+

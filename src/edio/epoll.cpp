@@ -108,7 +108,7 @@ int epoll::add(EventReactor *pHandler, short mask)
     if (fd > 100000)
         return LS_FAIL;
     m_reactorIndex.set(fd, pHandler);
-    LS_DBG_H( "epoll::add( %d, %d )\n", fd, mask);
+    //LS_DBG_H( "epoll::add( %d, %d )\n", fd, mask);
     pHandler->setPollfd();
     pHandler->setMask2(mask);
     pHandler->clearRevent();
@@ -143,7 +143,7 @@ int epoll::updateEvents(EventReactor *pHandler, short mask)
         return LS_OK;
     assert(pHandler == m_reactorIndex.get(fd));
     pHandler->setMask2(mask);
-    LS_DBG_H( "epoll::updateEvents( %d, %d )\n", fd, pHandler->getEvents());
+    //LS_DBG_H( "epoll::updateEvents( %d, %d )\n", fd, pHandler->getEvents());
     
     appendEvent(fd);
     return LS_OK;
@@ -169,7 +169,7 @@ int epoll::remove(EventReactor *pHandler)
     //assert( pHandler == m_reactorIndex.get( fd ) );
     if (fd <= (int)m_reactorIndex.getUsed())
     {
-        LS_DBG_H( "epoll::remove( %d )\n", fd);
+        //LS_DBG_H( "epoll::remove( %d )\n", fd);
         //pHandler->removeFlag(ERF_ADD);
         pHandler->clearRevent();
         pHandler->setMask2(0);
@@ -198,7 +198,7 @@ int epoll::removeEx(int fd)
 
     //if (LS_LOG_ENABLED(LOG4CXX_NS::Level::DBG_LESS) || s_problems )
     //    dump_type_info( pHandler, "remove" );
-    LS_DBG_H( "epoll_ctl( DEL, %d ) \n", fd);
+    //LS_DBG_H( "epoll_ctl( DEL, %d ) \n", fd);
     return epoll_ctl(m_epfd, EPOLL_CTL_DEL, fd, &epevt);
 }
 
@@ -377,7 +377,7 @@ void epoll::applyEvents()
     while(p < pEnd)
     {
         epevt.data.fd = *p++;
-        LS_DBG_H( "epoll::apply( %d )\n", epevt.data.fd);
+        //LS_DBG_H( "epoll::apply( %d )\n", epevt.data.fd);
         EventReactor *pReactor = m_reactorIndex.get(epevt.data.fd);
         m_reactorIndex.setUpdateFlags(epevt.data.fd, 0);
         if (pReactor)
@@ -399,8 +399,8 @@ void epoll::applyEvents()
             {
                 epevt.events = pReactor->getEvents();
                 ret = epoll_ctl(m_epfd, EPOLL_CTL_MOD, epevt.data.fd, &epevt);
-                LS_DBG_H( "epoll_ctl( MOD, %d, %d ) return %d\n", epevt.data.fd,
-                          epevt.events, ret);
+                //LS_DBG_H( "epoll_ctl( MOD, %d, %d ) return %d\n", epevt.data.fd,
+                //          epevt.events, ret);
                 if ( ret == 0)
                 {
                     pReactor->updateEventSet();
@@ -419,7 +419,7 @@ void epoll::appendEvent(int fd)
     m_reactorIndex.setUpdateFlags(fd, ERF_UPDATE);
     int *p = m_pUpdates->newObj();
     *p = fd;
-    LS_DBG_H( "epoll::appendEvent( %d )\n", fd);
+    //LS_DBG_H( "epoll::appendEvent( %d )\n", fd);
 }
 
 #endif

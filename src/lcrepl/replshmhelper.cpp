@@ -60,6 +60,11 @@ uint64_t ReplShmHelper::getLastShmTid(int idx)
     return getLsShmHash(idx)->getTidMgr()->getLastTid();
 }
 
+bool ReplShmHelper::getShmSliceRole(int idx)
+{
+    return getLsShmHash(idx)->isTidMaster();
+}
+
 
 int32_t ReplShmHelper::getMaxPacketSize()
 {
@@ -93,30 +98,30 @@ uint64_t ReplShmHelper::bcastNewTidData (int idx, uint64_t iLstTid, void *pInst,
     uint32_t uContID = idx + 1;
     iLocalTid   = getLastShmTid(idx);
     int offset  = sizeof(iLocalTid);
-    while (1)
+    int extra   = 0;
+    int loop    = 0;
+    AutoBuf autoBuf(64000);
+    while (loop++ < 10)
     {
-        AutoBuf autoBuf(8192);
+        if (autoBuf.size() > 0)
+            autoBuf.clear();
+        autoBuf.reserve(64000 + extra);
         autoBuf.append((const char*)&iLocalTid, offset);
         int ret = replShmHelper.tidGetNxtItems(idx, &iNewTid,
-            (uint8_t *)(autoBuf.begin() + offset), autoBuf.capacity() - offset );
-        if ( 0 == ret )
+            (uint8_t *)(autoBuf.begin() + offset), 64000 + extra - autoBuf.size() );
+        LS_DBG_M("ReplShmHelper::bcastNewTidData ret:%d", ret);
+        if ( !ret )
             break;
-        else if ( ret > 0)
+        else if (ret < 0 )
+            extra = -ret; //trying with bigger buffer
+        else 
+        {
+            assert(ret > 0);
             autoBuf.used(ret);
-        else
-        {  // try again
-            uint64_t iTid = iNewTid ;
-            int bytes = -ret;
-            autoBuf.grow(bytes);
-            ret = replShmHelper.tidGetNxtItems(idx, &iTid,
-                (uint8_t *)(autoBuf.begin() + offset), autoBuf.capacity() - offset);
-            autoBuf.used(bytes);
-            assert (iTid > iNewTid);
-            iNewTid  = iTid;
+            LS_DBG_M("bcastNewTidData idx:%d tid:%lld, ret=%d, autoBuf size=%d"
+                , idx, iNewTid, ret, autoBuf.size());
+            func(pInst, (void*)&uContID , (void*)&autoBuf);
         }
-        LS_DBG_M("tidGetNxtItems idx:%d tid:%lld, ret=%d, buf size=%d, my tid:%lld"
-            , idx, iNewTid, ret, autoBuf.size(), iLocalTid);
-        func(pInst, (void*)&uContID , (void*)&autoBuf);
     }
     return iNewTid;
 }

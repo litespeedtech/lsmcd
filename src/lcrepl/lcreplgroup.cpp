@@ -7,16 +7,17 @@
 #include "lcreplreceiver.h"
 #include "replshmtidcontainer.h"
 #include "replicableshmtid.h"
-
+#include "usocklistener.h"
+#include "usockmcd.h"
 #include <repl/sockconn.h>
 #include <repl/replregistry.h>
 #include <log4cxx/logger.h>
 #include <string.h>
 
 LcReplGroup::LcReplGroup()
+    : m_pStNodeInfoMgr(new StNodeInfoMgr())
 {
-    m_pNodeInfoMgr      = new LcNodeInfoMgr();
-    m_pStNodeInfoMgr    = new StNodeInfoMgr();
+    m_pNodeInfoMgr = new LcNodeInfoMgr();
     setReplReceiver(new LcReplReceiver());
     setReplSender(new LcReplSender());
 }
@@ -34,7 +35,7 @@ LcReplGroup &LcReplGroup::getInstance()
 //sockAdd:ip:port
 void LcReplGroup::initSelfStatus ()
 {
-    LcNodeInfo *pNodeInfo = new LcNodeInfo( getReplConf()->getSubFileNum(), getReplConf()->getLocalLsntnrIp());
+    LcNodeInfo *pNodeInfo = new LcNodeInfo( getReplConf()->getSliceCount(), getReplConf()->getLocalLsntnrIp());
     getNodeInfoMgr()->addNodeInfo(pNodeInfo);
     int count = 0;
     int *pPriorities = getReplConf()->getPriorities(&count);
@@ -42,28 +43,16 @@ void LcReplGroup::initSelfStatus ()
     DEBUG();
 }
 
-int LcReplGroup::notifyRoleChange(int idx,  const char *pAddr, int len)
+//repld notify all cacheds, but can't tell which slice change, 
+int LcReplGroup::notifyRoleChange()
 {
-    LsRepl2CacheEvent *pEvent;
-    RoleMemCache::getInstance().addUpdateRole(idx, pAddr);
+    m_pUsockLstnr->repldNotifyRole();
+    return LS_OK;
+}
 
-//     pTmpEv      = m_pR2cEventArr;
-//     pEvent      = NULL;
-//     int cnt     = getReplConf()->getSubFileNum();
-//     while (--cnt >= 0)
-//     {
-//         if (pTmpEv->getIdx() == idx)
-//         {
-//             pEvent = pTmpEv;
-//             break;
-//         }
-//         ++pTmpEv;
-//     }
-    pEvent = m_pR2cEventArr;
-    while (idx-- > 0)
-        pEvent++;
-    assert (pEvent != NULL);
-    pEvent->notify();
+int LcReplGroup::notifyConnChange()
+{
+    m_pUsockLstnr->repldNotifyConn(getSockConnMgr()->getActvLstnrConnCnt());
     return LS_OK;
 }
 
@@ -78,9 +67,9 @@ void LcReplGroup::delClntInfoAll(const char *pClntAddr)
         , pClntAddr, getNodeInfoMgr()->size(), getStNodeInfoMgr()->size(), getSockConnMgr()->getAcptedConnCnt());
 }
 
-LcNodeInfo * LcReplGroup::getLocalNodeInfo()
+LcNodeInfo * LcReplGroup::getLocalNodeInfo(bool bRefresh)
 {
-    return static_cast<LcNodeInfo *>(getNodeInfoMgr()->getLocalNodeInfo());
+    return static_cast<LcNodeInfo *>(getNodeInfoMgr()->getLocalNodeInfo(bRefresh));
 }
 
 void LcReplGroup::DEBUG ()
@@ -103,6 +92,7 @@ void LcReplGroup::DEBUG ()
         pStatus->DEBUG();
         ++idx;
     }
+    
     LS_DBG_M (  "============================ END (total=%d) ============================", idx);
 }
 
@@ -113,7 +103,6 @@ int LcReplGroup::clientsElectMstr(const LcNodeInfo * pLocalStatus, int idx)
     {
         LS_NOTICE(  "I'm trying to be new master");
         ((LcNodeInfo *)pLocalStatus)->setRole(idx, R_MASTER);  //notify peter of new master
-        //group.setNewMstrClearOthers("127.0.0.1", iContID);
         LcReplSender::getInstance().bcastNewMstrElectDone (pLocalStatus->getContID(idx));
         return LS_OK;
     }
@@ -201,16 +190,12 @@ void LcReplGroup:: monitorRoles()
                 }
             }
         }
-        if (!changes)
-        {
-            reorderClientHBFreq(inNum);
-        }
     }
 }
 
 int LcReplGroup::flipSelfBeMstr()
 {
-    //LcReplGroup &group = LcReplGroup::getInstance();
+    bool bUpdate = false;
     LcNodeInfo *pLocalStatus = (LcNodeInfo *)LcReplGroup::getInstance().getLocalNodeInfo();
     int contCount =  pLocalStatus->getContCount();
     for (int i = 0; i < contCount; ++i)
@@ -221,10 +206,13 @@ int LcReplGroup::flipSelfBeMstr()
             LcReplGroup::getInstance().setNewMstrClearOthers(ConfWrapper::getInstance()->getLocalLsntnrIp(), pLocalStatus->getContID(i));
             //notify cached of new master
             LS_WARN(  "LcReplGroup::flipSelfBeMstr notify I'm new master, idx=%d", i);
-
-            LcReplGroup::getInstance().notifyRoleChange(i, NULL, 0);
+            
+            UsockSvr::getRoleData()->setRoleAddr(i, NULL, 0);
+            bUpdate = true;
         }
     }
+    if (bUpdate)
+        LcReplGroup::getInstance().notifyRoleChange();
     return LS_OK;
 }
 
@@ -245,7 +233,7 @@ int LcReplGroup::initReplConn()
     
     initSelfStatus();
     LcNodeInfo *pLocalInfo = getLocalNodeInfo();
-    int subNum = getReplConf()->getSubFileNum();
+    int subNum = getReplConf()->getSliceCount();
     for (int idx = 0; idx < subNum; ++idx)
     {
         ReplShmTidContainer * pContainer1 = new ReplShmTidContainer (
@@ -257,6 +245,10 @@ int LcReplGroup::initReplConn()
     return LS_OK;
 }
 
+void LcReplGroup::setRef(UsocklListener * pUsockLstnr)
+{
+    m_pUsockLstnr = pUsockLstnr;
+}
 int LcReplGroup::connGroupLstnrs()
 {
     Addr2ClntConnMap_t::iterator itr;
@@ -298,19 +290,9 @@ int LcReplGroup::clearClntOnClose(const char *pAddr)
     getStNodeInfoMgr()->delNodeInfo(pAddr);
     LS_DBG_M(  "clearClntOnClose client[%s],  ReplStatus size=%d,  StaticStatus size=%d, m_hClientReplPeer size=%d"
         , pAddr, getNodeInfoMgr()->size(), getStNodeInfoMgr()->size(), getSockConnMgr()->getAcptedConnCnt());
+    
+    LcReplGroup::getInstance().notifyConnChange();
     return LS_OK;
-}
-
-void LcReplGroup::reorderClientHBFreq(int connCount)
-{
-//     ReplConn * pConn;
-//     HashStringMap<ReplConn *>::iterator itr;
-//     for (itr = m_hOutToListenSvr.begin(); itr != m_hOutToListenSvr.end();
-//             itr = m_hOutToListenSvr.next ( itr ))
-//     {
-//         pConn = itr.second();
-//         pConn->reorderHBFreq(connCount);
-//     }
 }
 
 bool LcReplGroup::isAllClientSync(const LcNodeInfo *  pLocalStatus, int idx)
@@ -344,8 +326,6 @@ bool LcReplGroup::roleExistInGroup(int idx, uint16_t role)
         pPeerlStatus = static_cast<LcNodeInfo*>(itr.second());
         if (pPeerlStatus->getRole(idx) ==  role)
         {
-            //LS_DBG_M(  "node[%s] has the  %s role on idx[%d]",
-            //    pPeerlStatus->getSvrAddr(pSockAddr, 64), LcNodeInfo::printStrRole(role), idx);
             return true;
         }
     }

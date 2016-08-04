@@ -4,10 +4,11 @@
 #include <memcache/memcacheconn.h>
 #include <memcache/lsmemcache.h>
 #include <shm/lsshmhash.h>
-#include <memcache/rolememcache.h>
 #include <repl/repllistener.h>
 #include <lcrepl/lcreplconf.h>
 #include <lcrepl/lcreplgroup.h>
+#include <lcrepl/usockmcd.h>
+#include "lcrepl/lcreplsender.h"
 
 #include <log4cxx/logger.h>
 #define OS_LINUX
@@ -32,7 +33,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <error.h>
-#include <fstream>
+//#include <fstream>
+#include <time.h>
 
 #define    HS_CHILD     1
 #define    HS_ALARM     2
@@ -74,11 +76,10 @@ static void sig_usr1( int sig )
 #define WAC_VERSION     "1.1"
 
 LsmcdImpl::LsmcdImpl()
-        : m_ReplMasterSvrConn(NULL)
-        , m_pC2rEventArr(NULL)
-        , m_iNoCrashGuard( 0 )
+        : m_iNoCrashGuard( 0 )
         , m_iNoDaemon( 0 )
-
+        , m_pMultiplexer(NULL)
+        , m_pUsockClnt(NULL)
 {}
 
 
@@ -86,27 +87,13 @@ LsmcdImpl::~LsmcdImpl()
 {
     m_pMemcacheListener.Stop();
     m_pReplListener.Stop();
-    if ( m_pC2rEventArr )
-    {
-        delete[] m_pC2rEventArr;
-        m_pC2rEventArr = NULL;
-    }
-    
-    if ( m_pR2cEventArr )
-    {
-        delete[] m_pR2cEventArr;
-        m_pR2cEventArr = NULL;
-    }
-    
+    if (m_pUsockClnt != NULL)
+        delete m_pUsockClnt;
+
     if ( m_pMultiplexer )
     {
         delete m_pMultiplexer;
         m_pMultiplexer = NULL;
-    }
-    if (m_ReplMasterSvrConn)
-    {
-        delete m_ReplMasterSvrConn;
-        m_ReplMasterSvrConn = NULL;
     }
 }
 
@@ -148,7 +135,6 @@ int LsmcdImpl::testRunningServer()
     return ret;
 }
 
-
 int LsmcdImpl::Init( int argc, char *argv[] )
 {
     if(argc > 1 ){
@@ -171,8 +157,8 @@ int LsmcdImpl::Init( int argc, char *argv[] )
         return -2;
         
     setReplGroup(new LcReplGroup());
-    //LcReplGroup::getInstance().initReplConn();
-
+    delUsockFiles();
+    
     return LS_OK;
 }
 
@@ -187,9 +173,7 @@ int LsmcdImpl::PreEventLoop()
         m_pMultiplexer = new Poller();
     }
     m_pReplListener.SetMultiplexer( m_pMultiplexer );
-
     m_pReplListener.SetListenerAddr(getReplConf()->getLisenSvrAddr());
-
     if ( m_pReplListener.Start(-1) != LS_OK )
     {
         LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
@@ -197,28 +181,40 @@ int LsmcdImpl::PreEventLoop()
     }
 
     m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
-
     m_pMemcacheListener.SetListenerAddr ( getReplConf()->getMemCachedAddr() );
-
     if ( m_pMemcacheListener.Start() != LS_OK )
     {
-        LS_DBG_M("Memcache Listener failed to start");
+        LS_ERROR("Memcache Listener failed to start");
         return LS_FAIL;
     }
-    int cnt = getReplConf()->getSubFileNum();
-    LsCache2ReplEvent *pC2rEventPtrs[cnt];
-    LsRepl2CacheEvent *pR2cEventPtrs[cnt];
-    if ( !setupC2rEvents(cnt, m_pMultiplexer,pC2rEventPtrs) )
+    
+    m_usockLstnr.SetMultiplexer(m_pMultiplexer);
+    m_usockLstnr.SetListenerAddr( getReplConf()->getCachedUsPath() );
+    if ( m_usockLstnr.Start( 1 + getReplConf()->getCachedProcCnt()) != LS_OK )
     {
+        LS_ERROR("Memcache usock listener failed to start");
         return LS_FAIL;
-    }
-    if ( !setupR2cEvents(cnt, m_pMultiplexer,pR2cEventPtrs) )
+    }    
+    LS_DBG_M("Memcache usock listener is up");
+    
+    m_fdPassLstnr.SetMultiplexer( m_pMultiplexer );
+    m_fdPassLstnr.SetListenerAddr(getReplConf()->getDispatchAddr());
+    if ( m_fdPassLstnr.Start(-1, &m_usockLstnr) != LS_OK )
     {
-        return LS_FAIL;
+        LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
+        return LS_FAIL;;
     }
+    
+//    int cnt = getReplConf()->getCachedProcCnt();
+    
+//     LsRepl2CacheEvent *pR2cEventPtrs[cnt];
+//     if ( !setupR2cEvents(cnt, m_pMultiplexer,pR2cEventPtrs) )
+//     {
+//         return LS_FAIL;
+//     }
 
     LsMemcache::getInstance().setMultiplexer(m_pMultiplexer);
-    if (LsMemcache::getInstance().initMcEvents(pC2rEventPtrs) < 0)
+    if (LsMemcache::getInstance().initMcEvents() < 0)
         return LS_FAIL;
 
 #ifdef notdef
@@ -231,87 +227,99 @@ int LsmcdImpl::PreEventLoop()
 #endif
     LcReplGroup::getInstance().setMultiplexer(m_pMultiplexer);
     LcReplGroup::getInstance().initReplConn();
+    LcReplGroup::getInstance().setRef(&m_usockLstnr);
+
     return LS_OK;
 }
 
-bool LsmcdImpl::setupC2rEvents(int cnt, Multiplexer *pMultiplexer, LsCache2ReplEvent **ppEvent)
+// bool LsmcdImpl::setupR2cEvents(int cnt, Multiplexer *pMultiplexer, LsRepl2CacheEvent **ppEvent)
+// {
+//     int procNo = 1;
+//     m_pR2cEventArr = new LsRepl2CacheEvent [cnt];
+//     LsRepl2CacheEvent *pEvent = m_pR2cEventArr;
+//     while (--cnt >= 0)
+//     {
+//         pEvent->setIdx(procNo);
+//         if (pEvent->initNotifier(pMultiplexer))
+//         {
+//             delete[] m_pR2cEventArr;
+//             return NULL;
+//         }
+//         *ppEvent++ = pEvent;
+//         ++pEvent;
+//         ++procNo;
+//     }
+//     return true;
+// }
+
+int LsmcdImpl::reinitRepldMpxr(int procNo)
 {
-    int idx = 0;
-    m_pC2rEventArr = new LsCache2ReplEvent [cnt];
-    LsCache2ReplEvent *pEvent = m_pC2rEventArr;
-    while (--cnt >= 0)
-    {
-        if (pEvent->init(idx, pMultiplexer))
-        {
-            delete[] m_pC2rEventArr;
-            return NULL;
-        }
-        *ppEvent++ = pEvent;
-        ++pEvent;
-        ++idx;
-    }
-    return true;
+    assert(procNo == 0);
+    Lsmcd::getInstance().setProcId(procNo);
+
+    m_pReplListener.SetMultiplexer( m_pMultiplexer );
+    m_pMultiplexer->add( &m_pReplListener, POLLIN | POLLHUP | POLLERR );
+
+    m_fdPassLstnr.SetMultiplexer( m_pMultiplexer );
+    m_pMultiplexer->add( &m_fdPassLstnr, POLLIN | POLLHUP | POLLERR );
+    
+    m_usockLstnr.SetMultiplexer( m_pMultiplexer );
+    m_pMultiplexer->add( &m_usockLstnr, POLLIN | POLLHUP | POLLERR );
+    
+    // repld send this event(role changing)    
+//     LsRepl2CacheEvent *pEvent = m_pR2cEventArr;
+//     int cnt = getReplConf()->getCachedProcCnt();
+//     while (--cnt >= 0)
+//     {
+//         m_pMultiplexer->add(pEvent, POLLHUP | POLLERR);
+//         ++pEvent;
+//     }
+
+    LcReplGroup::getInstance().setMultiplexer(m_pMultiplexer);    
+    //drop unused
+    //m_pMemcacheListener.Stop();
+    LcReplGroup::getInstance().setLstnrProc(true);
+    return 0;
 }
 
-bool LsmcdImpl::setupR2cEvents(int cnt, Multiplexer *pMultiplexer, LsRepl2CacheEvent **ppEvent)
+int LsmcdImpl::reinitCachedMpxr(int procNo)
 {
-    int idx = 0;
-    m_pR2cEventArr = new LsRepl2CacheEvent [cnt];
-    LsRepl2CacheEvent *pEvent = m_pR2cEventArr;
-    while (--cnt >= 0)
-    {
-        pEvent->setIdx(idx++);
-        if (pEvent->initNotifier(pMultiplexer))
-        {
-            delete[] m_pR2cEventArr;
-            return NULL;
-        }
-        *ppEvent++ = pEvent;
-        ++pEvent;
-    }
-    return true;
+    assert(procNo > 0  && procNo <= getReplConf()->getCachedProcCnt());
+    
+    m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
+    m_pMultiplexer->add( &m_pMemcacheListener, POLLIN | POLLHUP | POLLERR );
+
+    //one **matached** cached receives this event
+//     LsRepl2CacheEvent *pEvent = m_pR2cEventArr;
+//     pEvent += procNo - 1; 
+//     m_pMultiplexer->add(pEvent, POLLIN | POLLHUP | POLLERR);
+    
+    LsMemcache::getInstance().reinitMcConn(m_pMultiplexer);
+    
+    //no need to drop as multiplexer is renewed
+    //m_pReplListener.Stop();
+    //m_usockLstnr.Stop();
+    
+    LsMemcache::getInstance().setMultiplexer(m_pMultiplexer);
+    LcReplGroup::getInstance().setLstnrProc(false);
+    
+    Lsmcd::getInstance().setProcId(procNo);
+    connUsockSvr();
+    return 0;    
 }
 
-int LsmcdImpl::reinitMultiplexer(int procNo)
+    
+int LsmcdImpl::reinitMultiplexer()
 {
-    delete m_pMultiplexer;
+    if (m_pMultiplexer != NULL)
+        delete m_pMultiplexer;
     m_pMultiplexer = new epoll();
     if ( m_pMultiplexer->init( 1024 ) == LS_FAIL )
     {
         delete m_pMultiplexer;
         m_pMultiplexer = new Poller();
     }
-    m_pReplListener.SetMultiplexer( m_pMultiplexer );
-    m_pMultiplexer->add( &m_pReplListener, POLLIN | POLLHUP | POLLERR );
-
-    LsCache2ReplEvent *pEvent = m_pC2rEventArr;
-    int cnt = getReplConf()->getSubFileNum();
-    while (--cnt >= 0)
-    {
-        if (procNo == 0) //replicator
-            m_pMultiplexer->add(pEvent, POLLIN | POLLHUP | POLLERR);
-        else
-            m_pMultiplexer->add(pEvent, POLLHUP | POLLERR);
-        ++pEvent;
-    }
-
-    LsRepl2CacheEvent *pEvent2 = m_pR2cEventArr;
-    cnt = getReplConf()->getSubFileNum();
-    while (--cnt >= 0)
-    {
-        if (procNo == 0) //replicator
-            m_pMultiplexer->add(pEvent2, POLLHUP | POLLERR);
-        else
-            m_pMultiplexer->add(pEvent2, POLLIN | POLLHUP | POLLERR);
-        ++pEvent2;
-    }
-
-    m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
-    m_pMultiplexer->add( &m_pMemcacheListener, POLLIN | POLLHUP | POLLERR );
-
-
     return LS_OK;
-
 }
 
 int LsmcdImpl::ParseOpt( int argc, char *argv[] )
@@ -358,12 +366,12 @@ int LsmcdImpl::ChangeUid()
     pw = getpwnam( getReplConf()->getUser() );
     if ( pw == NULL )
     {
-        return -1;
+        pw = getpwnam( "nobody" );
     }
     gr = getgrnam( getReplConf()->getGroup() );
     if ( gr == NULL )
     {
-        return -1;
+        gr = getgrnam( "nobody" );
     }
 
     if ( setgid( gr->gr_gid ) < 0 )
@@ -389,8 +397,37 @@ int LsmcdImpl::ProcessTimerEvent()
     return 0;
 }
 
-#define MLTPLX_TIMEOUT 1000
+int LsmcdImpl::connUsockSvr()
+{
+    char pBuf[256];
+    m_pUsockClnt = new UsockClnt();
+    m_pUsockClnt->SetMultiplexer( m_pMultiplexer );
+    snprintf(pBuf, sizeof(pBuf), "%s%d", getReplConf()->getCachedUsPath(),
+             Lsmcd::getInstance().getProcId());
+    m_pUsockClnt->setLocalAddr(pBuf);
+    m_pUsockClnt->connectTo(getReplConf()->getRepldUsPath());
+    
+    return 0;
+}
 
+void LsmcdImpl::delUsockFiles()
+{
+    char pBuf[256];
+    if( ::access(getReplConf()->getRepldUsPath(), F_OK ) != -1 )
+    {
+        ::remove(getReplConf()->getRepldUsPath());
+    } 
+    for(int i = 1; i <= getReplConf()->getCachedProcCnt() ; ++i)
+    {
+        snprintf(pBuf, sizeof(pBuf), "%s%d", getReplConf()->getCachedUsPath(), i);
+        if( ::access(pBuf, F_OK ) != -1 )
+        {
+            ::remove(pBuf);
+        }         
+    }
+}
+
+#define MLTPLX_TIMEOUT 1000
 int LsmcdImpl::EventLoop()
 {
     register int ret;
@@ -408,22 +445,21 @@ int LsmcdImpl::EventLoop()
                 return 1;
             }
         }
-        ProcessTimerEvent();
         if ( (event = sEvents ) )
         {
             sEvents = 0;
             if ( event & HS_ALARM )
             {
                 alarm( 1 );
-//                 ProcessTimerEvent();
+                ProcessTimerEvent();
+                if (getppid() == 1)
+                    break;
             }
             if ( event & HS_STOP )
             {
                 break;
             }
         }
-        if (getppid() == 1)
-            break;
 
     }
     return 0;
@@ -447,11 +483,11 @@ Lsmcd::~Lsmcd()
 
 void Lsmcd::ReleaseAll()
 {
-    if ( _pReplSvrImpl )
-    {
-        delete _pReplSvrImpl;
-        _pReplSvrImpl = NULL;
-    }
+//     if ( _pReplSvrImpl )
+//     {
+//         delete _pReplSvrImpl;
+//         _pReplSvrImpl = NULL;
+//     }
 }
 
 Multiplexer * Lsmcd::getMultiplexer() const
@@ -481,55 +517,50 @@ int Lsmcd::Main(int argc, char **argv)
     LsMcParms parms;
     setMcParms(&parms);
     if (LsMemcache::getInstance().initMcShm(
-        getReplConf()->getSubFileNum(),      // number of slices
+        getReplConf()->getSliceCount(),      // number of slices
         (const char **)getReplConf()->getShmFiles(),  // array of pointers to names
         getReplConf()->getShmHashName(), //->_pHashName,
         &parms) < 0)
         return -1;
 
-    if (RoleMemCache::getInstance().initShm(getReplConf()->getShmDir()) < 0)
-        return -1;
-
     if (_pReplSvrImpl->PreEventLoop() < 0)
       return -1;
 
-    LcReplGroup::getInstance().setR2cEventRef(_pReplSvrImpl->m_pR2cEventArr);
+    //LcReplGroup::getInstance().setR2cEventRef(_pReplSvrImpl->m_pR2cEventArr);
     LcReplGroup::getInstance().setLstnrProc(true);
-    if (!_pReplSvrImpl->m_iNoCrashGuard)
+    if (_pReplSvrImpl->m_iNoCrashGuard)
+    {
+        setProcId(1);
+        _pReplSvrImpl->connUsockSvr(); //cached procId starting with 1 
+    }
+    else
     {
         CrashGuard cg(this);
 
-        int ret = cg.guardCrash(2);
+        int ret = cg.guardCrash( 1 + getReplConf()->getCachedProcCnt() );
         if (ret == -1)
             return 8;
-
         for( int i = 0; i< argc; ++i)
         {
             int n = strlen( argv[i]);
             memset(argv[i], 0 , n);
         }
-
-        _pReplSvrImpl->reinitMultiplexer(ret);
+        _pReplSvrImpl->reinitMultiplexer();
 
         if (ret == 0) //replicator
         {
-            _pReplSvrImpl->ChangeUid();
             snprintf(argv[0], 80, "lsmcd - replicator");
-            _pReplSvrImpl->m_pMemcacheListener.Stop();
-            LcReplGroup::getInstance().setMultiplexer(getMultiplexer());
+            _pReplSvrImpl->reinitRepldMpxr(ret);
             ::sleep(1);
         }
         else
         {
-            _pReplSvrImpl->ChangeUid();
+            LS_DBG_M("Cached pid:%d, procNo:%d", getpid(), ret);
             snprintf(argv[0], 80, "lsmcd - cached #%02d", ret);
-            _pReplSvrImpl->m_pReplListener.Stop();
-            LsMemcache::getInstance().setMultiplexer(getMultiplexer());
-            LcReplGroup::getInstance().setR2cEventRef(NULL);
-            LcReplGroup::getInstance().setLstnrProc(false);
+            _pReplSvrImpl->reinitCachedMpxr(ret);
         }
+        _pReplSvrImpl->ChangeUid();
     }
-
     init_signals();
 
     _pReplSvrImpl->EventLoop();
@@ -555,8 +586,7 @@ int Lsmcd::forkError(int seq, int err)
 
 int Lsmcd::postFork(int seq, pid_t pid)
 {
-    //LOG_INF("Child Process with PID: " << pid << " has been forked.");
-    return 0;
+     return 0;
 }
 
 
@@ -578,3 +608,18 @@ void Lsmcd::setMcParms(LsMcParms *pParms)
     return;
 }
 
+uint8_t Lsmcd::getProcId() const
+{
+    return m_procId;
+}
+
+void Lsmcd::setProcId(uint8_t procId)
+{
+    LS_DBG_M(" Lsmcd::setProcId, procId:%d", procId);
+    m_procId = procId;
+}
+
+UsockClnt* Lsmcd::getUsockConn() const
+{
+    return _pReplSvrImpl->m_pUsockClnt;
+}

@@ -123,6 +123,8 @@ int ClientConn::connectTo( const GSockAddr * pServerAddr )
         }
         else
             m_iConnState = CS_CONNECTING;
+
+        LS_DBG_L("ClientConn::connectTo m_iConnState %d", m_iConnState);
         
         struct sockaddr_in sin;
         socklen_t len = sizeof(sin);
@@ -391,7 +393,7 @@ int SockConnMgr::getActvLstnrConnCnt()
     for (itr = getClntConnMap().begin(); itr != getClntConnMap().end(); 
             itr = getClntConnMap().next ( itr ))
     {    
-        if (itr.second()->isActive())
+        if (itr.second()->isConnected())
             cnt++;
     }
     return cnt;

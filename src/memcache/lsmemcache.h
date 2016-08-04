@@ -250,7 +250,8 @@ public:
         const char *pHashName, LsMcParms *pParms);
     int  initMcShm(const char *pDirName, const char *pShmName,
         const char *pHashName, LsMcParms *pParms);
-    int  initMcEvents(LsCache2ReplEvent **ppEvent);
+    int  initMcEvents();
+    int  reinitMcConn(Multiplexer *pMultiplexer);
 
     LsShmHash *getHash() const
     {   return m_pHash;  }
@@ -387,8 +388,9 @@ private:
     LsMemcache &operator=(const LsMemcache &other);
 
 private:
+    
     static int  multiInitFunc(LsMcHashSlice *pSlice, void *pArg);
-    static int  multiInitEvFunc(LsMcHashSlice *pSlice, void *pArg);
+    static int  multiConnFunc(LsMcHashSlice *pSlice, void *pArg);
     static int  multiMultiplexerFunc(LsMcHashSlice *pSlice, void *pArg);
     static int  multiStatFunc(LsMcHashSlice *pSlice, void *pArg);
     static int  multiStatResetFunc(LsMcHashSlice *pSlice, void *pArg);

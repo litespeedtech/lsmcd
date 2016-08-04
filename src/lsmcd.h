@@ -2,13 +2,13 @@
 
 #ifndef LSCACHED_H
 #define LSCACHED_H
-
+#include <lcrepl/usocklistener.h>
 #include <memcache/memcachelistener.h>
 #include <repl/replconn.h>
 #include <repl/repllistener.h>
 #include <util/guardedapp.h>
 #include <util/pidfile.h>
-#include <lcrepl/lcshmevent.h>
+#include "lcrepl/fdpasslstnr.h"
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -18,7 +18,7 @@ class ReplConn;
 class GSockAddr;
 class LsShmHash;
 class LsCache2ReplEvent;
-
+class UsockClnt;
 
 typedef struct LsMcParms_s LsMcParms;
 
@@ -59,27 +59,31 @@ protected:
 
     int  AddNode( char * pNodeIP );
     int  getServerRootFromExecutablePath( const char * command );
-
+    MemcacheListener *getPriCacheLstr();
+    
     int  LoadConfig();    
     int  connReplListenSvr();    
     
-    bool setupC2rEvents(int cnt, Multiplexer *pMultiplexer, LsCache2ReplEvent **ppEvent);
-    bool setupR2cEvents(int cnt, Multiplexer *pMultiplexer, LsRepl2CacheEvent **ppEvent);
-    int  reinitMultiplexer(int procNo);
+    int  reinitMultiplexer();
+    int  reinitRepldMpxr(int procNo);
+    int  reinitCachedMpxr(int procNo);
     int  testRunningServer();
-protected:
-    Multiplexer *       m_pMultiplexer;
-    ReplListener        m_pReplListener;
-    ReplConn *          m_ReplMasterSvrConn; //only used by slave
-    MemcacheListener    m_pMemcacheListener;
+    int  connUsockSvr();
+    void delUsockFiles();
     
-    LsRepl2CacheEvent *        m_pR2cEventArr; 
-    LsCache2ReplEvent *        m_pC2rEventArr;     
+protected:
     int                 m_iNoCrashGuard;
     int                 m_iNoDaemon;
     uint16_t            m_uRole;
     PidFile             m_pidFile;
-    pid_t               m_pid;    
+    pid_t               m_pid;
+
+    Multiplexer *       m_pMultiplexer;
+    ReplListener        m_pReplListener;
+    FdPassLstnr         m_fdPassLstnr;
+    MemcacheListener    m_pMemcacheListener;
+    UsocklListener      m_usockLstnr;
+    UsockClnt           *m_pUsockClnt;
     
 };
 
@@ -102,9 +106,10 @@ public:
     ReplConn * GetActiveConn( int port );
 
     int Main( int argc, char ** argv );
-//     void notifyMainLoop(const EventStack *pEvStatck);
-//     const EventStack * readEventStack() const ; 
-
+    
+    uint8_t getProcId() const;
+    void setProcId(uint8_t procId);
+    UsockClnt *getUsockConn() const;
 private:
     static Lsmcd   _msServer;
     LsmcdImpl *    _pReplSvrImpl;
@@ -114,7 +119,7 @@ private:
     virtual int forkError( int seq, int err );
     virtual int postFork( int seq, pid_t pid );
     virtual int childExit( int seq, pid_t pid, int stat );
- 
+    uint8_t             m_procId;                 
 };
 
 #endif

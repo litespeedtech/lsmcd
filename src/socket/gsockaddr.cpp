@@ -11,6 +11,10 @@
 #include <strings.h>
 #include <sys/types.h>
 
+#ifdef USE_UDNS
+#include <adns/adns.h>
+#endif
+
 #include <util/pool.h>
 
 #include <ctype.h>
@@ -155,6 +159,9 @@ int GSockAddr::setHttpUrl(const char *pHttpUrl, const int len)
     else
         endPos = pHttpUrl + len - p;
 
+    if( endPos >= sizeof(url) - 5)
+        return -1;
+    
     memcpy(url, p, endPos);
     url[endPos] = 0;
 
@@ -238,7 +245,7 @@ int GSockAddr::set(int family, const char *pURL, int tag)
             m_v4->sin_addr.s_addr = inet_addr(achDest);
             if (m_v4->sin_addr.s_addr == INADDR_BROADCAST)
             {
-                if ((tag & DO_NSLOOKUP) == 0)
+                if ((tag & DO_NSLOOKUP | DO_NSLOOKUP_DIRECT) == 0)
                     return -1;
                 gotAddr = 0;
                 /*              struct hostent * hep;
@@ -279,17 +286,22 @@ int GSockAddr::set(int family, const char *pURL, int tag)
     }
     if (0 == gotAddr)
     {
-//         if (family == AF_INET)
-//         {
-//             if (Adns::getHostByNameSync(p, &m_v4->sin_addr.s_addr) == 0)
-//                 gotAddr = 1;
-//         }
-//         else
-//         {
-//             if (Adns::getHostByNameV6Sync(p, &(m_v6->sin6_addr)) == 0)
-//                 gotAddr = 1;
-//         }
-//         if (0 == gotAddr)
+#ifdef USE_UDNS
+        if (tag & DO_NSLOOKUP_DIRECT)
+        {
+            if (family == AF_INET)
+            {
+                if (Adns::getHostByNameSync(p, &m_v4->sin_addr.s_addr) != 0)
+                    return -1;
+            }
+            else
+            {
+                if (Adns::getHostByNameV6Sync(p, &(m_v6->sin6_addr)) != 0)
+                    return -1;
+            }
+        }
+        else
+#endif
         {
             struct addrinfo *res, hints;
 

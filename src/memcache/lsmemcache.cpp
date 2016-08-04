@@ -17,10 +17,9 @@
 *****************************************************************************/
 #include <memcache/lsmemcache.h>
 #include <shm/lsshmtidmgr.h>
-//#include <replserver.h>
 #include <lsmcd.h>
 #include <log4cxx/logger.h>
-
+#include <lcrepl/usockmcd.h>
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
@@ -32,6 +31,8 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <util/mysleep.h>
+#include <limits.h>
 
 struct LsMcUpdOpt
 {
@@ -244,7 +245,7 @@ void LsMemcache::sendResult(const char *fmt, ...)
         LS_ERROR("SERVER_ERROR Truncated result to client!\n");
     }
     va_end(va);
-    if (m_pConn->SendBuff(buf, len, 0) != len)
+    if (m_pConn->appendOutput(buf, len) != len)
     {
         LS_ERROR("SERVER_ERROR Unable to send to client!\n");
     }
@@ -253,7 +254,6 @@ void LsMemcache::sendResult(const char *fmt, ...)
 
 void LsMemcache::binRespond(uint8_t *buf, int cnt)
 {
-    lenNbuf lenNbuf;
     if (m_noreply)
     {
         if (m_pConn->GetConnFlags() & CS_INTERNAL)
@@ -266,14 +266,10 @@ void LsMemcache::binRespond(uint8_t *buf, int cnt)
     {
         if (m_pConn->GetConnFlags() & CS_INTERNAL)
         {
-            if (cnt > (int)sizeof(lenNbuf.buf))
-            {
-                LS_ERROR("SERVER_ERROR Response too large!\n");
-                return;
-            }
-            buf = (uint8_t *)buf2lenNbuf((char *)buf, &cnt, &lenNbuf);
+            uint16_t len = htons(cnt+2);
+            m_pConn->appendOutput((char*)&len, 2);
         }
-        if (m_pConn->SendBuff((char *)buf, cnt, 0) != cnt)
+        if (m_pConn->appendOutput((char *)buf, cnt) != cnt)
         {
             LS_ERROR("SERVER_ERROR Unable to send to client!\n");
         }
@@ -307,9 +303,11 @@ int LsMemcache::processInternal(
 {
     MemcacheConn *pLink;
     lenNbuf *ptr = (lenNbuf *)pBuf;
+    LS_DBG_M("processInternal iLen1:%d, bufLen:%d", iLen, sizeof(ptr->len));
     if (iLen < (int)sizeof(ptr->len))
         return -1;
     int len = ntohs(ptr->len);
+    LS_DBG_M("processInternal iLen2:%d, orig Len:%d, conv Len:%d", iLen, ptr->len, len);
     if (iLen < len)
         return -1;
     len -= sizeof(ptr->len);
@@ -321,6 +319,7 @@ int LsMemcache::processInternal(
     }
     else
     {
+        LS_DBG_M("processInternal ClrRespWait addr:%p", pLink);
         pLink->ClrRespWait();
         if ((len > 0) && (pLink->SendBuff(ptr->buf, len, 0) != len))
             LS_ERROR("SERVER_ERROR Unable to respond to link!\n");
@@ -362,11 +361,14 @@ static const char *g_pHashName = "SHMMCHASH";
 
 void LsMemcache::notifyChange()
 {
-    LS_DBG_M("LsMemcache::notifyChange pid:%d, pHash:%p is %s", getpid(), m_pHash, m_pHash->isTidMaster()?"master":"slave");
-    if (m_pHash->isTidMaster() && m_pCurSlice->m_pNotifier)
-        m_pCurSlice->m_pNotifier->notify();
+    LS_DBG_M("LsMemcache::notifyChange pid:%d, pHash:%p is %s, sliceIdx:%d", 
+             getpid(), m_pHash, m_pHash->isTidMaster()?"master":"slave", m_pCurSlice->m_idx);
+    if (m_pHash->isTidMaster())
+    {
+        Lsmcd::getInstance().getUsockConn()->cachedNotifyData(
+            Lsmcd::getInstance().getProcId(), m_pCurSlice->m_idx );
+    }
 }
-
 
 int LsMemcache::multiInitFunc(LsMcHashSlice *pSlice, void *pArg)
 {
@@ -509,16 +511,6 @@ int LsMemcache::initMcShm(const char *pDirName, const char *pShmName,
     return initMcShm(1, (const char **)&pShmName, pHashName, pParms);
 }
 
-
-int LsMemcache::multiInitEvFunc(LsMcHashSlice *pSlice, void *pArg)
-{
-    LsCache2ReplEvent ***pppEvent = (LsCache2ReplEvent ***)pArg;
-    pSlice->m_pNotifier = **pppEvent;
-    ++(*pppEvent);
-    return LS_OK;
-}
-
-
 int LsMemcache::multiMultiplexerFunc(LsMcHashSlice *pSlice, void *pArg)
 {
     pSlice->m_pConn = new MemcacheConn();
@@ -526,12 +518,19 @@ int LsMemcache::multiMultiplexerFunc(LsMcHashSlice *pSlice, void *pArg)
     return LS_OK;
 }
 
-
-int LsMemcache::initMcEvents(LsCache2ReplEvent **ppEvent)
+int LsMemcache::multiConnFunc(LsMcHashSlice *pSlice, void *pArg)
 {
-    LsCache2ReplEvent ***pppEvent = &ppEvent;
-    if (m_pHashMulti->foreach(multiInitEvFunc, (void *)pppEvent) == LS_FAIL)
-        return LS_FAIL;
+    pSlice->m_pConn->SetMultiplexer((Multiplexer *)pArg);
+    return LS_OK;
+}
+
+int LsMemcache::reinitMcConn(Multiplexer *pMultiplexer)
+{
+    return m_pHashMulti->foreach(multiConnFunc, (void *)pMultiplexer);
+}
+
+int LsMemcache::initMcEvents()
+{
     Multiplexer *pMultiplexer;
     if ((pMultiplexer = m_pHashMulti->getMultiplexer()) == NULL)
         return LS_FAIL;
@@ -548,10 +547,14 @@ int LsMemcache::setSliceDst(int which, char *pAddr)
         ((LsMcHdr *)pHash->offset2ptr(pSlice->m_iHdrOff))->x_dstaddr;
     if (*pDstAddr != 0)
     {
+        LS_DBG_M("closing slice[%d] last svr addr [%s].\n", which, pDstAddr);
         pSlice->m_pConn->CloseConnection();
         *pDstAddr = 0;
     }
     pHash->setTidMaster();
+    DispatchData_t dispData;
+    dispData.x_procId   = Lsmcd::getInstance().getProcId();
+    dispData.x_sliceId  = which;
     if (pAddr != NULL)
     {
         GSockAddr dstAddr;
@@ -560,22 +563,36 @@ int LsMemcache::setSliceDst(int which, char *pAddr)
             return LS_FAIL;
         if (pSlice->m_pConn->connectTo(&dstAddr) < 0)
         {
-            LS_ERROR("Unable to connect to [%s]!\n", pAddr);
+            LS_ERROR("pid:%d, slice[%d] Unable to connect to [%s]!\n", getpid(), which, pAddr);
         }
         else
         {
-            LS_DBG_M("Trying to connect to [%s].\n", pAddr);
+            LS_DBG_M("pid:%d, slice[%d] Trying to connect to [%s].\n", getpid(), which, pAddr);
+            
+            if (pSlice->m_pConn->SendBuff((char *)&dispData, sizeof(dispData), 0) != sizeof(dispData))
+            {
+                LS_ERROR("SERVER_ERROR Unable to connect fdpass listener!\n");
+            }
+            my_sleep(100);
             pSlice->m_pConn->SetConnInternal();
             uint8_t flag = MC_INTERNAL_REQ;
             if (pSlice->m_pConn->SendBuff((char *)&flag, 1, 0) != 1)
             {
                 LS_ERROR("SERVER_ERROR Unable to init remote!\n");
             }
+            else
+            {
+                LS_DBG_M("pid:%d, slice:%d, pConn Addr:%p, cached is connected to peer master", 
+                         getpid(), which, pSlice->m_pConn );
+            }
+                
+                
         }
         pHash->setTidSlave();
     }
-    LS_DBG_M("LsMemcache::setSliceDst which:%d, pAddr:%s, result role:%s", which, pAddr
-        , pHash->isTidMaster()?"Master":"Slave");
+    
+    LS_DBG_M("LsMemcache::setSliceDst pid:%d, procId:%d, pSlice->m_idx:%d, which:%d, pAddr:%s, result role:%d", 
+             getpid(), dispData.x_procId, pSlice->m_idx, which, pAddr, pHash->isTidMaster());
     
     return LS_OK;
 }
@@ -702,6 +719,7 @@ int LsMemcache::processCmd(char *pStr, int iLen)
     if ((p = getCmdFunction(pCmd, len)) == NULL)
     {
         respond(errorStr);
+        m_pConn->Flush();
         return consumed;
     }
     input.key.len = endp - input.key.ptr - 1;
@@ -711,6 +729,7 @@ int LsMemcache::processCmd(char *pStr, int iLen)
         (*p->func)(this, &input, p->arg)) >= 0)
 //         (*p->func)(this, pStr, endp + 1, iLen - consumed, p->arg)) >= 0)
     {
+        m_pConn->Flush();
         return consumed + datasz;
     }
     if (datasz == -1)   // need more data
@@ -1608,6 +1627,7 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
             LS_ERROR("Unable to forward to remote\n");
             pThis->respond("SERVER_ERROR unable to forward" "\r\n");
         }
+        LS_DBG_M("is not master, forwarding , return length:%d", length);
         return length;
     }
 
@@ -1726,7 +1746,7 @@ McBinStat LsMemcache::chkMemSz(int arg)
     {
         if (m_mcparms.m_nomemfail)
             return MC_BINSTAT_ENOMEM;
-        m_pHash->trimsize((int)(total - m_mcparms.m_iMemMaxSz), NULL, 0);
+        m_pHash->trimsize((int)(total - m_mcparms.m_iMemMaxSz)<<3, NULL, 0);
     }
     return MC_BINSTAT_SUCCESS;
 }
@@ -2194,8 +2214,12 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, void *pArg)
             ++((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats.flush_cmds;
         pHash->unlock();
         pHash->enableLock();
-        if (pSlice->m_pNotifier != NULL)
-            pSlice->m_pNotifier->notify();
+        
+        Lsmcd::getInstance().getUsockConn()->cachedNotifyData(
+            Lsmcd::getInstance().getProcId(), pSlice->m_idx );
+        
+//         if (pSlice->m_pNotifier != NULL)
+//             pSlice->m_pNotifier->notify();
     }
     else
     {

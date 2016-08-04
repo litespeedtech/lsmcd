@@ -43,7 +43,7 @@ class EvtcbQue : public TSingleton<EvtcbQue>
 
     void runOne(evtcbnode_s *pObj);
     
-    inline void logState(const char *s, evtcbnode_s *p);
+    static void logState(const char *s, evtcbnode_s *p);
     
 
 public:
@@ -60,6 +60,8 @@ public:
     evtcbnode_s * getNodeObj(evtcb_pf cb, evtcbhead_t *session,
                              long lParam, void *pParam);
     void schedule(evtcbnode_s *pObj, bool nowait = false);
+    
+    static evtcbhead_t **getSessionRefPtr(evtcbnode_s *nodeObj);
 
     LS_NO_COPY_ASSIGN(EvtcbQue);
     

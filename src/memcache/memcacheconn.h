@@ -56,12 +56,23 @@ public:
     MemcacheConn();
     ~MemcacheConn();
     
-    int InitConn( int fd, struct sockaddr * addr );
+    int InitConn( int fd, struct sockaddr * pAddr );
     int CloseConnection();
     int SendEx(const char *msg, int len, int flags);
     int SendBuff(const char *msg, int len, int flags);
-    int flush();
-
+    int Flush();
+ 
+    int appendOutput(const char *msg, int len)
+    {   
+        if (m_bufOutgoing.size() > 4096)
+        {
+            Flush();
+            if (m_bufOutgoing.empty() && len > 1024)
+                return SendBuff(msg, len, 0);
+        }
+        return m_bufOutgoing.append(msg, len);  
+    }
+    
     bool IsSendBufferFull()
     {   return m_bufOutgoing.size() >= m_iMaxBufferSize; }
     
@@ -112,7 +123,6 @@ private:
     int protocolErr();
     int forwardNoneMplx();
     
-    int Flush();
     int onInitConnected();
     
     Multiplexer * getMultiplexer() const    {   return m_pMultiplexer;   }
@@ -123,8 +133,7 @@ private:
     
     AutoStr         m_peerAddr;
     int             m_iSSPort;
-    GSockAddr       _ClientIP;
-        
+       
     int             m_iMaxBufferSize;
     LoopBuf         m_bufOutgoing;
     LoopBuf         m_bufIncoming;

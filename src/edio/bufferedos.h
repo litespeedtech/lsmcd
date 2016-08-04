@@ -39,7 +39,7 @@ public:
 
     int cacheWrite(const char *pBuf, int size)
     {
-        if (m_buf.size() + size < 16384)
+        if (m_buf.size() + size < 9000)
         {
             m_buf.append(pBuf, size);
             return size;

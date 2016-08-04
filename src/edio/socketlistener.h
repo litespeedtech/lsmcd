@@ -17,6 +17,7 @@
 /**
     @author George Wang <gwang@litespeedtech.com>
 */
+#include <inttypes.h>
 
 class SockConnProcessor;
 class GSockAddr;
@@ -35,8 +36,8 @@ public:
     const char *getName() const         {   return m_sName.c_str();         }
     void setAddrStr( const char *pAddr )    {   m_sAddr.setStr( pAddr );    }
     const char * getAddrStr() const         {   return m_sAddr.c_str();     }
-    void setBinding( unsigned int b )   {   m_iBinding = b;                 }
-    unsigned int getBinding() const     {   return m_iBinding;              }
+    void setBinding( uint64_t b )       {   m_iBinding = b;                 }
+    uint64_t getBinding() const         {   return m_iBinding;              }
     int getType() const;
     void setConnProc( SockConnProcessor *pProcessor, int iType );
     SockConnProcessor *getConnProc() const;
@@ -55,7 +56,7 @@ private:
     AutoStr             m_sName;
     AutoStr             m_sAddr;
     int                 m_iPort;
-    unsigned int        m_iBinding;
+    uint64_t            m_iBinding;
     SockConnProcessor  *m_pProcessor;
 };
 

@@ -142,12 +142,13 @@ void NodeInfo::mkJson(const char * ip,  bool isLocal, bool isLeader
     }
 }
 
-NodeInfo *NodeInfoMgr::getLocalNodeInfo()
+NodeInfo *NodeInfoMgr::getLocalNodeInfo(bool bRefresh)
 {
     NodeInfo * pLocal = getNodeInfo(ConfWrapper::getInstance()->getLocalLsntnrIp());
     if (!pLocal)
         return NULL;
-    pLocal->refresh();
+    if ( bRefresh )
+        pLocal->refresh();
     return pLocal;
 }
 

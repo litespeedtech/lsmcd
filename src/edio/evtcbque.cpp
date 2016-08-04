@@ -87,7 +87,7 @@ void EvtcbQue::run(evtcbhead_t *session)
     pLast = (evtcbnode_s *)(m_callbackObjList.end()->prev());
     ls_atomic_spin_unlock(&lock_add);
 
-    while(pObj->m_pSession == session)
+    while(pObj && pObj->m_pSession == session)
     {
         ls_atomic_spin_lock(&lock_add);
         pObjNext = (evtcbnode_s *)pObj->next();
@@ -147,6 +147,10 @@ void EvtcbQue::runOne(evtcbnode_s *pObj)
     m_callbackObjList.remove(pObj);
     ls_atomic_spin_unlock(&lock_add);
 
+    if (pObj->m_pSession 
+        && pObj->m_pSession->back_ref_ptr == &pObj->m_pSession)
+        pObj->m_pSession->back_ref_ptr = NULL;
+    
     if (pObj->m_callback)
         pObj->m_callback(pObj->m_pSession, pObj->m_lParam, pObj->m_pParam);
 
@@ -157,14 +161,18 @@ void EvtcbQue::runOne(evtcbnode_s *pObj)
 evtcbnode_s *EvtcbQue::getNodeObj(evtcb_pf cb,
                                 evtcbhead_t *session, long lParam, void *pParam)
 {
+    ls_atomic_spin_lock(&lock_add);
     evtcbnode_s *pObj = s_pCbnodePool->get();
+    ls_atomic_spin_unlock(&lock_add);
+    logState("getNodeObj", pObj);
+
     if (pObj)
     {
         pObj->m_callback = cb;
         pObj->m_pSession = session;
         pObj->m_lParam = lParam;
         pObj->m_pParam = pParam;
-        }
+    }
     return pObj;
 }
 
@@ -219,6 +227,8 @@ void EvtcbQue::recycle(evtcbnode_s *pObj)
 
 void EvtcbQue::removeSessionCb(evtcbhead_t *session)
 {
+    if (!session->evtcb_head)
+        return ;
 
     evtcbnode_s *pObj;
     evtcbnode_s *pObjNext;
@@ -246,5 +256,13 @@ void EvtcbQue::removeSessionCb(evtcbhead_t *session)
     }
     session->evtcb_head = NULL;
     ls_atomic_spin_unlock(&lock_add);
+}
+
+evtcbhead_t **EvtcbQue::getSessionRefPtr(evtcbnode_s *nodeObj)
+{
+    if (!nodeObj)
+        return NULL;
+    logState("getSessionRefPtr()", nodeObj);
+    return &nodeObj->m_pSession;
 }
 

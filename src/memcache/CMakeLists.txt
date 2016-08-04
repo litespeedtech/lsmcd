@@ -9,7 +9,6 @@ SET(shm_STAT_SRCS
     lsmchashmulti.cpp
     lsmemcache.cpp
     lsmcsasl.cpp
-    rolememcache.cpp
     memcacheconn.cpp
     memcachelistener.cpp
 )

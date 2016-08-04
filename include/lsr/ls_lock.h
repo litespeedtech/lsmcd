@@ -55,22 +55,14 @@ extern "C" {
 #if defined(linux) || defined(__linux) || defined(__linux__) || defined(__gnu_linux__) \
     || defined(__FreeBSD__ ) || defined(__NetBSD__) || defined(__OpenBSD__)
 #define USE_F_MUTEX
+#define USE_MUTEX_ADAPTIVE
+
 #else
 #undef USE_F_MUTEX
-#endif
-
-#if defined(linux) || defined(__linux) || defined(__linux__) || defined(__gnu_linux__) \
-    || defined(__FreeBSD__ ) || defined(__NetBSD__) || defined(__OpenBSD__)
-#define USE_ATOMIC_SPIN
-#else
 #define USE_MUTEX_LOCK
+
 #endif
-
-#if defined(linux) || defined(__linux) || defined(__linux__) || defined(__gnu_linux__) \
-    || defined(__FreeBSD__ ) || defined(__NetBSD__) || defined(__OpenBSD__)
-#define USE_MUTEX_ADAPTIVE
-#endif /* defined(linux) || defined(__FreeBSD__ ) */
-
+#define USE_ATOMIC_SPIN
 
 #define MAX_FUTEX_SPINCNT      10
 #define MAX_FUTEX_PIDCHECK     10
@@ -106,6 +98,9 @@ typedef int32_t             ls_atom_spinlock_t;
 
 #ifdef USE_ATOMIC_SPIN
 typedef ls_atom_spinlock_t   ls_spinlock_t;
+
+extern int ls_spin_pid;    /* process id used with ls_atomic_pidspin */
+void ls_atomic_pidspin_init();
 #else
 typedef ls_pspinlock_t  ls_spinlock_t;
 #endif
@@ -115,9 +110,6 @@ typedef ls_mutex_t         ls_lock_t;
 #else
 typedef ls_spinlock_t      ls_lock_t;
 #endif
-
-extern int ls_spin_pid;    /* process id used with ls_atomic_pidspin */
-void ls_atomic_pidspin_init();
 
 
 #ifdef USE_F_MUTEX
@@ -193,8 +185,6 @@ ls_inline int ls_futex_wait(int *futex, int val, struct timespec *timeout)
 #endif
 
 
-#if defined(linux) || defined(__linux) || defined(__linux__) || defined(__gnu_linux__) \
-    || defined(__FreeBSD__ ) || defined(__NetBSD__) || defined(__OpenBSD__)
 #ifdef USE_F_MUTEX
 
 #define LS_FUTEX_LOCKED1    (1)
@@ -352,7 +342,6 @@ ls_inline int ls_futex_unlock(ls_mutex_t *p)
 int ls_futex_setup(ls_mutex_t *p);
 
 #endif //USE_F_MUTEX
-#endif
 
 //#ifdef USE_ATOMIC_SPIN
 
@@ -371,13 +360,11 @@ int ls_futex_setup(ls_mutex_t *p);
  */
 ls_inline int ls_atomic_spin_lock(ls_atom_spinlock_t *p)
 {
-    while (1)
+    while (!ls_atomic_casint(p, LS_LOCK_AVAIL, LS_LOCK_INUSE))
     {
-        if ((*p == LS_LOCK_AVAIL)
-            && ls_atomic_casint(p, LS_LOCK_AVAIL, LS_LOCK_INUSE))
-            return 0;
         cpu_relax();
     }
+    return 0;
 }
 
 /**
@@ -396,35 +383,23 @@ ls_inline int ls_atomic_spin_lock(ls_atom_spinlock_t *p)
  *
  * @see ls_atomic_spin_lock
  */
+
+
+int ls_atomic_spin_pidwait(ls_atom_spinlock_t *p);
+
 ls_inline int ls_atomic_spin_pidlock(ls_atom_spinlock_t *p)
 {
     int waitpid;
     if (ls_spin_pid == 0)
         ls_atomic_pidspin_init();
-    assert(*p != ls_spin_pid);
-    int cnt = MAX_SPINCNT_CHECK;
-    while (1)
+    waitpid = ls_atomic_casvint(p, LS_LOCK_AVAIL, ls_spin_pid);
+    if (waitpid == LS_LOCK_AVAIL)
     {
-        if ((waitpid = *p) == LS_LOCK_AVAIL)
-        {
-            if (ls_atomic_casint(p, LS_LOCK_AVAIL, ls_spin_pid))
-                return 0;
-            cnt = MAX_SPINCNT_CHECK;
-        }
-        else if (--cnt == 0)
-        {
-            if ((kill(waitpid, 0) < 0) && (errno == ESRCH)
-                && ls_atomic_casint(p, waitpid, ls_spin_pid))
-                return -waitpid;
-            cnt = MAX_SPINCNT_CHECK;
-        }
-        else
-        {
-            usleep(200);
-            //cpu_relax();
-        }
+        return 0;
     }
+    return ls_atomic_spin_pidwait(p);
 }
+
 
 /**
  * @ls_atomic_spin_trylock

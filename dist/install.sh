@@ -1,7 +1,5 @@
 #!/bin/sh
 
-set -x
-
 LSMCD_HOME=/usr/local/lsmcd
 TMP_DIR=/tmp/lsmcd
 

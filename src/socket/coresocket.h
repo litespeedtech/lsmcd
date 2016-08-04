@@ -118,6 +118,9 @@ public:
         return ::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(int));
 //#endif
     }
+    
+    static int enableFastOpen(int fd, int queLen);
+    
 };
 
 #endif

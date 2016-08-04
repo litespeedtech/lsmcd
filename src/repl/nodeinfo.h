@@ -67,7 +67,7 @@ public:
     int  replaceNodeInfo(NodeInfo *pNewInfo);
     
     bool isSelfFirstUp();
-    NodeInfo *getLocalNodeInfo();    
+    NodeInfo *getLocalNodeInfo(bool brefresh = true);    
     const NodeInfo   * getLeaderNode() const;        
     Ip2NodeInfoMap_t & getNodeInfoMap()        {       return m_hNodeInfoMap;      }
     int  size() const   {       return m_hNodeInfoMap.size();   }

@@ -1,45 +1,37 @@
+#ifndef FDPASSRLSTNR_H
+#define FDPASSRLSTNR_H
 
-
-#ifndef MEMCACHELISTENER_H
-#define MEMCACHELISTENER_H
-
-
+#include <util/autostr.h>
 #include <edio/eventreactor.h>
-#include "util/autostr.h"
-
-#include <string>
-
+#include "usockconn.h"
 class GSockAddr;
 class Multiplexer;
-class MemcacheConn;
+class ReplConn;
 
-class MemcacheListener : public EventReactor
+
+class UsocklListener;
+class FdPassLstnr : public EventReactor
 {
 public: 
-	MemcacheListener();
-	~MemcacheListener();
+    FdPassLstnr();
+    ~FdPassLstnr();
 
     virtual int handleEvents( short events );
     
-    int Start();
+    int Start(int dupFd, UsocklListener*pLstnr);
     int Stop();
 
     int SetListenerAddr( const char * pAddr );
     Multiplexer * getMultiplexer() const    {   return m_pMultiplexer;   }
     void SetMultiplexer( Multiplexer * pMplx )  {   m_pMultiplexer = pMplx;  }
     
-    void RecycleConn( MemcacheConn * pConn );
-    MemcacheConn * GetConn();
-    
-    void acceptFd(int fd, struct sockaddr * pSockAddr);
-    
+    const char* getListenerAddr ();    
 private:
-
-
-    AutoStr     _AddrStr;
+    AutoStr         m_addrStr;   
     Multiplexer *   m_pMultiplexer;
     
     int SetSockAttr( int fd, GSockAddr &addr );
+    UsocklListener *m_pusockLstnr;
 
 };
 

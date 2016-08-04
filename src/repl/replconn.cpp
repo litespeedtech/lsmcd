@@ -199,16 +199,19 @@ int ReplConn::Read( char * pBuf, int len )
 int ReplConn::sendPacket(uint32_t uContID, uint32_t uiType, uint32_t seqNum
     , const char* pPayLoad, uint32_t loadLen)
 {
-    ReplPacketHeader header;
-    header.initPack();
-    header.setContID (uContID);
-    header.setType ( uiType );
-    header.setSequenceNum ( seqNum );
-    header.setPackLen ( sizeof (header) +  loadLen );        
-    sendBuff ( ( const char* ) (&header), sizeof ( ReplPacketHeader ), 0);
+    int totLen = sizeof(ReplPacketHeader) + loadLen;
+    char *pBuf = new char[ totLen ];
+    ReplPacketHeader *pHeader = (ReplPacketHeader*)pBuf;
+    pHeader->initPack();
+    pHeader->setContID (uContID);
+    pHeader->setType ( uiType );
+    pHeader->setSequenceNum ( seqNum );
+    pHeader->setPackLen ( totLen );
     if (loadLen > 0)
-        sendBuff ( ( const char* ) pPayLoad, loadLen, 0);
-    return sizeof (header) +  loadLen;
+        memcpy( pBuf + sizeof(ReplPacketHeader), pPayLoad, loadLen);
+    sendBuff ( pBuf, totLen, 0);
+    delete []pBuf;
+    return totLen;
 }
 
 
@@ -351,7 +354,7 @@ int ReplConn::SendEx(const char *msg, int len, int flags)
 int ReplConn::sendBuff(const char *msg, int len, int flags)
 {
     int sent = 0;
-    if (m_pDefZipStream != NULL)     
+    if (m_pDefZipStream != NULL)
         m_pDefZipStream->pushOutGoingData(msg, len);
     else
         m_bufOutgoing.append(msg, len);

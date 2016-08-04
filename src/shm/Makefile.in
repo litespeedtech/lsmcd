@@ -85,9 +85,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/acinclude.m4 \
 	$(top_srcdir)/ax_check_zlib.m4 \
 	$(top_srcdir)/ax_check_openssl.m4 \
-	$(top_srcdir)/ax_path_lib_pcre.m4 \
-	$(top_srcdir)/ax_lib_expat.m4 $(top_srcdir)/ax_check_sasl.m4 \
-	$(top_srcdir)/configure.ac
+	$(top_srcdir)/ax_check_sasl.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
@@ -200,9 +198,6 @@ ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
 EXEEXT = @EXEEXT@
-EXPAT_CFLAGS = @EXPAT_CFLAGS@
-EXPAT_LIBS = @EXPAT_LIBS@
-EXPAT_VERSION = @EXPAT_VERSION@
 FGREP = @FGREP@
 GREP = @GREP@
 INSTALL = @INSTALL@
@@ -240,9 +235,6 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
-PCRE_CFLAGS = @PCRE_CFLAGS@
-PCRE_LDFLAGS = @PCRE_LDFLAGS@
-PCRE_LIBS = @PCRE_LIBS@
 RANLIB = @RANLIB@
 RT_LIB_OPTION = @RT_LIB_OPTION@
 SED = @SED@

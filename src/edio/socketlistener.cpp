@@ -30,7 +30,7 @@ SocketListener::SocketListener( const char *pName, const char *pAddr )
     , m_sName( pName )
     , m_sAddr( pAddr )
     , m_iPort( 0 )
-    , m_iBinding( 0xffffffff )
+    , m_iBinding( 0xffffffffffffffffull )
     , m_pProcessor( NULL )
 {
 }
@@ -40,7 +40,7 @@ SocketListener::SocketListener()
     : m_sName( NULL )
     , m_sAddr( NULL )
     , m_iPort( 0 )
-    , m_iBinding( 0xffffffff )
+    , m_iBinding( 0xffffffffffffffffull )
     , m_pProcessor( NULL )
 {
 }

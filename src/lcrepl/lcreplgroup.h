@@ -4,19 +4,18 @@
 #include "repl/replconn.h"
 
 #include "lcrepl/lcnodeinfo.h"
-#include "lcshmevent.h"
 #include <repl/replgroup.h>
-#include <memcache/rolememcache.h>
 #include <util/dlinkqueue.h>
 #include <util/hashstringmap.h>
 #include <util/stringlist.h>
 #include <edio/multiplexer.h>
-
+#include "usockconn.h"
 enum
 {
     CONT_ZERO     = 0,
     CONT_TID
 };
+class UsocklListener;
 
 class LcReplGroup : public ReplGroup
 {
@@ -27,15 +26,14 @@ public:
     
     void initSelfStatus ();
     void delClntInfoAll(const char *sockAddr);
-    
+    void setRef(UsocklListener * pUsockLstnr);
     virtual int  initReplConn();
     virtual int  connGroupLstnrs();
     virtual int  clearClntOnClose(const char *pAddr);
     virtual bool isFullReplNeeded(uint32_t contId, const NodeInfo *pLocalInfo, const NodeInfo *pPeerInfo);
-    void setR2cEventRef( LsRepl2CacheEvent * pR2cEventArr)      {       m_pR2cEventArr = pR2cEventArr;  }
-    int  notifyRoleChange(int idx, const char *pAddr, int len);
-    
-    LcNodeInfo *getLocalNodeInfo();   
+    int  notifyRoleChange();
+    int  notifyConnChange();
+    LcNodeInfo *getLocalNodeInfo(bool bRefresh = true);   
     virtual int onTimer1s();
     virtual int onTimer30s();
     int setNewMstrClearOthers(const char* pSockAddr, uint32_t iContID);
@@ -50,13 +48,13 @@ private:
     bool isSelfMinAddr(const StringList &inlist, const char* pSvrAddr);
     int  flipSelfBeMstr();
     int  clientsElectMstr(const LcNodeInfo * pLocalStatus, int idx);
-    void reorderClientHBFreq(int connCount);
     uint64_t getClientsMaxTid(const StringList &inlist, int idx, uint64_t myTid, StringList &outlist);
     
     void  monitorRoles();    
 private:
     StNodeInfoMgr       *m_pStNodeInfoMgr;
-    LsRepl2CacheEvent   * m_pR2cEventArr;
+    UsocklListener      *m_pUsockLstnr;
+    
 };
 
-#endif // REPLCONTAINER_H
+#endif

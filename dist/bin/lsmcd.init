@@ -7,47 +7,56 @@
 # processname: lsmcd
 
 LSMCD_CTRL="/usr/local/lsmcd/bin/lsmcdctrl"
-
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
 ret=0
-case "$1" in 
-	start)
-		"$LSMCD_CTRL" start 2>/dev/null 1>&2
-		ret=$?
-		if [ "x`uname -s`" = "xFreeBSD" ]; then
-			if [ $ret -eq 0 ]; then
-				echo -n " lslb"
-			fi
-		fi
-		;;
-	stop)
-		"$LSMCD_CTRL" stop 2>/dev/null 1>&2
-		ret=$?
-		if [ "x`uname -s`" = "xFreeBSD" ]; then
-			if [ $ret -eq 0 ]; then
-				echo -n " lslb"
-			fi
-		fi
-		;;
-	restart)
-		"$LSMCD_CTRL" restart 2>/dev/null 1>&2
-		ret=$?
-		;;
-	reload)
-		"$LSMCD_CTRL" reload 2>/dev/null 1>&2
-		ret=$?
-		;;
-	*)
-	echo $"Usage: $PROG {start|stop|restart|reload|help}"
-	cat <<EOF
+
+OK="\t\t\t\t[\t${GREEN}OK${NC}\t]"
+ERR="\t\t\t\t[\t${RED}ERROR${NC}\t]"
+case "$1" in
+    start)
+        "$LSMCD_CTRL" start 2>/dev/null 1>&2
+        ret=$?
+        if [ $ret -eq 0 ]; then
+            printf "start lsmcd ${OK}\n";
+        else
+            printf "start lsmcd ${ERR}\n";
+        fi
+        ;;
+
+    stop)
+        "$LSMCD_CTRL" stop 2>/dev/null 1>&2
+        ret=$?
+        if [ $ret -eq 0 ]; then
+            printf "stop lsmcd ${OK}\n";
+        else
+            printf "stop lsmcd ${ERR}\n";
+        fi
+
+        ;;
+    restart)
+        "$LSMCD_CTRL" restart 2>/dev/null 1>&2
+        ret=$?
+        if [ $ret -eq 0 ]; then
+            printf "restart lsmcd ${OK}\n";
+        else
+            printf "restart lsmcd ${ERR}\n";
+        fi
+
+        ;;
+    *)
+    echo $"Usage: $PROG {start|stop|restart|help}"
+    cat <<EOF
 
 start    - start lsmcd
 stop     - stop lsmcd
 restart  - restart (stop then start) load balancer
 help     - this screen
-		
+        
 EOF
 
-		ret=2
-		;;
+        ret=2
+        ;;
 esac
 exit $ret

@@ -8,6 +8,7 @@
 #include "lcreplconf.h"
 #include "lcreplsender.h"
 #include "replshmtidcontainer.h"
+#include "usockmcd.h"
 
 #include <repl/replregistry.h>
 #include <repl/replsender.h>
@@ -127,23 +128,33 @@ int LcReplReceiver::handleData ( ReplConn *pConn, ReplPacketHeader * header,
     }
     uint64_t iPeerTid = *(uint64_t *)pData;
     LcNodeInfo *pPeerNode = (LcNodeInfo *) getReplGroup()->getNodeInfoMgr()->getNodeInfo(pConn->getPeerAddr());
-    pPeerNode->setCurrTid(contId -1, iPeerTid);
+    if (pPeerNode != NULL)
+    {
+        pPeerNode->setCurrTid(contId -1, iPeerTid);
     
-    int dataLen = header->getPackLen() - sizeof ( *header ) - sizeof(uint64_t);
-    LS_DBG_M("LcReplReceiver::handleData idx:%d, iPeerTid:%lld, dataLen:%d", contId -1, iPeerTid, dataLen);
-    saveDataToContainer ( pReplContainer, pConn, header, pData + sizeof(uint64_t)
-        , dataLen, iBulk); 
+        int dataLen = header->getPackLen() - sizeof ( *header ) - sizeof(uint64_t);
+        LS_DBG_M("LcReplReceiver::handleData idx:%d, iPeerTid:%lld, dataLen:%d", contId -1, iPeerTid, dataLen);
+        saveDataToContainer ( pReplContainer, pConn, header, pData + sizeof(uint64_t)
+            , dataLen, iBulk); 
+    }
+    else
+        LS_DBG_M("code bug...");
     return LS_OK;
 }
 
 int LcReplReceiver::saveDataToContainer ( ReplContainer* pReplContainer, ReplConn *pReplNode,
                                         ReplPacketHeader * header, char * pData, int dataLen, int iBulk)
 {
+    static uint32_t lastTm = time(NULL);
     if ( pReplContainer->addAndUpdateData ( ( uint8_t * )(pData), dataLen, 0) == 0 )
     {
         LS_DBG_M(  "add_And_Update_Obj to container %d successfully isBulk=%d, dataLen=%d",
                         header->getContID(), iBulk, dataLen ) ;
-        respondPacket(pReplNode, header, RT_ACK, iBulk);
+        if ( time(NULL) - lastTm > 1)         //void too much ACK at big traffic                  
+        {
+            respondPacket(pReplNode, header, RT_ACK, iBulk);
+            lastTm = time(NULL);
+        }
     }
     else
     {
@@ -219,13 +230,18 @@ int LcReplReceiver::clntHandleJoinSvrResp(ReplConn* pReplNode, ReplPacketHeader*
     
     StaticNodeInfo::getSvrAddr(pPeerStatus->getShmSvrIp(), pPeerStatus->getShmSvrPort(), pSockAddr, 64);
     LS_DBG_M(  "set all cached slices to pointing to master addr[%s]", pSockAddr);
-      
+    bool bUpdated = false;  
     for (int idx = 0; idx < (int)(pLocalStatus->getContCount()); ++idx)
     {
         if (R_SLAVE == pLocalStatus->getRole(idx))
-            LcReplGroup::getInstance().notifyRoleChange(idx, pSockAddr, strlen(pSockAddr));
-            //LsMemcache::getInstance().setSliceDst(idx, pSockAddr);
-    }    
+        {
+            UsockSvr::getRoleData()->setRoleAddr(idx, pSockAddr, strlen(pSockAddr));
+            bUpdated =  true;
+        }
+    }
+    if(bUpdated)
+        LcReplGroup::getInstance().notifyRoleChange();
+    LcReplGroup::getInstance().notifyConnChange();
     delete pPeerStatus;
     return LS_OK;
 
@@ -352,8 +368,8 @@ int LcReplReceiver::clientHandleTakeMstr ( ReplConn *pConn, ReplPacketHeader * h
     //notify cached of new master
     LS_DBG_M(  "LcReplReceiver::clientHandleTakeMstr notify I'm new master, idx=%d"
         , header->getContID() - 1); 
-    
-    LcReplGroup::getInstance().notifyRoleChange(header->getContID() - 1, NULL, 0);
+    UsockSvr::getRoleData()->setRoleAddr(header->getContID() - 1, NULL, 0);
+    LcReplGroup::getInstance().notifyRoleChange();
     
     return 0;
 }
@@ -383,7 +399,8 @@ int LcReplReceiver::handleNewElectedMaster(ReplConn *pConn, ReplPacketHeader * h
     LS_DBG_M(  "LcReplReceiver::handleNewElectedMaster notify master role idx=%d,addr=%s"
     , iContID -1, pSockAddr); 
 
-    group.notifyRoleChange(iContID -1, pSockAddr, strlen(pSockAddr));
+    UsockSvr::getRoleData()->setRoleAddr(iContID -1, pSockAddr, strlen(pSockAddr));
+    group.notifyRoleChange();
     return 0;
 }
 

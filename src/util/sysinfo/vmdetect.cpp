@@ -142,8 +142,6 @@ static void handler(int sig)
 #define VMCMD_GET_VERSION   0x0a        // Get version number
 
 
-static int _isVMWare = 0;
-
 #if defined(__i386__)||defined( __x86_64 )||defined( __x86_64__ )
 static int isVMware()
 {

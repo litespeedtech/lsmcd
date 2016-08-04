@@ -34,7 +34,7 @@ public:
     
     int         tidGetNxtItems(int idx, uint64_t* tid, uint8_t* pBuf, int isize);
     
-    //bool        readShmDBTid (int idx, uint64_t *pCurrTid, uint32_t *pTidNum);
+    bool        getShmSliceRole(int idx);
     bool        readShmDBTid (int idx, LcNodeInfo* pStatus);
     uint64_t    getLastShmTid(int idx);
     

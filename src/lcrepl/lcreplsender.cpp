@@ -123,9 +123,17 @@ static int bcastReplicableDataFn(void * cbData, void *pUData1, void *pUData2)
     AutoBuf *pBuf               = (AutoBuf *)pUData2;
     
     Addr2ClntConnMap_t::iterator itr;
+    ClientConn *pConn;
     for ( itr = pconMap->begin(); itr != pconMap->end(); itr = pconMap->next(itr))
     {
-        itr.second()->sendPacket(contID, RT_DATA_UPDATE, getReplSender()->getSeqNum(), pBuf->begin(), pBuf->size());
+        pConn = itr.second();
+        LS_DBG_M("bcastReplicableDataFn constate %d", pConn->isConnected() );
+        if (pConn->isConnected())
+        {
+            LS_DBG_M( "bcastReplicableDataFn, hashkey:%s", pConn->getHashKey());
+            pConn->sendPacket(contID, RT_DATA_UPDATE, getReplSender()->getSeqNum(), 
+                                 pBuf->begin(), pBuf->size());
+        }
     }
     
     return LS_OK;

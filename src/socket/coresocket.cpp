@@ -167,3 +167,21 @@ int CoreSocket::close()
 }
 
 
+int CoreSocket::enableFastOpen(int fd, int queLen)
+{
+    int ret = 1;
+#if defined(linux) || defined(__linux) || defined(__linux__)
+#ifndef TCP_FASTOPEN
+#define TCP_FASTOPEN 23
+#endif
+    static int isTfoAvail = 1;
+    if (!isTfoAvail)
+        return -1;
+    
+    ret = setsockopt(fd, SOL_TCP, TCP_FASTOPEN, &queLen, sizeof(queLen));
+    if ((ret == -1)&&(errno == ENOPROTOOPT))
+        isTfoAvail = 0;
+#endif
+    return ret;
+}
+

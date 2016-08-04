@@ -10,7 +10,7 @@ StaticNodeInfo::StaticNodeInfo(const char *pAddr)
 {
     setHashKey(pAddr);
     setSvrAddr(getReplConf()->getLisenSvrAddr());
-    setShmSvrAddr(getReplConf()->getMemCachedAddr());
+    setShmSvrAddr(getReplConf()->getDispatchAddr() );
 }
 
 StaticNodeInfo::StaticNodeInfo(const StaticNodeInfo& status)
@@ -163,7 +163,7 @@ int LcNodeInfo::copyAll(NodeInfo* rhs)
 
 int LcNodeInfo::refresh()
 {
-    int subNum = getReplConf()->getSubFileNum();
+    int subNum = getReplConf()->getSliceCount();
     for (int idx = 0; idx < subNum; ++idx)
     {
         setCurrTid(idx, ReplShmHelper::getInstance().getLastShmTid(idx));

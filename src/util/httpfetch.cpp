@@ -179,7 +179,7 @@ int HttpFetch::startReq(const char *pURL, int nonblock, int enableDriver,
     GSockAddr server;
     if (addrServer == NULL)
         addrServer = m_achHost;
-    if (0 != server.set(addrServer, NO_ANY | DO_NSLOOKUP))
+    if (0 != server.set(addrServer, NO_ANY | DO_NSLOOKUP_DIRECT))
         return -1;
 
     return startReq(pURL, nonblock, enableDriver, pBody, bodyLen,
@@ -195,6 +195,8 @@ int HttpFetch::startReq(const char *pURL, int nonblock, int enableDriver,
 
     if (enableDriver)
         m_pHttpFetchDriver = new HttpFetchDriver(this);
+    if (m_iTimeoutSec <= 0)
+        m_iTimeoutSec = 60;
     m_tmStart = time(NULL);
     
     if (m_pProxyServerAddr)
@@ -607,7 +609,7 @@ int HttpFetch::process()
     while ((m_fdHttp != -1) && (m_reqState < 4))
         sendReq();
     while ((m_fdHttp != -1) && (m_reqState < 7) 
-        && m_tmStart + m_iTimeoutSec < time(NULL))
+        && m_tmStart + m_iTimeoutSec > time(NULL))
         recvResp();
     return (m_reqState == 7) ? 0 : -1;
 }

@@ -189,6 +189,17 @@ void VMemBuf::rewindWOff(off_t rewind)
 }
 
 
+void VMemBuf::seekRwOff(off_t rewind)
+{
+    seekWritePos(rewind);
+    m_pCurRBlock = m_pCurWBlock;
+    m_pCurRPos = m_pCurWPos;
+    m_pCurRBlock = m_pCurWBlock;
+    m_curRBlkPos = m_curWBlkPos;
+}
+
+
+
 int VMemBuf::shrinkBuf(off_t size)
 {
     /*
@@ -599,7 +610,8 @@ int VMemBuf::setROffset(off_t offset)
 int VMemBuf::seekWritePos(off_t offset)
 {
     struct stat st;
-    m_curTotalSize = fstat(getfd(), &st);
+    fstat(getfd(), &st);
+    m_curTotalSize = st.st_size;
     off_t target_size = (offset + s_iBlockSize - 1) & ~(s_iBlockSize - 1);
     if (target_size > st.st_size)
     {

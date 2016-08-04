@@ -20,9 +20,10 @@
 #include <sys/types.h>
 #include <sys/un.h>
 
-#define DO_NSLOOKUP     1
-#define NO_ANY          2
-#define ADDR_ONLY       4
+#define DO_NSLOOKUP         1
+#define NO_ANY              2
+#define ADDR_ONLY           4
+#define DO_NSLOOKUP_DIRECT  8
 
 class GSockAddr
 {
@@ -31,7 +32,7 @@ private:
     {
         struct sockaddr      *m_pSockAddr;
         struct sockaddr_in   *m_v4;
-        struct sockaddr_in6 *m_v6;
+        struct sockaddr_in6  *m_v6;
         struct sockaddr_un   *m_un;
     };
 
@@ -75,7 +76,7 @@ public:
     }
 
     ~GSockAddr()                {   release();          }
-    struct sockaddr *get()     {   return m_pSockAddr; }
+    struct sockaddr *get()      {   return m_pSockAddr; }
 
     int family() const
     {   return m_pSockAddr->sa_family;  }

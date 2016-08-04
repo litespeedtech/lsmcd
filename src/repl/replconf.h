@@ -41,10 +41,7 @@ public:
     void setIsGzip(bool b)                      {       m_bGzipStream = b;}
 
     int    getHbTimeout() const          {       return m_hbTimeout;      }
-    void   setHbTimeout(int secs);
-    
     int    getHbFreq() const             {       return m_hbFreq;         }
-    void   setHbFreq(int secs);
     
     void setIncSync(bool b)                     {       m_bIncSync = b;         }
     bool isIncSync() const                      {       return m_bIncSync;      }

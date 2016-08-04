@@ -24,13 +24,12 @@
 
 class MemcacheConn;
 class Multiplexer;
-class LsCache2ReplEvent;
 typedef struct
 {
+    uint8_t         m_idx;    
     LsShmHash      *m_pHash;
     LsShmOffset_t   m_iHdrOff;
     MemcacheConn   *m_pConn;
-    LsCache2ReplEvent     *m_pNotifier;
 } LsMcHashSlice;
 
 

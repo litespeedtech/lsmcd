@@ -104,6 +104,7 @@ public:
     void rewindReadBuf();
     int  seekWritePos(off_t offset);
     void rewindWOff(off_t rewind);
+    void seekRwOff(off_t rewind);
     int setROffset(off_t offset);
     int getfd() const               {   return m_fd;            }
     off_t getCurFileSize() const   {   return m_curTotalSize;  }

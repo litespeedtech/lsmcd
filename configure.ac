@@ -1,7 +1,5 @@
 m4_include(ax_check_zlib.m4)
 m4_include(ax_check_openssl.m4)
-m4_include(ax_path_lib_pcre.m4)
-m4_include(ax_lib_expat.m4)
 m4_include(ax_check_sasl.m4)
 
 dnl Process this file with autoconf to produce a configure script.
@@ -82,11 +80,8 @@ AC_SUBST([OPENLSWS_LIBDIR])
 
 AX_CHECK_ZLIB(, AC_MSG_ERROR(Can not find zlib. You must install it before continuing.))
 AX_CHECK_OPENSSL(, AC_MSG_ERROR(Can not find openssl. You must install it before continuing.))
-AX_PATH_LIB_PCRE(, AC_MSG_ERROR(Can not find pcre. You must install it before continuing.))
-AX_LIB_EXPAT(0.5)
-AC_CHECK_LIB([GeoIP], [GeoIP_id_by_addr])
 AC_CHECK_LIB(crypt,crypt,LIBS="-lcrypt $LIBS")
-      
+     
       
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_HEADER_STDBOOL

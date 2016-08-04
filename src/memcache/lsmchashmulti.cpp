@@ -74,6 +74,7 @@ int LsMcHashMulti::init(int iCnt, const char **ppPathName, const char *pHashName
         fnValComp = memcmp;
     m_fnHashKey = fnHashKey;
 
+    int lstIdx = iCnt - 1 ;
     m_pSlices = new LsMcHashSlice [iCnt];
     pSlice = m_pSlices;
     int ret = LS_OK;
@@ -114,12 +115,14 @@ int LsMcHashMulti::init(int iCnt, const char **ppPathName, const char *pHashName
         }
 
         if ((pSlice->m_pHash = pGPool->getNamedHash(
-            pHashName, 0, fnHashKey, fnValComp, mode)) == NULL)
+            pHashName, 500000, fnHashKey, fnValComp, mode)) == NULL)
         {
             LS_ERROR("getNamedHash failed! [%s]\n", *ppPathName);
             ret = LS_FAIL;
             break;
         }
+        pSlice->m_idx = lstIdx - iCnt;
+        LS_DBG_M(" LsMcHashMulti::init m_idx:%d", pSlice->m_idx);
         pSlice->m_iHdrOff = 0;
         pSlice->m_pConn = NULL;
 

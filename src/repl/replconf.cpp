@@ -137,24 +137,6 @@ bool ReplConf::setLisenSvrAddr(const char* pAddr)
 }   
 
 
-void   ReplConf::setHbTimeout(int secs)
-{  
-    if (m_hbTimeout < 5 * m_hbFreq)
-        secs = 5 * m_hbFreq;
-    m_hbTimeout = secs;
-}      
-
-
-void   ReplConf::setHbFreq(int secs)
-{ 
-    if ( 10 <= secs && secs <= 200 )
-        m_hbFreq = secs;   
-    else
-        m_hbFreq = 60;
-
-} 
-
-
 ConfWrapper::ConfWrapper()
     : m_pConf(NULL)
 {

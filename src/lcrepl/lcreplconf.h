@@ -32,11 +32,11 @@ public:
     ~LcReplConf();
     bool         parse(const char *szFile);
 
-    uint16_t     getSubFileNum() const;
+    uint16_t     getSliceCount() const;
     int        * getPriorities(int *count) const;       
     char      ** getShmFiles() const;
     const char * getMemCachedAddr() const;
-
+    const char * getCachedPriAddr() const;
     const char * getShmDir() const;
     const char * getShmName() const;
     const char * getShmHashName() const;
@@ -54,8 +54,18 @@ public:
     const char  *getTmpDir();
     const char  *getUser();
     const char  *getGroup();
+    uint16_t     getCachedProcCnt() const;
+    const char  *getDispatchAddr() const;
+    
+    const char  *getRepldUsPath() const;
+    const char  *getCachedUsPath() const;
+    
 private:
+    AutoStr             m_repldUsPath;
+    AutoStr             m_cachedUsPath;
+    AutoStr             m_dispatchAddr;
     AutoStr             m_cachedAddr;
+    AutoStr             m_cachedPriAddr;
     AutoStr             m_shmDir;
     AutoStr             m_shmName;
     AutoStr             m_shmHashName;
@@ -65,7 +75,8 @@ private:
     bool                m_useCas;
     bool                m_useSasl;
     bool                m_noMemFail;
-    uint16_t            m_iSubFileNum;
+    uint16_t            m_sliceCnt;
+    uint16_t            m_cachedProcCnt;
     AutoStr             m_user;
     AutoStr             m_group;
     

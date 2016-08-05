@@ -1,5 +1,8 @@
-LiteSpeed Memcache Compatible Persistent HA replication Cache Server 
-=======
+LSMCD
+=======  
+Description
+--------
+LiteSpeed Memcached is LiteSpeed's persistent memcache compatible cache server supporting high availability replication. It's performance and interface are similar to the popular Memcached. Unlike Memcached, cache data is persistent on single or multiple box setups -- preserving all cache data through updates and in the event of server failure.
 
 Compile
 --------
@@ -18,5 +21,4 @@ Install
 
 Configuration Documentation
 --------
-
 Lsmcd configuration setting is different from memcached. For detail description, please read through https://www.litespeedtech.com/support/wiki/doku.php/litespeed_wiki:lsmcd.

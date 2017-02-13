@@ -139,7 +139,7 @@ uint32_t cmpTimeHashList(int localCount, const char *pBuf1
         localCount--;
         pBuf1 += sizeof(uint32_t) + 32;
     }
-    LS_DBG_M("IncReplAuditor::cmpTimeHashList return tm count:%d", (localOnly.size() - sz0)/sizeof(uint32_t));
+    LS_DBG_M("IncReplAuditor::cmpTimeHashList return tm count:%ld", (localOnly.size() - sz0)/sizeof(uint32_t));
     return (localOnly.size() - sz0)/sizeof(uint32_t);
 }
 
@@ -212,7 +212,7 @@ int IncReplAuditor::addBReplTask(ServerConn *pConn, const AutoBuf &diffBuf )
     endTm               = *(uint32_t*)pBuf;
     pBuf               += sizeof(uint32_t);
     
-    LS_DBG_L("IncReplAuditor::addBReplTask, startTm:%d, endTm:%d, buf left size:%d", 
+    LS_DBG_L("IncReplAuditor::addBReplTask, startTm:%d, endTm:%d, buf left size:%zd", 
              startTm, endTm, diffBuf.size() - sizeof(uint32_t) * 2);
     m_pBulkReplCtx      = new BulkReplCtx(BULK_REPL, startTm, endTm);
     m_pBulkReplCtx->start(pConn, pBuf, diffBuf.size() - sizeof(uint32_t) * 2);

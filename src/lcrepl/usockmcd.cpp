@@ -259,7 +259,7 @@ int UsockSvr::recvCachedNotify()
     {
         tid = m_pTidTracker->getCurrTid(dispData.x_sliceId) ;
         LS_DBG_L("repld notified from cached procId:%d, sliceId:%d, currTid:%lld", 
-                dispData.x_procId, dispData.x_sliceId, tid );
+                dispData.x_procId, dispData.x_sliceId, (long long)tid );
 
         tid = LcReplSender::getInstance().bcastReplicableData(dispData.x_sliceId, tid);
         m_pTidTracker->setCurrTid(dispData.x_sliceId, tid);

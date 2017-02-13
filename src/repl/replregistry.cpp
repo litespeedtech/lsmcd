@@ -186,7 +186,7 @@ int cmpAllContNextTmFn(void *cbData, void * pUData1, void *pUData2 )
     const time_t *tm            = (const time_t *)pUData1;
     time_t *nextJumpTm          = (time_t *)pUData2;
     time_t tmp                  = pContainer->getCurrLruNextTm(*tm);
-    LS_DBG_M("cmpAllContNextTmFn, min NextTm:%d, currTm:%d", *nextJumpTm, tmp );    
+    LS_DBG_M("cmpAllContNextTmFn, min NextTm:%ld, currTm:%ld", *nextJumpTm, tmp );    
     if (tmp > 0 && tmp < *nextJumpTm)
         *nextJumpTm =  tmp;
     return LS_OK;    
@@ -323,7 +323,7 @@ int ReplRegistry::calRTReplHash(time_t startTm, time_t endTm, AutoBuf& rAutoBuf)
             totTmCnt += tmCnt;
         }
     }
-    LS_DBG_M("ReplGroup::calRTReplHash startTm:%d, endTm:%d, container num:%d, size:%d, totTmCnt:%d"
+    LS_DBG_M("ReplGroup::calRTReplHash startTm:%ld, endTm:%ld, container num:%d, size:%d, totTmCnt:%d"
         , startTm, endTm, num, rAutoBuf.size(), totTmCnt);    
     return totTmCnt;
 }

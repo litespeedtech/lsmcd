@@ -303,7 +303,7 @@ int LsMemcache::processInternal(
 {
     MemcacheConn *pLink;
     lenNbuf *ptr = (lenNbuf *)pBuf;
-    LS_DBG_M("processInternal iLen1:%d, bufLen:%d", iLen, sizeof(ptr->len));
+    LS_DBG_M("processInternal iLen1:%d, bufLen:%zd", iLen, sizeof(ptr->len));
     if (iLen < (int)sizeof(ptr->len))
         return -1;
     int len = ntohs(ptr->len);
@@ -960,8 +960,8 @@ int LsMemcache::tidGetNxtItems(LsShmHash *pHash, uint64_t *pTidLast,
         pHash->enableLock();
     if ((cnt > 0) || (ret == 0))
     {
-        LS_DBG_M("tidGetNxtItems: cnt=%d, [%llu-%llu].\n", cnt, tidStrt,
-                 tidEnd);
+        LS_DBG_M("tidGetNxtItems: cnt=%d, [%llu-%llu].\n", cnt, 
+                 (long long)tidStrt, (long long)tidEnd);
     }
     else
     {
@@ -991,8 +991,8 @@ int LsMemcache::getNxtTidItem(LsShmHash *pHash, uint64_t *pTidLast,
             if (isExpired((LsMcDataItem *)pElem->getVal()))
             {
                 *ppBlk = NULL;  // block may be deleted, or remapped on delete tid
-                LS_DBG_M("getNxtTidItem: expired (%llu)[%.*s]\n",
-                         tid, pElem->getKeyLen(), (char *)pElem->getKey());
+                LS_DBG_M("getNxtTidItem: expired (%llu)[%.*s]\n", 
+                         (long long)tid, pElem->getKeyLen(), (char *)pElem->getKey());
                 pHash->eraseIterator(iIterOff);
                 continue;
             }
@@ -1005,7 +1005,7 @@ int LsMemcache::getNxtTidItem(LsShmHash *pHash, uint64_t *pTidLast,
         {
             if (*pVal == TIDDEL_FLUSHALL)
             {
-                LS_DBG_M("getNxtTidItem: FLUSHALL tid=%llu.\n", tid);
+                LS_DBG_M("getNxtTidItem: FLUSHALL tid=%llu.\n", (long long)tid);
             }
             totSz = tidDelPktSize();
             if (totSz > iBufSz)
@@ -1038,7 +1038,7 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
         {
             LS_ERROR(
                 "Unable to insert Tid(%llu) out of sequence! last=(%llu).\n",
-                pPkt->m_hdr.m_tid, pTidMgr->getLastTid());
+                (long long)pPkt->m_hdr.m_tid, (long long)pTidMgr->getLastTid());
             break;
         }
         if (pPkt->m_hdr.m_type == LSSHM_PKTADD)
@@ -1059,7 +1059,8 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
     pHash->unlock();
     if (isAutoLock)
         pHash->enableLock();
-    LS_DBG_M("tidSetItems: cnt=%d, [%llu-%llu].\n", cnt, tidStrt, tidEnd);
+    LS_DBG_M("tidSetItems: cnt=%d, [%llu-%llu].\n", cnt, (long long)tidStrt, 
+             (long long)tidEnd);
     return (pBuf - pStrt);
 }
 
@@ -1082,7 +1083,7 @@ int LsMemcache::delTidItem(LsShmHash *pHash, LsMcTidPkt *pPkt,
     if (pPkt->m_del.m_tid == TIDDEL_FLUSHALL)
     {
         LS_DBG_M("setTidItem: FLUSHALL lastTid=%llu.\n",
-                 pTidMgr->getLastTid());
+                 (long long)pTidMgr->getLastTid());
         pHash->clear();
     }
     else

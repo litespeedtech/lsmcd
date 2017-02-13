@@ -248,7 +248,7 @@ void LcNodeInfo::DEBUG() const
     for (int i = 0; i < (int)m_iContCount; ++i)
     {
         LS_INFO (  "\tcontID[%d]=%d, currTid[%d]=%lld, priority[%d]=%d,role[%d]=%s, didFrepl[%d]:%s"
-            , i, getContID(i), i, getCurrTid(i), i, getPriority(i)
+            , i, getContID(i), i, (long long )getCurrTid(i), i, getPriority(i)
             , i, printStrRole(getRole(i), pBuf, sizeof(pBuf)) 
             , i, isDidFsync(i)?"Yes":"No");
     }

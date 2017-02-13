@@ -857,7 +857,7 @@ int VMemBuf::write(VMemBuf *pBuf, off_t offset, int size)
     {
         size_t len;
         const char * p = pBuf->getReadBuffer(len);
-        if (len > size - total)
+        if ((int)len > size - total)
             len = size - total;
         if (!p)
             break;

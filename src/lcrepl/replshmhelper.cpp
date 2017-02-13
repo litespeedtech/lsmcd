@@ -119,7 +119,7 @@ uint64_t ReplShmHelper::bcastNewTidData (int idx, uint64_t iLstTid, void *pInst,
             assert(ret > 0);
             autoBuf.used(ret);
             LS_DBG_M("bcastNewTidData idx:%d tid:%lld, ret=%d, autoBuf size=%d"
-                , idx, iNewTid, ret, autoBuf.size());
+                , idx, (long long)iNewTid, ret, autoBuf.size());
             func(pInst, (void*)&uContID , (void*)&autoBuf);
         }
     }

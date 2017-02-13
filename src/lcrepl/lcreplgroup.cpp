@@ -308,7 +308,7 @@ bool LcReplGroup::isAllClientSync(const LcNodeInfo *  pLocalStatus, int idx)
         if (pPeerlStatus->getCurrTid(idx) !=  myTid)
         {
             LS_DBG_M("LcReplGroup::isAllClientSync return false idx:%d, peer tid:%lld, mytid:%lld"
-                , idx, pPeerlStatus->getCurrTid(idx), myTid );
+                , idx, (long long)pPeerlStatus->getCurrTid(idx), (long long)myTid );
             return false;
         }
     }
@@ -405,7 +405,8 @@ uint64_t LcReplGroup::getClientsMaxTid(const StringList &inlist, int idx, uint64
         uint64_t currTid =  pStatus->getCurrTid(idx);
         if (currTid >  myTid)
         {
-            LS_DBG_M( "node[%d] priority %lld > myTid %lld", currTid, myTid);
+            LS_DBG_M( "node[%d] priority %lld > myTid %lld", 
+                      idx, (long long)currTid, (long long)myTid);
             return currTid;
         }
         else if (currTid == myTid)
@@ -453,7 +454,7 @@ bool LcReplGroup::isLegalClientBeMstr(int idx, uint64_t myTid, uint32_t myPriori
             const StaticNodeInfo *pStatic = getStNodeInfoMgr()->getNodeInfo(pClntAddr);
             StaticNodeInfo::getSvrAddr(pStatic->getSvrIp(), pStatic->getSvrPort()
                 , pReplSvrAddr, 64);
-            LS_DBG_M(  "node[%s] has higher priority %d > %d, addr:%d",
+            LS_DBG_M(  "node[%s] has higher priority %d > %d, addr:%s",
                 pReplSvrAddr, pPeerStatus->getPriority(idx), myPriority, pClntAddr);
             return false;
         }

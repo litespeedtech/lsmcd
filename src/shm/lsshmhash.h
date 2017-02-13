@@ -91,6 +91,8 @@ typedef struct lsShm_hElem_s
     { return ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_data; }
     int32_t          getValLen() const
     { return ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_size; }
+    int32_t          getValStartOff() const
+    { return getVal() - (uint8_t *)this;    }
     void             setKeyLen(int32_t len)
     { ((ls_vardata_t *)x_aData)->x_size = len; }
     void             setValLen(int32_t len)
@@ -226,6 +228,9 @@ public:
     ls_attr_inline void *offset2iteratorData(iteroffset offset) const
     {   return ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getVal(); }
 
+    ls_attr_inline LsShmOffset_t iter2DataOffset(iteroffset offset) const
+    {   return offset.m_iOffset + ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getValStartOff(); }
+    
     // For now, assume only one observer.
 //     void *getObsData(LsShmHElem *pElem, LsShmObserver *pObserver) const;
     void *getObsData(LsShmHElem *pElem) const;
@@ -545,7 +550,7 @@ public:
     int stat(LsHashStat *pHashStat, for_each_fn2 fun, void *pData);
 
     // LRU stuff
-    LsHashLruInfo *getLru() const;
+    LsHashLruInfo *getLru();
 
     iteroffset getLruTop();    
     iteroffset getLruBottom();
@@ -554,6 +559,7 @@ public:
 
     int trim(time_t tmCutoff, LsShmHash::TrimCb cb, void *arg);
     int trimsize(int need, LsShmHash::TrimCb cb, void *arg);
+    int trimByCb(int maxCnt, LsShmHash::TrimCb func, void *arg);
     
     int check();
 
@@ -592,7 +598,7 @@ protected:
     typedef iteroffset(*hash_set)(LsShmHash *pThis, ls_strpair_t *pParms);
     typedef iteroffset(*hash_update)(LsShmHash *pThis, ls_strpair_t *pParms);
 
-    uint32_t getIndex(uint32_t k, uint32_t n)
+    static inline uint32_t getIndex(uint32_t k, uint32_t n)
     {   return k % n ; }
 
     ls_attr_inline LsShmHTable *getHTable() const
@@ -709,7 +715,7 @@ protected:
     uint8_t             m_dataExtraSpace;
     int8_t              m_iLockEnable;
     int8_t              m_iMode;        // mode 0=Num, 1=Ptr
-    uint8_t             m_iFlags;       // lru=0x01, tid=0x04, tid_slave=0x10
+    uint8_t             m_iFlags;       // lru=0x01, tid=0x02, tid_slave=0x04
     ls_shmlock_t       *m_pShmLock;     // local lock for Hash
     LsShmStatus_t       m_status;
     LsShmHashLruAddon  *m_pLruAddon;

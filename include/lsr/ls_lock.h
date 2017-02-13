@@ -384,22 +384,42 @@ ls_inline int ls_atomic_spin_lock(ls_atom_spinlock_t *p)
  * @see ls_atomic_spin_lock
  */
 
-
-int ls_atomic_spin_pidwait(ls_atom_spinlock_t *p);
+#define LS_SPIN_MIN_PID 10
 
 ls_inline int ls_atomic_spin_pidlock(ls_atom_spinlock_t *p)
 {
     int waitpid;
     if (ls_spin_pid == 0)
         ls_atomic_pidspin_init();
-    waitpid = ls_atomic_casvint(p, LS_LOCK_AVAIL, ls_spin_pid);
-    if (waitpid == LS_LOCK_AVAIL)
+    assert(*p != ls_spin_pid);
+    int cnt = MAX_SPINCNT_CHECK;
+    while (1)
     {
-        return 0;
+        waitpid = ls_atomic_casvint(p, LS_LOCK_AVAIL, ls_spin_pid);
+        if (waitpid == LS_LOCK_AVAIL)
+        {
+            return 0;
+        }
+        else if (waitpid < LS_SPIN_MIN_PID)
+        {
+            //something is wrong with waitpid, mark it as available, otherise
+            // it will spin forever as those PIDs are taken by system processes
+            *p = LS_LOCK_AVAIL;
+        }
+        else if (--cnt == 0)
+        {
+            if ((kill(waitpid, 0) < 0) && (errno == ESRCH)
+                && ls_atomic_casint(p, waitpid, ls_spin_pid))
+                return -waitpid;
+            cnt = MAX_SPINCNT_CHECK;
+        }
+        else
+        {
+            usleep(200);
+            //cpu_relax();
+        }
     }
-    return ls_atomic_spin_pidwait(p);
 }
-
 
 /**
  * @ls_atomic_spin_trylock
@@ -452,6 +472,21 @@ ls_inline int ls_atomic_spin_unlock(ls_atom_spinlock_t *p)
 }
 
 /**
+ * @ls_atomic_spin_locked
+ * @brief Test if a spinlock is currently in locked state.
+ *
+ * @param[in] p - A pointer to the lock.
+ * @return 1 - locked, 0 - not locked.
+ *
+ * @see ls_atomic_spin_setup, ls_atomic_spin_lock, ls_atomic_spin_trylock 
+ *      ls_atomic_spin_unlock
+ */
+ls_inline int ls_atomic_spin_locked(ls_atom_spinlock_t *p)
+{
+    return *p != 0;
+}
+
+/**
  * @ls_atomic_spin_pidunlock
  * @brief Unlocks
  *   a spinlock set up with built-in functions for atomic memory access.
@@ -466,6 +501,23 @@ ls_inline int ls_atomic_spin_pidunlock(ls_atom_spinlock_t *p)
     assert(*p == ls_spin_pid);
     ls_atomic_clrint(p);
     return 0;
+}
+
+/**
+ * @ls_atomic_pidlocked
+ * @brief Test if a spinlock is currently is locked with current pid.
+ *
+ * @param[in] p - A pointer to the lock.
+ * @return 1 - locked, 0 - not locked.
+ *
+ * @see ls_atomic_spin_setup, ls_atomic_spin_lock, ls_atomic_spin_trylock 
+ *      ls_atomic_spin_unlock
+ */
+ls_inline int ls_atomic_pidlocked(ls_atom_spinlock_t *p)
+{
+    if (ls_spin_pid == 0)
+        ls_atomic_pidspin_init();
+    return *p == ls_spin_pid;
 }
 
 

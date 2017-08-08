@@ -189,7 +189,8 @@ int ReplGroup::addReplTaskByRtHash(time_t startTm, time_t endTm
     }
     else
     {
-        LS_INFO("There is no data to replicate to peer at [%ld:%ld] time slot.", startTm, endTm);
+        LS_INFO("There is no data to replicate to peer at [%ld:%ld] time slot.",
+                startTm, endTm);
         endTm++;
         firstLegAuditDone(pConn, startTm, endTm);
     }

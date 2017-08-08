@@ -1058,8 +1058,13 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
     }
     pHash->unlock();
     if (isAutoLock)
+<<<<<<< HEAD
         pHash->enableAutoLock();
     LS_DBG_M("tidSetItems: cnt=%d, [%llu-%llu].\n", cnt, (long long )tidStrt, 
+=======
+        pHash->enableLock();
+    LS_DBG_M("tidSetItems: cnt=%d, [%llu-%llu].\n", cnt, (long long)tidStrt, 
+>>>>>>> 58e7da5afc1bc9bd68e51b2e1d103dee23ebd847
              (long long)tidEnd);
     return (pBuf - pStrt);
 }

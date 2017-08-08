@@ -176,6 +176,8 @@ public:
 
     static void setPid( int pid );
 
+    static void setPid( int pid );
+
 private:
     ls_attr_inline LsShmPoolMem *getPool() const
     {   return x_pPool;     }

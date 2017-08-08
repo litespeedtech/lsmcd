@@ -305,15 +305,17 @@ int LcReplReceiver::clientHandleSvrEchoStatus ( ReplConn *pConn, ReplPacketHeade
    
     if (iSlaveTid > iMstrTid)
     {
-        LS_ERROR( "Repl slave[%s] out of sync with master[%s], bailouts! master currTid=%lld;slave currTid=%lld" 
+        LS_ERROR("Repl slave[%s] out of sync with master[%s], bailouts! master"
+                 " currTid=%lld;slave currTid=%lld" 
                   , pConn->getLocalAddr(), pConn->getPeerAddr(), 
                   (long long)iMstrTid, (long long)iSlaveTid);
     }
     else if (pLocalStatus->getCurrTid(idx) < pPeerStatus->getCurrTid(idx))
     {
-        LS_ERROR(  "Repl slave[%s] missing new changes on master[%s], weird! master currTid=%lld;slave currTid=%lld" 
-            , pConn->getLocalAddr(), pConn->getPeerAddr(), (long long)iMstrTid, 
-                   (long long)iSlaveTid);
+        LS_ERROR("Repl slave[%s] missing new changes on master[%s], "
+                 "weird! master currTid=%lld;slave currTid=%lld" 
+                   , pConn->getLocalAddr(), pConn->getPeerAddr(), 
+                   (long long)iMstrTid, (long long)iSlaveTid);
     }
     else
     {

@@ -151,7 +151,7 @@ int ReplProgressTrker::trackNextCont()
 
 static int printKeysFn(GHash::iterator iter)
 {
-    LS_DBG_M("ReplProgressTrker container Hash key:%ld", long(iter->first()));
+    LS_DBG_M("ReplProgressTrker container Hash key:%ld", (long)iter->first());
     return 0;
 }
     

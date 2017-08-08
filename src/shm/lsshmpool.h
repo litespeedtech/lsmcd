@@ -173,9 +173,6 @@ public:
     
     void addLeftOverPages(LsShmOffset_t offset, LsShmSize_t size);
 
-
-    static void setPid( int pid );
-
     static void setPid( int pid );
 
 private:

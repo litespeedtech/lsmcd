@@ -159,7 +159,7 @@ int GSockAddr::setHttpUrl(const char *pHttpUrl, const int len)
     else
         endPos = pHttpUrl + len - p;
 
-    if( endPos >= sizeof(url) - 5)
+    if( endPos >= (int)sizeof(url) - 5)
         return -1;
     
     memcpy(url, p, endPos);
@@ -245,7 +245,7 @@ int GSockAddr::set(int family, const char *pURL, int tag)
             m_v4->sin_addr.s_addr = inet_addr(achDest);
             if (m_v4->sin_addr.s_addr == INADDR_BROADCAST)
             {
-                if ((tag & DO_NSLOOKUP | DO_NSLOOKUP_DIRECT) == 0)
+                if ((tag & (DO_NSLOOKUP | DO_NSLOOKUP_DIRECT)) == 0)
                     return -1;
                 gotAddr = 0;
                 /*              struct hostent * hep;

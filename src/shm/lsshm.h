@@ -21,6 +21,7 @@
 #include <lsdef.h>
 #include <shm/lsshmlock.h>
 #include <shm/lsshmtypes.h>
+#include "addrmap.h"
 #include <util/hashstringmap.h>
 
 #include <assert.h>
@@ -38,7 +39,10 @@
 #define SHM_NOTICE(format, ...) \
     LOG4CXX_NS::Logger::getRootLogger()->notice(format, ##__VA_ARGS__ )
 
+#define SHM_WARN(format, ...) \
+    LOG4CXX_NS::Logger::getRootLogger()->warn(format, ##__VA_ARGS__ )
 
+    
 #ifdef LSSHM_DEBUG_ENABLE
 class debugBase;// These two should be the same size...
 #endif
@@ -91,7 +95,11 @@ class LsShm : public ls_shm_s
 {
 public:
     static LsShm *open(const char *mapName, LsShmXSize_t initSize,
-                       const char *pBaseDir = NULL, int mode = LSSHM_OPEN_STD);
+                       const char *pBaseDir = NULL, 
+                       int mode = LSSHM_OPEN_STD, LsShmXSize_t addrMapSize = 0);
+    
+    int chperm(int uid, int gid, int mask);
+    
     void close();
 
     void deleteFile();
@@ -107,7 +115,8 @@ public:
     static LsShmStatus_t checkDirSpace(const char *dirName);
     static LsShmStatus_t addBaseDir(const char *dirName);
     static int getBaseDirCount()        {   return s_iNumBaseDir;   }
-
+    static int deleteFile(const char *pName, const char *pBaseDir);
+    
     static LsShmStatus_t setErrMsg(LsShmStatus_t stat, const char *fmt, ...);
     static LsShmStatus_t getErrStat()   {   return s_errStat;   }
     static int getErrNo()               {   return s_iErrNo;    }
@@ -138,11 +147,15 @@ public:
         return x_pShmMap;
     }
 
+    int getfd() const   {   return m_iFd;   }
+    
     LsShmMapStat *getMapStat() const    {   return x_pStats;    }
 
     LsShmOffset_t getMapStatOffset() const;
 
     LsShmOffset_t allocPage(LsShmSize_t pagesize, int &remapped);
+    int reserveAddrSpace(LsShmSize_t total)
+    {   return m_addrMap.mapAddrSpace(total);  }
 
     LsShmPool *getGlobalPool();
     LsShmPool *getNamedPool(const char *pName);
@@ -157,7 +170,7 @@ public:
         {
             tryRecoverBadOffset(offset);
         }
-        return (void *)(((uint8_t *)x_pShmMap) + offset);
+        return (void *)m_addrMap.offset2ptr(offset);
     }  // map size
 
     int isOffsetValid(LsShmOffset_t offset);
@@ -166,9 +179,7 @@ public:
     {
         if (ptr == NULL)
             return 0;
-        assert((ptr <= (((uint8_t *)x_pShmMap) + x_pStats->m_iFileSize))
-               && (ptr > (const void *)x_pShmMap));
-        return (LsShmOffset_t)((uint8_t *)ptr - (uint8_t *)x_pShmMap);
+        return m_addrMap.ptr2offset(ptr);
     }
 
     LsShmXSize_t avail() const
@@ -180,14 +191,11 @@ public:
 
     LsShmLock *getLocks()               {   return &m_locks;    }
 
-    ls_shmlock_t *allocLock()           {   return m_locks.allocLock();     }
+    LsShmOffset_t allocLock()           {   return m_locks.allocLock();     }
     int freeLock(ls_shmlock_t *pLock)   {   return m_locks.freeLock(pLock); }
 
     ls_shmlock_t *offset2pLock(LsShmOffset_t offset) const
     {   return m_locks.offset2pLock(offset);    }
-
-    LsShmOffset_t pLock2offset(ls_shmlock_t *pLock)
-    {   return m_locks.pLock2offset(pLock);     }
 
     ls_attr_inline int lockRemap(ls_shmlock_t *pLock)
     {
@@ -196,6 +204,11 @@ public:
         return ret;
     }
 
+    ls_attr_inline int isLocked(ls_shmlock_t *pLock)
+    {
+        return ls_shmlock_locked(pLock);
+    }
+    
     ls_attr_inline LsShmStatus_t chkRemap()
     {
         return (x_pStats->m_iFileSize == m_iMaxSizeO) ? LSSHM_OK : remap();
@@ -265,13 +278,14 @@ private:
         x_pStats->m_iUsedSize += size;
     }
 
+    LsShmStatus_t   mapAddrMap(LsShmXSize_t size);
+
     void            cleanup();
     LsShmStatus_t   checkMagic(LsShmMap *mp, const char *mName) const;
     LsShmStatus_t   initShm(const char *mapName, LsShmXSize_t initialSize,
                             const char *pBaseDir, int mode);
     LsShmStatus_t   openLockShmFile(int mode);
 
-    LsShmStatus_t   map(LsShmXSize_t size);
     LsShmStatus_t   expandFile(LsShmOffset_t from, LsShmXSize_t incrSize);
     void            unmap();
     static LsShm   *getExisting(const char *dirName);
@@ -300,13 +314,13 @@ private:
     ls_shmlock_t           *m_pShmLock;
 
     LsShmMap               *x_pShmMap;
-    LsShmMap               *m_pShmMapO;
     LsShmXSize_t            m_iMaxSizeO;
     LsShmMapStat           *x_pStats;
 
     LsShmPool              *m_pGPool;
     LsShmHash              *m_pGHash;
     int                     m_iRef;
+    AddrMap                 m_addrMap;
 };
 
 #endif

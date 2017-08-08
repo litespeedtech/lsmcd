@@ -133,7 +133,8 @@ int LcReplReceiver::handleData ( ReplConn *pConn, ReplPacketHeader * header,
         pPeerNode->setCurrTid(contId -1, iPeerTid);
     
         int dataLen = header->getPackLen() - sizeof ( *header ) - sizeof(uint64_t);
-        LS_DBG_M("LcReplReceiver::handleData idx:%d, iPeerTid:%lld, dataLen:%d", contId -1, iPeerTid, dataLen);
+        LS_DBG_M("LcReplReceiver::handleData idx:%d, iPeerTid:%lld, dataLen:%d", 
+                 contId -1, (long long)iPeerTid, dataLen);
         saveDataToContainer ( pReplContainer, pConn, header, pData + sizeof(uint64_t)
             , dataLen, iBulk); 
     }
@@ -174,7 +175,7 @@ int LcReplReceiver::handleDataAck (ReplConn *pConn, ReplPacketHeader * header,
     int iBulk           = *(int *)pData;           
     uint64_t iTid       = *(uint64_t *)(pData + sizeof(int));
     LS_DBG_M("pid[%d]  LcReplReceiver::handleDataAck, contId:%d, iBulk:%d, peer Tid:%lld"
-        , getpid(), contId, iBulk, iTid);
+        , getpid(), contId, iBulk, (long long)iTid);
 
     LcNodeInfo *pPeerNode = (LcNodeInfo *) getReplGroup()->getNodeInfoMgr()->getNodeInfo(pConn->getPeerAddr());
     pPeerNode->setCurrTid(contId -1, iTid);    
@@ -305,12 +306,14 @@ int LcReplReceiver::clientHandleSvrEchoStatus ( ReplConn *pConn, ReplPacketHeade
     if (iSlaveTid > iMstrTid)
     {
         LS_ERROR( "Repl slave[%s] out of sync with master[%s], bailouts! master currTid=%lld;slave currTid=%lld" 
-            , pConn->getLocalAddr(), pConn->getPeerAddr(), iMstrTid, iSlaveTid);
+                  , pConn->getLocalAddr(), pConn->getPeerAddr(), 
+                  (long long)iMstrTid, (long long)iSlaveTid);
     }
     else if (pLocalStatus->getCurrTid(idx) < pPeerStatus->getCurrTid(idx))
     {
         LS_ERROR(  "Repl slave[%s] missing new changes on master[%s], weird! master currTid=%lld;slave currTid=%lld" 
-            , pConn->getLocalAddr(), pConn->getPeerAddr(), iMstrTid, iSlaveTid);
+            , pConn->getLocalAddr(), pConn->getPeerAddr(), (long long)iMstrTid, 
+                   (long long)iSlaveTid);
     }
     else
     {

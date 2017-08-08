@@ -91,6 +91,8 @@ typedef struct lsShm_hElem_s
     { return ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_data; }
     int32_t          getValLen() const
     { return ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_size; }
+    int32_t          getValStartOff() const
+    { return getVal() - (uint8_t *)this;    }
     void             setKeyLen(int32_t len)
     { ((ls_vardata_t *)x_aData)->x_size = len; }
     void             setValLen(int32_t len)
@@ -226,6 +228,9 @@ public:
     ls_attr_inline void *offset2iteratorData(iteroffset offset) const
     {   return ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getVal(); }
 
+    ls_attr_inline LsShmOffset_t iter2DataOffset(iteroffset offset) const
+    {   return offset.m_iOffset + ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getValStartOff(); }
+    
     // For now, assume only one observer.
 //     void *getObsData(LsShmHElem *pElem, LsShmObserver *pObserver) const;
     void *getObsData(LsShmHElem *pElem) const;
@@ -545,7 +550,7 @@ public:
     int stat(LsHashStat *pHashStat, for_each_fn2 fun, void *pData);
 
     // LRU stuff
-    LsHashLruInfo *getLru() const;
+    LsHashLruInfo *getLru();
 
     iteroffset getLruTop();    
     iteroffset getLruBottom();
@@ -554,27 +559,28 @@ public:
 
     int trim(time_t tmCutoff, LsShmHash::TrimCb cb, void *arg);
     int trimsize(int need, LsShmHash::TrimCb cb, void *arg);
+    int trimByCb(int maxCnt, LsShmHash::TrimCb func, void *arg);
     
     int check();
 
-    void enableLock()
-    {   m_iLockEnable = 1; };
+    void enableAutoLock()
+    {   m_iAutoLock = 1; };
 
-    void disableLock()
-    {   m_iLockEnable = 0; };
+    void disableAutoLock()
+    {   m_iAutoLock = 0; };
 
     int isAutoLock()
-    {   return m_iLockEnable;   }
+    {   return m_iAutoLock;   }
 
     int lock()
     {
-        if (m_iLockEnable != 0)
+        if (m_iAutoLock != 0)
             return 0;
         return getPool()->getShm()->lockRemap(m_pShmLock);
     }
 
     int unlock()
-    {   return m_iLockEnable ? 0 : ls_shmlock_unlock(m_pShmLock); }
+    {   return m_iAutoLock ? 0 : ls_shmlock_unlock(m_pShmLock); }
 
     void lockChkRehash();
 
@@ -592,11 +598,12 @@ protected:
     typedef iteroffset(*hash_set)(LsShmHash *pThis, ls_strpair_t *pParms);
     typedef iteroffset(*hash_update)(LsShmHash *pThis, ls_strpair_t *pParms);
 
-    uint32_t getIndex(uint32_t k, uint32_t n)
+    static inline uint32_t getIndex(uint32_t k, uint32_t n)
     {   return k % n ; }
 
     ls_attr_inline LsShmHTable *getHTable() const
-    {   return (LsShmHTable *)m_pPool->offset2ptr(m_iOffset);   }
+    {   assert( x_pTable == (LsShmHTable *)m_pPool->offset2ptr(m_iOffset)); 
+        return x_pTable;   }
 
     LsShmSize_t fullFactor() const;
     LsShmSize_t growFactor() const;
@@ -653,13 +660,13 @@ protected:
 
     int autoLock()
     {
-        if (m_iLockEnable == 0)
+        if (m_iAutoLock == 0)
             return 0;
         return getPool()->getShm()->lockRemap(m_pShmLock);
     }
 
     int autoUnlock()
-    {   return m_iLockEnable && ls_shmlock_unlock(m_pShmLock); }
+    {   return m_iAutoLock && ls_shmlock_unlock(m_pShmLock); }
 
     void autoLockChkRehash();
 
@@ -667,7 +674,7 @@ protected:
     int statIdx(iteroffset iterOff, for_each_fn2 fun, void *pUData);
 
     int setupLock()
-    {   return m_iLockEnable && ls_shmlock_setup(m_pShmLock); }
+    {   return m_iAutoLock && ls_shmlock_setup(m_pShmLock); }
 
     // auxiliary double linked list of hash elements
     void set_linkNext(iteroffset offThis, iteroffset offNext)
@@ -694,9 +701,10 @@ protected:
 
 protected:
     uint32_t            m_iMagic;
-    LsShmPool          *m_pPool;
     LsShmOffset_t       m_iOffset;
-
+    LsShmPool          *m_pPool;
+    LsShmHTable        *x_pTable;
+    
     LsShmHasher_fn      m_hf;
     LsShmValComp_fn     m_vc;
     hash_insert         m_insert;
@@ -707,9 +715,9 @@ protected:
 
     uint8_t             m_iterExtraSpace;
     uint8_t             m_dataExtraSpace;
-    int8_t              m_iLockEnable;
+    int8_t              m_iAutoLock;
     int8_t              m_iMode;        // mode 0=Num, 1=Ptr
-    uint8_t             m_iFlags;       // lru=0x01, tid=0x04, tid_slave=0x10
+    uint8_t             m_iFlags;       // lru=0x01, tid=0x02, tid_slave=0x04
     ls_shmlock_t       *m_pShmLock;     // local lock for Hash
     LsShmStatus_t       m_status;
     LsShmHashLruAddon  *m_pLruAddon;

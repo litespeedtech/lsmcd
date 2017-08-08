@@ -89,7 +89,7 @@ time_t LruHashReplBridge::for_each_tmslot(time_t tm, time_t endTm, for_each_fn2 
     if (iterOff.m_iOffset == 0 )
     {
         nextTm = time(NULL) > endTm ? (time(NULL) + 1) : (endTm + 1);
-        LS_DBG_L("LruHashReplBridge::for_each_tmslot retun 0 byte at tm=%d, return time=%d", tm, nextTm);
+        LS_DBG_L("LruHashReplBridge::for_each_tmslot retun 0 byte at tm=%ld, return time=%ld", tm, nextTm);
         return nextTm;
     }
     iter        = getHash()->offset2iterator(iterOff);

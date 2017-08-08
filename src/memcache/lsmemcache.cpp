@@ -303,7 +303,7 @@ int LsMemcache::processInternal(
 {
     MemcacheConn *pLink;
     lenNbuf *ptr = (lenNbuf *)pBuf;
-    LS_DBG_M("processInternal iLen1:%d, bufLen:%d", iLen, sizeof(ptr->len));
+    LS_DBG_M("processInternal iLen1:%d, bufLen:%zd", iLen, sizeof(ptr->len));
     if (iLen < (int)sizeof(ptr->len))
         return -1;
     int len = ntohs(ptr->len);
@@ -380,7 +380,7 @@ int LsMemcache::multiInitFunc(LsMcHashSlice *pSlice, void *pArg)
     LsMcHdr *pHdr;
     int ret = LS_OK;
     LS_DBG_M("ShmSlice: [%s].\n", pHash->getPool()->getShm()->fileName());
-    pHash->disableLock();
+    pHash->disableAutoLock();
     pHash->lockChkRehash();
 
     iHelperOff = pHash->getHTableReservedOffset();
@@ -435,7 +435,7 @@ int LsMemcache::multiInitFunc(LsMcHashSlice *pSlice, void *pArg)
         }
     }
     pHash->unlock();
-    pHash->enableLock();
+    pHash->enableAutoLock();
     pSlice->m_iHdrOff = off;
     return ((off != 0) ? ret : LS_FAIL);
 }
@@ -695,7 +695,7 @@ int LsMemcache::processCmd(char *pStr, int iLen)
     int consumed;
     char *endp;
     char *pCmd;
-    int len;
+    size_t len;
     LsMcCmdFunc *p;
     ls_strpair_t input;
 
@@ -714,7 +714,7 @@ int LsMemcache::processCmd(char *pStr, int iLen)
     m_pStrt = pStr;     // save for possible fwd
     pStr = advToken(pStr, endp - 1, &pCmd, &len);
     input.key.ptr = pStr;
-    if (len <= 0)
+    if (len == 0)
         return consumed;
     if ((p = getCmdFunction(pCmd, len)) == NULL)
     {
@@ -943,7 +943,7 @@ int LsMemcache::tidGetNxtItems(LsShmHash *pHash, uint64_t *pTidLast,
     uint64_t tidEnd = 0;
     void *pBlk = NULL;
     int isAutoLock = pHash->isAutoLock();
-    pHash->disableLock();
+    pHash->disableAutoLock();
     pHash->lockChkRehash();
     while ((ret = getNxtTidItem(pHash, pTidLast, &pBlk, (LsMcTidPkt *)pBuf,
                                 iBufSz)) > 0)
@@ -957,11 +957,11 @@ int LsMemcache::tidGetNxtItems(LsShmHash *pHash, uint64_t *pTidLast,
         *pTidLast = tidEnd = pHash->getTidMgr()->getLastTid();   // might be a delete
     pHash->unlock();
     if (isAutoLock)
-        pHash->enableLock();
+        pHash->enableAutoLock();
     if ((cnt > 0) || (ret == 0))
     {
-        LS_DBG_M("tidGetNxtItems: cnt=%d, [%llu-%llu].\n", cnt, tidStrt,
-                 tidEnd);
+        LS_DBG_M("tidGetNxtItems: cnt=%d, [%llu-%llu].\n", cnt, 
+                 (long long)tidStrt, (long long)tidEnd);
     }
     else
     {
@@ -992,7 +992,7 @@ int LsMemcache::getNxtTidItem(LsShmHash *pHash, uint64_t *pTidLast,
             {
                 *ppBlk = NULL;  // block may be deleted, or remapped on delete tid
                 LS_DBG_M("getNxtTidItem: expired (%llu)[%.*s]\n",
-                         tid, pElem->getKeyLen(), (char *)pElem->getKey());
+                         (long long)tid, pElem->getKeyLen(), (char *)pElem->getKey());
                 pHash->eraseIterator(iIterOff);
                 continue;
             }
@@ -1005,7 +1005,7 @@ int LsMemcache::getNxtTidItem(LsShmHash *pHash, uint64_t *pTidLast,
         {
             if (*pVal == TIDDEL_FLUSHALL)
             {
-                LS_DBG_M("getNxtTidItem: FLUSHALL tid=%llu.\n", tid);
+                LS_DBG_M("getNxtTidItem: FLUSHALL tid=%llu.\n", (long long)tid);
             }
             totSz = tidDelPktSize();
             if (totSz > iBufSz)
@@ -1028,7 +1028,7 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
     uint64_t tidEnd = 0;
     int isAutoLock = pHash->isAutoLock();
     LsShmTidMgr *pTidMgr = pHash->getTidMgr();
-    pHash->disableLock();
+    pHash->disableAutoLock();
     pHash->lockChkRehash();
     while (((unsigned int)iBufSz > (int)sizeof(LsShmPktHdr))
         && ((unsigned int)iBufSz >= ((LsShmPktHdr *)pBuf)->m_iSize))
@@ -1038,7 +1038,7 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
         {
             LS_ERROR(
                 "Unable to insert Tid(%llu) out of sequence! last=(%llu).\n",
-                pPkt->m_hdr.m_tid, pTidMgr->getLastTid());
+                (long long)pPkt->m_hdr.m_tid, (long long)pTidMgr->getLastTid());
             break;
         }
         if (pPkt->m_hdr.m_type == LSSHM_PKTADD)
@@ -1058,8 +1058,9 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
     }
     pHash->unlock();
     if (isAutoLock)
-        pHash->enableLock();
-    LS_DBG_M("tidSetItems: cnt=%d, [%llu-%llu].\n", cnt, tidStrt, tidEnd);
+        pHash->enableAutoLock();
+    LS_DBG_M("tidSetItems: cnt=%d, [%llu-%llu].\n", cnt, (long long )tidStrt, 
+             (long long)tidEnd);
     return (pBuf - pStrt);
 }
 
@@ -1082,7 +1083,7 @@ int LsMemcache::delTidItem(LsShmHash *pHash, LsMcTidPkt *pPkt,
     if (pPkt->m_del.m_tid == TIDDEL_FLUSHALL)
     {
         LS_DBG_M("setTidItem: FLUSHALL lastTid=%llu.\n",
-                 pTidMgr->getLastTid());
+                 (long long)pTidMgr->getLastTid());
         pHash->clear();
     }
     else
@@ -1149,7 +1150,7 @@ int LsMemcache::tidDelPktSize()
 
 int LsMemcache::doCmdTest1(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
-    int tokLen;
+    size_t tokLen;
     char *pIndx;
     uint64_t tid = 0;
     uint32_t indx = 0;
@@ -1219,7 +1220,7 @@ int LsMemcache::doCmdTest1(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 int LsMemcache::doCmdTest2(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
-    int tokLen;
+    size_t tokLen;
     char *pVal;
     uint32_t which;
     char *pStr = pInput->key.ptr;
@@ -1261,7 +1262,8 @@ int LsMemcache::doCmdPrintTids(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     const int maxOutBuf = 1024;
     char outBuf[maxOutBuf];
-    int tokLen, curOutLen = 0;
+    size_t tokLen; 
+    int curOutLen = 0;
     char *pIndx;
     uint64_t tid = 0;
     uint32_t indx = 0;
@@ -1549,7 +1551,7 @@ LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
 int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
-    int tokLen;
+    size_t tokLen;
     char *pFlags;
     char *pExptime;
     char *pLength;
@@ -1756,7 +1758,7 @@ int LsMemcache::doCmdArithmetic(LsMemcache *pThis, ls_strpair_t *pInput,
                                 int arg)
 {
     char *tokPtr;
-    int tokLen;
+    size_t tokLen;
     char *pDelta;
     uint64_t delta;
     LsMcUpdOpt updOpt;
@@ -1838,7 +1840,7 @@ int LsMemcache::doCmdArithmetic(LsMemcache *pThis, ls_strpair_t *pInput,
 int LsMemcache::doCmdDelete(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
-    int tokLen;
+    size_t tokLen;
     LsShmHash::iteroffset iterOff;
     bool expired;
     LsMcHashSlice *pSlice;
@@ -1916,7 +1918,7 @@ int LsMemcache::doCmdDelete(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 int LsMemcache::doCmdTouch(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
-    int tokLen;
+    size_t tokLen;
     char *pExptime;
     uint32_t exptime;
     LsMcHashSlice *pSlice;
@@ -1978,7 +1980,7 @@ int LsMemcache::doCmdTouch(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 int LsMemcache::doCmdStats(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
-    int tokLen;
+    size_t tokLen;
     char *pStr = pInput->key.ptr;
     if (pThis->m_iHdrOff == 0)
     {
@@ -2099,7 +2101,7 @@ int LsMemcache::multiStatFunc(LsMcHashSlice *pSlice, void *pArg)
     if (iHdrOff == 0)
         return LS_FAIL;
     LsMcStats *pTotal = (LsMcStats *)pArg;
-    pHash->disableLock();
+    pHash->disableAutoLock();
     pHash->lockChkRehash();
     LsMcStats *pStats = &((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats;
     pTotal->get_cmds += pStats->get_cmds;
@@ -2122,7 +2124,7 @@ int LsMemcache::multiStatFunc(LsMcHashSlice *pSlice, void *pArg)
     pTotal->auth_cmds += pStats->auth_cmds;
     pTotal->auth_errors += pStats->auth_errors;
     pHash->unlock();
-    pHash->enableLock();
+    pHash->enableAutoLock();
     return LS_OK;
 }
 
@@ -2133,12 +2135,12 @@ int LsMemcache::multiStatResetFunc(LsMcHashSlice *pSlice, void *pArg)
     LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
     if (iHdrOff == 0)
         return LS_FAIL;
-    pHash->disableLock();
+    pHash->disableAutoLock();
     pHash->lockChkRehash();
     ::memset(&((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats, 0,
         sizeof(LsMcStats));
     pHash->unlock();
-    pHash->enableLock();
+    pHash->enableAutoLock();
     return LS_OK;
 }
 
@@ -2147,7 +2149,7 @@ int LsMemcache::multiStatResetFunc(LsMcHashSlice *pSlice, void *pArg)
 int LsMemcache::doCmdFlush(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
     char *tokPtr;
-    int tokLen;
+    size_t tokLen;
     char *pStr = pInput->key.ptr;
     char *pStrEnd = pStr + pInput->key.len;
     char *pNxt = pInput->val.ptr;
@@ -2207,13 +2209,13 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, void *pArg)
     if (pHash->isTidMaster())
     {
         LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
-        pHash->disableLock();
+        pHash->disableAutoLock();
         pHash->lockChkRehash();
         pHash->clear();
         if (iHdrOff != 0)
             ++((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats.flush_cmds;
         pHash->unlock();
-        pHash->enableLock();
+        pHash->enableAutoLock();
         
         Lsmcd::getInstance().getUsockConn()->cachedNotifyData(
             Lsmcd::getInstance().getProcId(), pSlice->m_idx );
@@ -2269,7 +2271,7 @@ int LsMemcache::doCmdVerbosity(LsMemcache *pThis, ls_strpair_t *pInput,
                                int arg)
 {
     char *tokPtr;
-    int tokLen;
+    size_t tokLen;
     char *pVerbose;
     uint32_t verbose;
     char *pStr = pInput->key.ptr;
@@ -2303,7 +2305,7 @@ int LsMemcache::doCmdVerbosity(LsMemcache *pThis, ls_strpair_t *pInput,
 
 int LsMemcache::doCmdClear(LsMemcache *pThis, ls_strpair_t *pInput, int arg)
 {
-    int tokLen;
+    size_t tokLen;
     char *pWhich;
     uint32_t which;
     pThis->advToken(pInput->key.ptr, pInput->key.ptr + pInput->key.len,
@@ -2706,7 +2708,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch)
     if (getVerbose() > 1)
     {
         LS_INFO("<%d %s %.*s\n", m_pConn->getfd(), (doTouch ? "TOUCH" : "GET"),
-                m_parms.key.len, m_parms.key.ptr);
+                (int)m_parms.key.len, m_parms.key.ptr);
     }
     lock();
     if ((m_iterOff = m_pHash->findIteratorWithKey(m_hkey,
@@ -3300,7 +3302,7 @@ void LsMemcache::binErrRespond(McBinCmdHdr *pHdr, McBinStat err)
 }
 
 
-char *LsMemcache::advToken(char *pStr, char *pStrEnd, char **pTokPtr, int *pTokLen)
+char *LsMemcache::advToken(char *pStr, char *pStrEnd, char **pTokPtr, size_t *pTokLen)
 {
     while ((pStr < pStrEnd) && (*pStr ==  ' '))
        ++pStr;

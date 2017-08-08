@@ -153,7 +153,7 @@ int ReplSender::bcastReplicableData (Replicable* pRepl, int contID, uint32_t lru
             
             pConn->sendBuff ( ( const char* )(&header), sizeof(ReplPacketHeader), 0 );
             pConn->sendBuff ( ( const char* )autoBuf.begin(), bufSize, 0 );
-            LS_DBG_L ( "bcastReplicableData sent to client addr[%s] %d bytes"
+            LS_DBG_L ( "bcastReplicableData sent to client addr[%s] %zd bytes"
                 , itr.first(), sizeof(ReplPacketHeader) + bufSize);
         }
         pConn->cacheWaitAckData(seqNum, header.getContID(), lruTm);

@@ -353,14 +353,14 @@ public:
 
     void lock()
     {
-        m_pHash->disableLock();
+        m_pHash->disableAutoLock();
         m_pHash->lockChkRehash();
     }
 
     void unlock()
     {
         m_pHash->unlock();
-        m_pHash->enableLock();
+        m_pHash->enableAutoLock();
     }
 
     bool useMulti()
@@ -502,7 +502,7 @@ private:
     void     binOkRespond(McBinCmdHdr *pHdr);
     void     binErrRespond(McBinCmdHdr *pHdr, McBinStat err);
 
-    char    *advToken(char *pStr, char *pStrEnd, char **pTokPtr, int *pTokLen);
+    char    *advToken(char *pStr, char *pStrEnd, char **pTokPtr, size_t *pTokLen);
     bool     myStrtol(const char *pStr, int32_t *pVal);
     bool     myStrtoul(const char *pStr, uint32_t *pVal);
     bool     myStrtoll(const char *pStr, int64_t *pVal);
@@ -512,7 +512,7 @@ private:
     bool     chkEndToken(char *pStr, char *pStrEnd)
     {
         char *tokPtr;
-        int tokLen;
+        size_t tokLen;
         advToken(pStr, pStrEnd, &tokPtr, &tokLen);
         return (tokLen <= 0);
     }

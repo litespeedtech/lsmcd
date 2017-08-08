@@ -112,7 +112,7 @@ void BulkReplCtx::resumeBulkRepl(ServerConn *pConn)
     if (isAllReplDone())
     {
         unlinkBReplCtx();
-        LS_INFO("one step of %s Replication has completed in %d secs", isFRepl()? "Full" : "Bulk"
+        LS_INFO("one step of %s Replication has completed in %ld secs", isFRepl()? "Full" : "Bulk"
             , time(NULL) - m_startTm);
         if (isFRepl())
         {

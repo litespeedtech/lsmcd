@@ -18,6 +18,7 @@
 #ifndef LS_TYPES_H
 #define LS_TYPES_H
 
+#include <stddef.h>
 #include <inttypes.h>
 
 /**

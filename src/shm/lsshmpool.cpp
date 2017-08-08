@@ -19,15 +19,20 @@
 
 #include <shm/lsshmhash.h>
 
+#include <log4cxx/logger.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+static int s_pid = -1;
 
 //
 // Internal for free link
 //
 #define LSSHM_FREE_AMARKER 0x0123fedc
 #define LSSHM_FREE_BMARKER 0xba984567
+
 //
 //  Two block to indicate a free block
 //
@@ -94,6 +99,7 @@ LsShmOffset_t LsShmPool::getPoolMapStatOffset() const
 
 inline  void LsShmPool::incrCheck(LsShmXSize_t *ptr, LsShmSize_t size)
 {
+    assert(ptr != NULL);
     LsShmSize_t prev = *ptr;
     *ptr += size;
     if (*ptr < prev)    // cnt wrapped
@@ -104,7 +110,6 @@ inline  void LsShmPool::incrCheck(LsShmXSize_t *ptr, LsShmSize_t size)
 
 LsShmStatus_t LsShmPool::createStaticData(const char *name)
 {
-    LsShmCnt_t i;
     LsShmPoolMem *pPool = getPool();
 
     pPool->x_iMagic = LSSHM_POOL_MAGIC;
@@ -120,8 +125,7 @@ LsShmStatus_t LsShmPool::createStaticData(const char *name)
     pDataMap->x_chunk.x_iEnd = 0;
     pDataMap->x_iFreeList = 0;
     pDataMap->x_iFreePageList = 0;
-    for (i = 0; i < LSSHM_POOL_NUMBUCKET; ++i)
-        pDataMap->x_aFreeBucket[i] = 0;
+    ::memset(pDataMap->x_aFreeBucket, 0, sizeof(pDataMap->x_aFreeBucket));
     ::memset(&pDataMap->x_stat, 0, sizeof(LsShmPoolMapStat));
 
     return LSSHM_OK;
@@ -142,6 +146,7 @@ LsShmStatus_t LsShmPool::checkStaticData(const char *name)
 LsShmPool::LsShmPool(LsShm *shm, const char *name, LsShmPool *gpool)
     : m_iMagic(LSSHM_POOL_MAGIC)
     , m_iOffset(0)
+    , x_pPool(NULL)
     , m_iShmOwner(0)
     , m_iRegNum(0)
     , m_pParent(gpool)
@@ -159,7 +164,7 @@ LsShmPool::LsShmPool(LsShm *shm, const char *name, LsShmPool *gpool)
         return;
     }
 
-    m_iLockEnable = 1;
+    m_iAutoLock = 1;
     m_pShm = shm;
 
     if (strcmp(name, LSSHM_SYSPOOL) == 0)
@@ -208,6 +213,7 @@ LsShmPool::LsShmPool(LsShm *shm, const char *name, LsShmPool *gpool)
             extraSize = LSSHM_SHM_UNITSIZE - rndPoolMemSz;
         }
     }
+    x_pPool = (LsShmPoolMem *)offset2ptr(m_iOffset);
 
     if (getPool()->x_iSize != 0)
     {
@@ -347,9 +353,11 @@ LsShmHash * LsShmPool::newHashByOffset(LsShmOffset_t offset,
 LsShmOffset_t LsShmPool::allocateNewHash(int init_size, int iMode, int iFlags)
 {
     // Create new HASH Table
-
-    ls_shmlock_t *pShmLock = lockPool()->allocLock();
-    if ((pShmLock == NULL) || (ls_shmlock_setup(pShmLock) != 0))
+    ls_shmlock_t *pShmLock;
+    LsShmOffset_t lockOffset = lockPool()->allocLock();
+    if ((lockOffset == 0) 
+        || (pShmLock = lockPool()->offset2pLock(lockOffset)) == NULL
+        || (ls_shmlock_setup(pShmLock) != 0))
     {
         return 0;
     }
@@ -357,7 +365,7 @@ LsShmOffset_t LsShmPool::allocateNewHash(int init_size, int iMode, int iFlags)
     // NOTE: system is not up yet... ignore remap here
     LsShmOffset_t offset =
             LsShmHash::allocHTable(this, init_size, iMode, iFlags,
-                                   lockPool()->pLock2offset(pShmLock));
+                                   lockOffset);
     if (offset == 0)
     {
         lockPool()->freeLock(pShmLock);
@@ -407,7 +415,7 @@ void LsShmPool::destroy()
     m_pParent->release2(m_iOffset, roundDataSize(sizeof(LsShmPoolMem)));
     m_iOffset = m_pParent->m_iOffset;   // let parent/global take over
     m_pShmLock = m_pShm->offset2pLock(getPool()->x_iLockOffset);
-    m_iLockEnable = m_pParent->m_iLockEnable;
+    m_iAutoLock = m_pParent->m_iAutoLock;
     if (owner != 0)
         m_pParent->close();
     m_pParent = NULL;
@@ -416,7 +424,6 @@ void LsShmPool::destroy()
 
 LsShmOffset_t LsShmPool::alloc2(LsShmSize_t size, int &remapped)
 {
-    LsShmMap *map_o = m_pShm->getShmMap();
     LsShmOffset_t offset;
 
     if ((size == 0) || (size&0x80000000) || (size>LSSHM_MAXSIZE)) 
@@ -424,7 +431,7 @@ LsShmOffset_t LsShmPool::alloc2(LsShmSize_t size, int &remapped)
 
     remapped = 0;
     size = roundDataSize(size);
-    lock();
+    autoLock();
     if (size >= LSSHM_SHM_UNITSIZE)
     {
         if ((offset = allocPage(size, remapped)) != 0)
@@ -443,11 +450,17 @@ LsShmOffset_t LsShmPool::alloc2(LsShmSize_t size, int &remapped)
         if (offset != 0)
             getDataMap()->x_stat.m_iPoolInUse += size;
     }
-    unlock();
-    if (map_o != m_pShm->getShmMap())
-        remapped = 1;
+    autoUnlock();
 
     return offset;
+}
+
+
+void LsShmPool::addLeftOverPages(LsShmOffset_t offset, LsShmSize_t size)
+{
+    releasePageLocked(offset, size);
+    incrCheck(&getDataMap()->x_stat.m_iGpAllocated,
+            (size / LSSHM_SHM_UNITSIZE));
 }
 
 
@@ -456,17 +469,23 @@ void LsShmPool::release2(LsShmOffset_t offset, LsShmSize_t size)
     size = roundDataSize(size);
     if (size >= LSSHM_SHM_UNITSIZE)
     {
-        releasePage(offset, size);
-        lock();
+        LsShmPool *pPagePool = ((m_pParent != NULL) ? m_pParent : this);
+        pPagePool->autoLock();
+        pPagePool->releasePageLocked(offset, size);
+        if (m_pParent)
+        {
+            pPagePool->autoUnlock();
+            autoLock();
+        }
         incrCheck(&getDataMap()->x_stat.m_iPgReleased, roundSize2pages(size));
-        unlock();
+        autoUnlock();
     }
     else
     {
-        lock();
+        autoLock();
         releaseData(offset, size);
         getDataMap()->x_stat.m_iPoolInUse -= size;
-        unlock();
+        autoUnlock();
     }
 }
 
@@ -475,9 +494,9 @@ void LsShmPool::mvFreeList()
 {
     if (m_pParent != NULL)
     {
-        lock();
+        autoLock();
         m_pParent->addFreeList(getDataMap());
-        unlock();
+        autoUnlock();
     }
     return;
 }
@@ -488,7 +507,7 @@ void LsShmPool::addFreeList(LsShmPoolMap *pSrcMap)
     LsShmOffset_t listOffset;
     if ((listOffset = pSrcMap->x_iFreeList) != 0)
     {
-        lock();
+        autoLock();
         LsShmFreeList *pFree;
         LsShmFreeList *pFreeList;
         LsShmOffset_t freeOffset;
@@ -512,7 +531,7 @@ void LsShmPool::addFreeList(LsShmPoolMap *pSrcMap)
         getDataMap()->x_iFreeList = listOffset;
         incrCheck(&getDataMap()->x_stat.m_iFlReleased, cnt);
         getDataMap()->x_stat.m_iFlCnt += pSrcMap->x_stat.m_iFlCnt;
-        unlock();
+        autoUnlock();
         pSrcMap->x_iFreeList = 0;
         incrCheck(&pSrcMap->x_stat.m_iFlAllocated, cnt);
         pSrcMap->x_stat.m_iFlCnt = 0;
@@ -525,9 +544,9 @@ void LsShmPool::mvFreeBucket()
 {
     if (m_pParent != NULL)
     {
-        lock();
+        autoLock();
         m_pParent->addFreeBucket(getDataMap());
-        unlock();
+        autoUnlock();
     }
     return;
 }
@@ -538,7 +557,7 @@ void LsShmPool::addFreeBucket(LsShmPoolMap *pSrcMap)
     int num = 1;     // skip zero slot
     LsShmOffset_t *pSrc = &pSrcMap->x_aFreeBucket[1];
     LsShmOffset_t *pDst = &getDataMap()->x_aFreeBucket[1];
-    lock();
+    autoLock();
     while (num < LSSHM_POOL_NUMBUCKET)
     {
         LsShmOffset_t bcktOffset;
@@ -567,9 +586,11 @@ void LsShmPool::addFreeBucket(LsShmPoolMap *pSrcMap)
         ++pDst;
         ++num;
     }
-    unlock();
+    autoUnlock();
     return;
 }
+
+static unsigned int s_debug_free_bucket = 0;
 
 
 //
@@ -614,7 +635,20 @@ void LsShmPool::releaseData(LsShmOffset_t offset, LsShmSize_t size)
 
         pData = (LsShmOffset_t *)offset2ptr(offset);
         pBucket = &pDataMap->x_aFreeBucket[bucketNum];
-        *pData = *pBucket;
+        assert(m_pShm->isOffsetValid(offset));
+        if (s_debug_free_bucket == bucketNum)
+            LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] release to freebucket, "
+                      "offset: %d, size: %d, next: %d\n",
+                      s_pid, m_pShm->getfd(), this, offset, size, *pBucket);
+        if (!m_pShm->isOffsetValid(*pBucket))
+        {    
+            LS_ERROR("[SHM] [%d-%d:%p] freebucket corruption, "
+                     "offset: %d, bucket: %d\n", s_pid, m_pShm->getfd(), 
+                     this, *pBucket, bucketNum);
+            *pData = 0;
+        }
+        else
+            *pData = *pBucket;
         *pBucket = offset;
         incrCheck(&pDataMap->x_stat.m_bckt[bucketNum].m_iBkReleased, 1);
     }
@@ -629,14 +663,14 @@ void LsShmPool::mapLock()
     LsShmPoolMem *pPool = getPool();
     if (pPool->x_iLockOffset == 0)
     {
-        if ((m_pShmLock = m_pShm->allocLock()) == NULL)
-            m_status = LSSHM_ERROR;
-        else
+        pPool->x_iLockOffset = m_pShm->allocLock();
+        if ( pPool->x_iLockOffset == 0)
         {
-            pPool->x_iLockOffset = m_pShm->pLock2offset(m_pShmLock);
-            //FIX FOR BELOW BUG
-            setupLock();
+            m_status = LSSHM_ERROR;
+            return;
         }
+        m_pShmLock = m_pShm->offset2pLock(pPool->x_iLockOffset);
+        ls_shmlock_setup(m_pShmLock);
 
     }
     else
@@ -690,11 +724,31 @@ LsShmOffset_t LsShmPool::allocFromDataBucket(LsShmSize_t size)
     if ((offset = *pBucket) != 0)
     {
         np = (LsShmOffset_t *)offset2ptr(offset);
-        *pBucket = *np;
+        if (!m_pShm->isOffsetValid(*np))
+        {
+            LS_ERROR("[SHM] [%d-%d:%p] pool free bucket [%d] corruption, at "
+                     "offset: %d, invalid value: %d, usage: alloc %d, free %d\n",
+                     s_pid, m_pShm->getfd(), this, num, offset, *np, 
+                     getDataMap()->x_stat.m_bckt[num].m_iBkAllocated,
+                     getDataMap()->x_stat.m_bckt[num].m_iBkReleased );
+            *pBucket = (LsShmOffset_t)0;
+        }
+        else
+            *pBucket = *np;
     }
-    else if ((offset = fillDataBucket(num, size)) == 0)
-        return 0;
+    else 
+    {
+        if (s_debug_free_bucket == num)
+            LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] freebucket %d is empty for size: %d\n", 
+                    s_pid, m_pShm->getfd(), this, num, size);
+        if ((offset = fillDataBucket(num, size)) == 0)
+            return 0;
+        }
     incrCheck(&getDataMap()->x_stat.m_bckt[num].m_iBkAllocated, 1);
+    if (s_debug_free_bucket == num)
+        LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] allocate from freebucket, "
+                  "offset: %d, size: %d, next: %d\n", 
+                  s_pid, m_pShm->getfd(), this, offset, size, getDataMap()->x_aFreeBucket[num]);
     return offset;
 }
 
@@ -710,11 +764,12 @@ LsShmOffset_t LsShmPool::allocFromGlobalBucket(
         return 0;
 
     LsShmSize_t cnt = 0;
-    lock();
+    autoLock();
     np = &getDataMap()->x_aFreeBucket[bucketNum];
     next = first = *np;
     while (next != 0)
     {
+        assert(m_pShm->isOffsetValid(next));
         np = (LsShmOffset_t *)offset2ptr(next);
         next = *np;
         if (++cnt >= num)
@@ -723,7 +778,7 @@ LsShmOffset_t LsShmPool::allocFromGlobalBucket(
     getDataMap()->x_aFreeBucket[bucketNum] = next;
     *np = 0;
     incrCheck(&getDataMap()->x_stat.m_bckt[bucketNum].m_iBkAllocated, cnt);
-    unlock();
+    autoUnlock();
     num = cnt;
     return first;
 }
@@ -750,7 +805,16 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
         && ((offset = m_pParent->allocFromGlobalBucket(bucketNum, num)) != 0))
     {
         if (num > 1)
-            getDataMap()->x_aFreeBucket[bucketNum] = offset + size;
+        {
+            xoffset = *((LsShmOffset_t *)m_pShm->offset2ptr(offset));
+            assert(m_pShm->isOffsetValid(xoffset));
+            getDataMap()->x_aFreeBucket[bucketNum] = xoffset;
+            if (s_debug_free_bucket == bucketNum)
+                LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] allocFromGlobalBucket(), %d objects, "
+                          "first offset: %d, second offset: %d\n", s_pid,
+                          m_pShm->getfd(), this, num, offset, xoffset);
+
+        }
         incrCheck(&getDataMap()->x_stat.m_bckt[bucketNum].m_iBkReleased, num);
         return offset;
     }
@@ -761,17 +825,27 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
 
     // take the first one - save the rest
     xoffset += size;
+    if (s_debug_free_bucket == bucketNum)
+        LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] allocFromDataChunk(), %d objects, "
+                  "first offset: %d, push offset: %d\n", s_pid, m_pShm->getfd(),
+                  this, num, offset, xoffset);
     if (--num != 0)
+    {
+        assert(m_pShm->isOffsetValid(xoffset));
         getDataMap()->x_aFreeBucket[bucketNum] = xoffset;
-
+    }
     uint8_t *xp;
     xp = (uint8_t *)offset2ptr(offset);
     while (num-- != 0)
     {
         xp += size;
         xoffset += size;
+        assert(m_pShm->isOffsetValid(xoffset));
         *((LsShmOffset_t *)xp) = num ? xoffset : 0;
-    }
+        if (s_debug_free_bucket == bucketNum)
+            LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] allocFromDataChunk(), append #%d offset: %d, \n",
+                      s_pid, m_pShm->getfd(), this, num , *((LsShmOffset_t *)xp));
+        }
     return offset;
 }
 
@@ -871,6 +945,8 @@ void LsShmPool::mvDataFreeListToBucket(LsShmFreeList *pFree,
         LsShmOffset_t *np;
         np = (LsShmOffset_t *)pFree; // cast to offset
         *np = getDataMap()->x_aFreeBucket[bucketNum];
+        
+        assert(m_pShm->isOffsetValid(offset));
         getDataMap()->x_aFreeBucket[bucketNum] = offset;
         incrCheck(&getDataMap()->x_stat.m_bckt[bucketNum].m_iBkReleased, 1);
     }
@@ -1083,13 +1159,13 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
     LsShmOffset_t offset;
 
     if ((pagesize&0x80000000) || (pagesize>LSSHM_MAXSIZE))
-        return 0;;
+        return 0;
     pagesize = roundPageSize(pagesize);
     remap = 0;
 
     LsShmPool *pPagePool = ((m_pParent != NULL) ? m_pParent : this);
     if (m_pParent != NULL)
-        pPagePool->lock();
+        pPagePool->autoLock();
     if ((offset = pPagePool->getFromFreeList(pagesize)) == 0)
     {
         if ((offset = m_pShm->allocPage(pagesize, remap)) == 0)
@@ -1102,35 +1178,30 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
         (pagesize / LSSHM_SHM_UNITSIZE));
 out:
     if (m_pParent != NULL)
-        pPagePool->unlock();
+        pPagePool->autoUnlock();
 
     return offset;
 }
 
 
-void LsShmPool::releasePage(LsShmOffset_t offset, LsShmSize_t pagesize)
+void LsShmPool::releasePageLocked(LsShmOffset_t offset, LsShmSize_t pagesize)
 {
     pagesize = roundPageSize(pagesize);
 
-    LsShmPool *pPagePool = ((m_pParent != NULL) ? m_pParent : this);
-    pPagePool->lock();
-    incrCheck(&pPagePool->getDataMap()->x_stat.m_iGpReleased,
+    incrCheck(&getDataMap()->x_stat.m_iGpReleased,
         (pagesize / LSSHM_SHM_UNITSIZE));
-    if (pPagePool->isFreeBlockAbove(offset, pagesize, 1))
+    if (isFreeBlockAbove(offset, pagesize, 1))
     {
         LShmFreeTop *ap;
         offset = ((LShmFreeBot *)offset2ptr(
                       offset + pagesize - sizeof(LShmFreeBot)))->x_iFreeOffset;
         ap = (LShmFreeTop *)offset2ptr(offset);
-        pPagePool->isFreeBlockBelow(offset, ap->x_iFreeSize, 2);
-        goto out;
+        isFreeBlockBelow(offset, ap->x_iFreeSize, 2);
+        return;
     }
-    if (pPagePool->isFreeBlockBelow(offset, pagesize, 1))
-        goto out;
-    pPagePool->joinFreeList(offset, pagesize);
-out:
-    pPagePool->unlock();
-    return;
+    if (isFreeBlockBelow(offset, pagesize, 1))
+        return;
+    joinFreeList(offset, pagesize);
 }
 
 
@@ -1173,3 +1244,8 @@ int LsShmPool::mergeDeadPool(LsShmPoolMem* pPool)
     return 0;
 }
 
+
+void LsShmPool::setPid(int pid)
+{
+    s_pid = pid;
+}

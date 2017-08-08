@@ -46,9 +46,8 @@ public:
     void *offset2ptr(LsShmOffset_t offset) const;
 
     LsShmOffset_t ptr2offset(const void *ptr) const;
-    LsShmOffset_t pLock2offset(ls_shmlock_t *pLock);
 
-    ls_shmlock_t *allocLock();
+    LsShmOffset_t allocLock();
     int freeLock(ls_shmlock_t *pLock);
 
 private:
@@ -66,6 +65,7 @@ private:
     LsShmStatus_t       checkMagic(LsShmLockMap *mp) const;
     LsShmStatus_t       init(const char *pFile, int fd,
                              LsShmXSize_t size, uint64_t id);
+    int                 getfd() const   {   return m_iFd;   }
     uint64_t            getId() const;
     LsShmStatus_t       map(LsShmXSize_t size);
     void                unmap();

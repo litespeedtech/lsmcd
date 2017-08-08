@@ -65,8 +65,6 @@ extern "C" {
 #define USE_ATOMIC_SPIN
 
 #define MAX_FUTEX_SPINCNT      10
-#define MAX_FUTEX_PIDCHECK     10
-#define MAX_SPINCNT_CHECK      50000
 
 /* LiteSpeed general purpose lock/unlock/trylock
  */
@@ -126,7 +124,7 @@ typedef ls_spinlock_t      ls_lock_t;
 
 #ifdef USE_ATOMIC_SPIN
 #define ls_spinlock_setup         ls_atomic_spin_setup
-#define ls_spinlock_lock          ls_atomic_spin_pidlock
+#define ls_spinlock_lock          ls_atomic_spin_lock
 #define ls_spinlock_trylock       ls_atomic_spin_trylock
 #define ls_spinlock_unlock        ls_atomic_spin_unlock
 #else
@@ -384,7 +382,6 @@ ls_inline int ls_atomic_spin_lock(ls_atom_spinlock_t *p)
  * @see ls_atomic_spin_lock
  */
 
-
 int ls_atomic_spin_pidwait(ls_atom_spinlock_t *p);
 
 ls_inline int ls_atomic_spin_pidlock(ls_atom_spinlock_t *p)
@@ -452,6 +449,21 @@ ls_inline int ls_atomic_spin_unlock(ls_atom_spinlock_t *p)
 }
 
 /**
+ * @ls_atomic_spin_locked
+ * @brief Test if a spinlock is currently in locked state.
+ *
+ * @param[in] p - A pointer to the lock.
+ * @return 1 - locked, 0 - not locked.
+ *
+ * @see ls_atomic_spin_setup, ls_atomic_spin_lock, ls_atomic_spin_trylock 
+ *      ls_atomic_spin_unlock
+ */
+ls_inline int ls_atomic_spin_locked(ls_atom_spinlock_t *p)
+{
+    return *p != 0;
+}
+
+/**
  * @ls_atomic_spin_pidunlock
  * @brief Unlocks
  *   a spinlock set up with built-in functions for atomic memory access.
@@ -466,6 +478,23 @@ ls_inline int ls_atomic_spin_pidunlock(ls_atom_spinlock_t *p)
     assert(*p == ls_spin_pid);
     ls_atomic_clrint(p);
     return 0;
+}
+
+/**
+ * @ls_atomic_pidlocked
+ * @brief Test if a spinlock is currently is locked with current pid.
+ *
+ * @param[in] p - A pointer to the lock.
+ * @return 1 - locked, 0 - not locked.
+ *
+ * @see ls_atomic_spin_setup, ls_atomic_spin_lock, ls_atomic_spin_trylock 
+ *      ls_atomic_spin_unlock
+ */
+ls_inline int ls_atomic_pidlocked(ls_atom_spinlock_t *p)
+{
+    if (ls_spin_pid == 0)
+        ls_atomic_pidspin_init();
+    return *p == ls_spin_pid;
 }
 
 

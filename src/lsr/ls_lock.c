@@ -68,7 +68,8 @@ void ls_atomic_pidspin_init()
 }
 
 
-#define LS_SPIN_MIN_PID 10
+#define MAX_SPINCNT_CHECK   5000
+#define LS_SPIN_MIN_PID     10
 int ls_atomic_spin_pidwait(ls_atom_spinlock_t *p)
 {
     int waitpid;

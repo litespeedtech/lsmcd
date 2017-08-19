@@ -212,6 +212,8 @@ int MemcacheConn::handleEvents(short events)
     {
         CloseConnection();
     }
+    if (m_iConnState == CS_DISCONNECTED && getfd() == -1)
+        delete this;
     return 0;
 }
 

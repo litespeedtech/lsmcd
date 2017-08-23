@@ -604,7 +604,9 @@ void Lsmcd::setMcParms(LsMcParms *pParms)
     pParms->m_usesasl   = getReplConf()->getUseSasl();
     pParms->m_nomemfail = getReplConf()->getNomemFail();
     pParms->m_iValMaxSz = getReplConf()->getValMaxSz();
-    pParms->m_iMemMaxSz = getReplConf()->getMemMaxSz() * 1024 * 1024;
+    pParms->m_iMemMaxSz = getReplConf()->getMemMaxSz();
+    if (pParms->m_iMemMaxSz < 1024)
+        pParms->m_iMemMaxSz *= 1024 * 1024; 
     return;
 }
 

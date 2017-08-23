@@ -102,7 +102,7 @@ liblsshm_a_AR = $(AR) $(ARFLAGS)
 liblsshm_a_LIBADD =
 am_liblsshm_a_OBJECTS = lsshmlock.$(OBJEXT) lsshmhash.$(OBJEXT) \
 	lsshmpool.$(OBJEXT) lsshm.$(OBJEXT) lsshmtidmgr.$(OBJEXT) \
-	lsshmhashobserver.$(OBJEXT)
+	lsshmhashobserver.$(OBJEXT) addrmap.$(OBJEXT)
 liblsshm_a_OBJECTS = $(am_liblsshm_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -301,7 +301,7 @@ noinst_LIBRARIES = liblsshm.a
 INCLUDES = -I$(top_srcdir)/include -I$(top_srcdir)/src
 liblsshm_a_METASOURCES = AUTO
 liblsshm_a_SOURCES = lsshmlock.cpp lsshmhash.cpp lsshmpool.cpp lsshm.cpp \
-	lsshmtidmgr.cpp lsshmhashobserver.cpp
+	lsshmtidmgr.cpp lsshmhashobserver.cpp addrmap.cpp
 
 all: all-am
 
@@ -352,6 +352,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/addrmap.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lsshm.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lsshmhash.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lsshmhashobserver.Po@am__quote@

@@ -1,4 +1,4 @@
 [Project]
-Name=replicator
+Name=lsmcd
 Manager=KDevCMakeManager
 VersionControl=kdevgit

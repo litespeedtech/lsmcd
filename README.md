@@ -8,9 +8,10 @@ Compile
 --------
 - git clone https://github.com/litespeedtech/lsmcd.git or download project via "wget https://github.com/litespeedtech/lsmcd/archive/master.zip"
 - cd lsmcd directory and run configure and make.   
-  ./configure CFLAGS=" -O3" CXXFLAGS=" -O3"  
-  make
-
+```
+./configure CFLAGS=" -O3" CXXFLAGS=" -O3"  
+make
+```
 Install
 --------
 - install prerequisites, for centos, do
@@ -25,7 +26,9 @@ sudo apt-get install zlib1g-dev libexpat1-dev openssl
 - update the default configure "/usr/local/lsmcd/conf/node.conf".  
   There is example.conf under dist/conf, just replace with your testing IP.
 - now start or stop it.  
+```
   service lsmcd start/stop
+```
 
 Configuration Documentation
 --------

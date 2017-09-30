@@ -16,11 +16,11 @@ Install
 --------
 - install prerequisites, for centos, do
 ```
-yum install zlib-devel openssl-devel expat-devel
+yum install autoconf automake zlib-devel openssl-devel expat-devel
 ```
   for Debian/Ubuntu, do
 ```
-sudo apt-get install zlib1g-dev libexpat1-dev openssl
+sudo apt-get install build-essential zlib1g-dev libexpat1-dev openssl
 ```
 - cd dist, run "install.sh" so that lsmcd service is added.
 - update the default configure "/usr/local/lsmcd/conf/node.conf".  

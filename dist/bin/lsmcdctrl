@@ -18,14 +18,14 @@ CONF="$BASE_DIR"/conf/node.conf
 DESC="lsmcd"
 
 if [ ! -f $CONF ] ; then
-	echo "[ERROR] Cannot find the config $CONF"
-	exit 1
+    echo "[ERROR] Cannot find the config $CONF"
+    exit 1
 fi
 LINE=`grep TmpDir $CONF`
 if [ "x$LINE" != "x" ]; then
-	TMPDIR=`echo  $LINE |cut -d = -f2`	
+    TMPDIR=`echo  $LINE |cut -d = -f2`    
 else
-	TMPDIR="/tmp/lsmcd"
+    TMPDIR="/tmp/lsmcd"
 fi
 
 PIDFILE=$TMPDIR/lsmcd.pid
@@ -34,20 +34,20 @@ PIDFILE=$TMPDIR/lsmcd.pid
 RUNNING=0
 SYS_NAME=`uname -s`
 if [ "x$SYS_NAME" = "xFreeBSD" ] || [ "x$SYS_NAME" = "xDarwin" ] ; then
-	PS_CMD="ps -ax"
+    PS_CMD="ps -ax"
 else
-	PS_CMD="ps -ef"
+    PS_CMD="ps -ef"
 fi
 
 if [ -f $PIDFILE ] ; then
-	FPID=`cat $PIDFILE`
-	if [ "x$FPID" != "x" ]; then
-		PL=`$PS_CMD | grep $EXECUTABLE | grep -v grep | grep -w $FPID`
-		if [ "x$PL" != "x" ] ; then
-			RUNNING=1
-			PID=$FPID
-		fi
-	fi
+    FPID=`cat $PIDFILE`
+    if [ "x$FPID" != "x" ]; then
+        PL=`$PS_CMD | grep $EXECUTABLE | grep -v grep | grep -w $FPID`
+        if [ "x$PL" != "x" ] ; then
+            RUNNING=1
+            PID=$FPID
+        fi
+    fi
 fi
 
 
@@ -55,41 +55,41 @@ ret=0
 
 start()
 {
-	if [ -f "$PIDFILE" ]; then
-		PID=`cat $PIDFILE`
-	else
-		PID=""
-	fi
-	if [ ! -f "$CONF" ]; then
-		echo "[ERROR] Cannot find the configure file $CONF"
-		return 
-	fi
+    if [ -f "$PIDFILE" ]; then
+        PID=`cat $PIDFILE`
+    else
+        PID=""
+    fi
+    if [ ! -f "$CONF" ]; then
+        echo "[ERROR] Cannot find the configure file $CONF"
+        return 
+    fi
     ./bin/${EXECUTABLE} -f $CONF
-	ret=$?
+    ret=$?
 
-	if [ $ret -eq 0 ]; then
-		NEW_PID=`cat $PIDFILE`
-		if [ "x$NEW_PID" = "x$PID" ] || [ "x$NEW_PID" = "x" ]; then
-			sleep 1
-			NEW_PID=`cat $PIDFILE`
-		fi
-		echo "[OK] $DESC: pid=$NEW_PID."
+    if [ $ret -eq 0 ]; then
+        NEW_PID=`cat $PIDFILE`
+        if [ "x$NEW_PID" = "x$PID" ] || [ "x$NEW_PID" = "x" ]; then
+            sleep 1
+            NEW_PID=`cat $PIDFILE`
+        fi
+        echo "[OK] $DESC: pid=$NEW_PID."
 
-	else
-		echo "[ERROR] Failed to start $DESC!"
-	fi
+    else
+        echo "[ERROR] Failed to start $DESC!"
+    fi
 }
 
 
 stop()
 {
-	kill -TERM $PID
-	ret=$?
-    	if  [ $ret -eq 0 ]; then
-		echo "[OK] $DESC: stopped."
-	else
-		echo "[ERROR] can not kill $DESC"
-	fi
+    kill -TERM $PID
+    ret=$?
+        if  [ $ret -eq 0 ]; then
+        echo "[OK] $DESC: stopped."
+    else
+        echo "[ERROR] can not kill $DESC"
+    fi
 }
 
 
@@ -107,40 +107,49 @@ restart()
 }
 
 help() {
-	echo $"Usage: $PROG {start|stop|restart|help}"
-	cat <<EOF
+    echo $"Usage: $PROG {start|stop|restart|status|help}"
+    cat <<EOF
 
 start    - start cached daemon 
 stop     - stop  cached daemon
 restart  - restart (stop then start) cached daemon
+status   - show service status
 help     - this screen
-		
+        
 EOF
 }
 
 case "$1" in 
-	start)
-		if [ $RUNNING -eq 1 ]; then
-			echo "[ERROR] $DESC is running with pid=$PID."
-			ret=1
-		else
-			start
-		fi
-		;;
-	stop)
-		if [ $RUNNING -eq 1 ]; then
-			stop
-		else
-			echo "[ERROR] $DESC is not running."
-			ret=1
-		fi
-		;;
-	restart)
-        	restart
-		;;
-	*)
-		help
-		ret=3
-		;;
+    start)
+        if [ $RUNNING -eq 1 ]; then
+            echo "[ERROR] $DESC is running with pid=$PID."
+            ret=1
+        else
+            start
+        fi
+        ;;
+    stop)
+        if [ $RUNNING -eq 1 ]; then
+            stop
+        else
+            echo "[ERROR] $DESC is not running."
+            ret=1
+        fi
+        ;;
+    restart)
+            restart
+        ;;
+    status)
+        if [ $RUNNING -eq 1 ]; then
+            echo "$DESC is running with PID $PID."
+        else
+            echo "[ERROR] $DESC is not running."
+            ret=3
+        fi
+        ;;
+    *)
+        help
+        ret=3
+        ;;
 esac
 exit $ret

@@ -45,13 +45,18 @@ case "$1" in
         fi
 
         ;;
+    status)
+        "$LSMCD_CTRL" status
+        ret=$?
+        ;;
     *)
-    echo $"Usage: $PROG {start|stop|restart|help}"
+    echo $"Usage: $PROG {start|stop|restart|status|help}"
     cat <<EOF
 
 start    - start lsmcd
 stop     - stop lsmcd
-restart  - restart (stop then start) load balancer
+restart  - restart (stop then start) lsmcd
+status   - show service status
 help     - this screen
         
 EOF

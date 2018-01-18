@@ -18,11 +18,13 @@
 
 #include "logrotate.h"
 #include <log4cxx/appender.h>
+#include <log4cxx/logger.h>
 
 #include <util/ni_fio.h>
 #include <util/gzipbuf.h>
 
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
@@ -124,11 +126,19 @@ int archiveFile(const char *pFileName, const char *pSuffix,
         snprintf(achName, 1024, "%s.gz", achBuf);
         GzipBuf gzBuf;
         if (gzBuf.compressFile(achBuf, achName) == 0)
+        {
             unlink(achBuf);
+            if (chown(achName, uid, gid))
+            {
+                LS_ERROR( "Failed to chown %s (%d) : %s", achName, errno, strerror( errno ) );
+            }
+            if (chmod(achName, 0644))
+            {
+                LS_ERROR( "Failed to chmod %s (%d) : %s", achName, errno, strerror( errno ) );
+            }
+        }
         else
             unlink(achName);
-        chown(achName, uid, gid);
-        chmod(achName, 0644);
         exit(0);
     }
     return 0;
@@ -173,12 +183,18 @@ int LogRotate::testRolling(Appender *pAppender, off_t rollingSize,
         {
             pAppender->close();
             pAppender->open();
-            fchown(pAppender->getfd(), uid, gid);
+            if (fchown(pAppender->getfd(), uid, gid))
+            {
+                LS_ERROR( "Failed to fchown %s (%d) : %s", pAppender->getName(), errno, strerror( errno ) );
+            }
         }
         return ret;
     }
     else if ((st.st_uid != uid) || (st.st_gid != gid))
-        chown(pName, uid, gid);
+        if (chown(pName, uid, gid))
+        {
+            LS_ERROR( "Failed to chown %s (%d) : %s", pName, errno, strerror( errno ) );
+        }
     if (rollingSize <= 0)
         return ret;
     return (st.st_size > rollingSize);
@@ -188,7 +204,10 @@ int LogRotate::postRotate(Appender *pAppender, uid_t uid, gid_t gid)
 {
     pAppender->close();
     pAppender->open();
-    fchown(pAppender->getfd(), uid, gid);
+    if (fchown(pAppender->getfd(), uid, gid))
+    {
+        LS_ERROR( "Failed to chown %s (%d) : %s", pAppender->getName(), errno, strerror( errno ) );
+    }
     if (pAppender->getKeepDays() > 0)
     {
         time_t tm = time(NULL) - 3600L * 24 * pAppender->getKeepDays();

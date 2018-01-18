@@ -62,7 +62,10 @@ int ls_expandfile(int fd, LsShmOffset_t fromsize, LsShmXSize_t incrsize)
     {
         if (pwrite(fd, "", 1, fromsize) != 1)
         {
-            ftruncate(fd, (off_t)fromloc);
+            if (ftruncate(fd, (off_t)fromloc))
+            {
+                LS_ERROR( "Failed to ftruncate (%d) : %s", errno, strerror( errno ) );
+            }
             return LS_FAIL;
         }
         fromsize += pagesize;
@@ -399,7 +402,10 @@ int LsShm::chperm(int uid, int gid, int mask)
     if (ret != -1 && uid > 0)
     {
         ret = fchown(m_iFd, uid, gid);
-        fchown( m_locks.getfd(), uid, gid);
+        if (fchown( m_locks.getfd(), uid, gid))
+        {
+            LS_ERROR( "Failed to fchown (%d) : %s", errno, strerror( errno ) );
+        }
     }
     return ret;
 }

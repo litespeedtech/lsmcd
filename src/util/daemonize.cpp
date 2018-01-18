@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <log4cxx/logger.h>
 
 int Daemonize::daemonize(int nochdir, int noclose)
 {
@@ -30,8 +31,15 @@ int Daemonize::daemonize(int nochdir, int noclose)
     if (!nochdir)
     {
         if (!getuid())
-            chroot("/");
-        chdir("/");
+            if (chroot("/"))
+            {
+                // should not happen
+                LS_ERROR( "Failed to chroot to / (%d) : %s", errno, strerror( errno ) );
+            }
+        if (chdir("/"))
+        {
+            LS_ERROR( "Failed to chdir to / (%d) : %s", errno, strerror( errno ) );
+        }
     }
     if (!noclose)
         close();

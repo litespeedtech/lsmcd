@@ -18,6 +18,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <log4cxx/logger.h>
 
 class ReadLinkInfo
 {
@@ -609,7 +610,13 @@ int GPath::createMissingPath(char *pBuf, int mode, int uid, int gid)
                 if (mkdir(pBuf, mode) == -1)
                     return -1;
                 if ((uid != -1) || (gid != -1))
-                    chown(pBuf, uid, gid);
+                {
+                    if (chown(pBuf, uid, gid))
+                    {
+                        LS_ERROR( "Failed to chown (%d) : %s", errno, strerror( errno ) );
+                        return -1;
+                    }
+                }
             }
             *p++ = '/';
             p = strchr(p, '/');

@@ -94,7 +94,11 @@ int FdPassLstnr::handleEvents( short events )
         return -1;
     
     DispatchData_t dispData;
-    ::read(fwFd, &dispData, sizeof(dispData));
+    if (-1 == ::read(fwFd, &dispData, sizeof(dispData)))
+    {
+        // not checking for short read?
+        return -1;
+    }
     m_pusockLstnr->forwardFd(dispData, fwFd);
     my_sleep(100);
     close(fwFd);

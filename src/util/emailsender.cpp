@@ -71,9 +71,13 @@ int EmailSender::send(const char *pSubject, const char *to,
     int fd = mkstemp(achFileName);
     if (fd == -1)
         return -1;
-    write(fd, content, strlen(content));
+    int ret = write(fd, content, strlen(content));
     close(fd);
-    int ret = sendFile(pSubject, to, achFileName, cc, bcc);
+    if (-1 == ret)
+    {
+        return ret;
+    }
+    ret = sendFile(pSubject, to, achFileName, cc, bcc);
     ::unlink(achFileName);
     return ret;
 }

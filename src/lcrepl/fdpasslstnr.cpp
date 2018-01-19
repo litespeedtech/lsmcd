@@ -78,7 +78,7 @@ int FdPassLstnr::SetListenerAddr( const char * pAddr )
     return 0;
 }
 #include <memcache/lsmemcache.h>
-
+    
 //only master calls this function
 int FdPassLstnr::handleEvents( short events )
 {
@@ -92,13 +92,9 @@ int FdPassLstnr::handleEvents( short events )
     fwFd = accept( getfd(), (struct sockaddr *)(&peerAddr), &len );
     if ( fwFd == -1 )
         return -1;
-
+    
     DispatchData_t dispData;
-    if (-1 == ::read(fwFd, &dispData, sizeof(dispData)))
-    {
-        // not checking for short read?
-        return -1;
-    }
+    ::read(fwFd, &dispData, sizeof(dispData));
     m_pusockLstnr->forwardFd(dispData, fwFd);
     my_sleep(100);
     close(fwFd);

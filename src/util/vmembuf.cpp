@@ -16,7 +16,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <log4cxx/logger.h>
 #include "vmembuf.h"
 
 #define _RELEASE_MMAP
@@ -221,10 +220,7 @@ int VMemBuf::shrinkBuf(off_t size)
     if ((m_type == VMBUF_FILE_MAP) && (m_fd != -1))
     {
         if (m_curTotalSize > size)
-            if (ftruncate(m_fd, size))
-            {
-                LS_ERROR( "Failed to truncate (%d) : %s", errno, strerror( errno ) );
-            }
+            ftruncate(m_fd, size);
     }
     BlockBuf *pBuf;
     while (m_curTotalSize > size)

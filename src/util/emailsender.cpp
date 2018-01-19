@@ -12,7 +12,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <log4cxx/logger.h>
 
 EmailSender::EmailSender()
 {
@@ -72,14 +71,9 @@ int EmailSender::send(const char *pSubject, const char *to,
     int fd = mkstemp(achFileName);
     if (fd == -1)
         return -1;
-    int ret = write(fd, content, strlen(content));
+    write(fd, content, strlen(content));
     close(fd);
-    if (-1 == ret)
-    {
-        LS_ERROR( "Failed to write message (%d) : %s", errno, strerror( errno ) );
-        return ret;
-    }
-    ret = sendFile(pSubject, to, achFileName, cc, bcc);
+    int ret = sendFile(pSubject, to, achFileName, cc, bcc);
     ::unlink(achFileName);
     return ret;
 }

@@ -91,14 +91,9 @@ bool Config::read()
     char sLine[MAX_LINE_LEN];
     char *pKey = NULL;
     char *pVal = NULL ;
-    while (!feof(m_pFileHandle) && !ferror(m_pFileHandle))
+    while (!feof(m_pFileHandle))
     {
-        if (!fgets(sLine, MAX_LINE_LEN, m_pFileHandle))
-        {
-            // got err or EOF, don't try to process (sLine
-            // still has prior contents), while() will exit
-            continue;
-        }
+        fgets(sLine, MAX_LINE_LEN, m_pFileHandle);
         if (strlen(sLine) >= MAX_LINE_LEN - 1)
         {
             snprintf(chBuf, MAX_LINE_LEN

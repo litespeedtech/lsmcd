@@ -16979,6 +16979,7 @@ fi
 #	if test "$ac_cv_found_sasl" = yes; then
     if test "${with_sasl}" != no; then
       LIB_SASL="$LIB_SASL -lsasl2"
+      LIBS="$cmu_saved_LIBS $LIB_SASL"
 	else
 	  LIB_SASL=""
 	  SASLFLAGS=""

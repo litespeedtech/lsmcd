@@ -9,6 +9,7 @@ Compile
 - git clone https://github.com/litespeedtech/lsmcd.git or download project via "wget https://github.com/litespeedtech/lsmcd/archive/master.zip"
 - cd lsmcd directory and run configure and make.   
 ```
+./fixtimestamp.sh
 ./configure CFLAGS=" -O3" CXXFLAGS=" -O3"  
 make
 ```

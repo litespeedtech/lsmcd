@@ -100,7 +100,7 @@ typedef struct
             uint8_t  val[1];
         } withcas;
         uint8_t val[1];
-    } x_data[];
+    } x_data[0];
 } LsMcDataItem;
 
 typedef enum

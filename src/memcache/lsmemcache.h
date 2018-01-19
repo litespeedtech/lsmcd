@@ -85,7 +85,7 @@ typedef struct
     {
         uint64_t cas;
         uint8_t  val[1];
-    } x_data[];
+    } x_data[0];
 } LsMcHdr;
 
 typedef struct

@@ -26,7 +26,7 @@ AC_DEFUN(CMU_SASL_INC_WHERE, [
 AC_DEFUN(CMU_SASL_LIB_WHERE1, [
 AC_REQUIRE([AC_PROG_CC_GNU])
 saved_LIBS=$LIBS
-LIBS="$saved_LIBS -L$1 -lsasl"
+LIBS="$saved_LIBS -L$1 -lsasl2"
 AC_TRY_LINK(,
 [sasl_getprop();],
 [ac_cv_found_sasl_lib=yes],
@@ -79,6 +79,7 @@ AC_ARG_WITH(sasl,
 #	if test "$ac_cv_found_sasl" = yes; then
     if test "${with_sasl}" != no; then
       LIB_SASL="$LIB_SASL -lsasl2"
+      LIBS="$cmu_saved_LIBS $LIB_SASL"
 	else
 	  LIB_SASL=""
 	  SASLFLAGS=""

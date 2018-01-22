@@ -32,6 +32,9 @@ int MemcacheListener::Start()
     GSockAddr addr;
     if ( addr.set( _AddrStr.c_str(), 0 ) )
         return -1;
+    if (addr.get()->sa_family == AF_UNIX)
+        unlink(_AddrStr.c_str() + 5);
+
     int fd;
     int ret = CoreSocket::listen( addr, 100, &fd, 0, 0 );
     if ( ret != 0 )

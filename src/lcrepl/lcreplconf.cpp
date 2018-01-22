@@ -78,100 +78,54 @@ LcReplConf::~LcReplConf()
 
 bool LcReplConf::parse(const char *szFile)
 {
-    char pSockAddr[64];
+    char pSockAddr[256];
     const char* pAddr;    
     StringList lbAddrs;
+    GSockAddr sockAddr;
+    int v;
     AutoStr str;
+
     if (!m_confParser.loadConfig(szFile, "="))
     {
         initLogger("stderr", "DBG");
-        LS_ERROR (  "LcReplConf unable to load config %s, error:%s"
+        LS_ERROR("LcReplConf unable to load config %s, error:%s"
             , szFile, m_confParser.getErrorMessage());
         return false;               
     }
     initLogger(getLogFile(), getLogLevel());
 
-    const char *pEntry = m_confParser.getConfig("REPL.LBADDRS");
-    setLBAddrs(pEntry);
-    
-    GSockAddr sockAddr;
-    //LISTENSVRADDR
-    pAddr = m_confParser.getConfig("REPL.LISTENSVRADDR");
-    if (!setLisenSvrAddr(pAddr))
-    {
-        LS_ERROR ( "LcReplConf fails to load Repl ListenSvrAddr %s", pAddr);
-        return false;        
-    }
-    m_lsntnrSvrIp = getIpOfAddr(pAddr, str);
-    
-    if ( !isAllowedIP(getLocalLsntnrIp() ))
-    {
-        LS_ERROR ( "Repl ListenSvrIp %s is not in LB Addrs"
-            , getLocalLsntnrIp());
-        return false;
-    }
-    //dispatch addr
-    pAddr = m_confParser.getConfig("REPL.DispatchAddr");
-    if ( pAddr == NULL || sockAddr.set(pAddr, 0) )
-    {
-        LS_ERROR ( "LcReplConf fails to load Repl DispatchAddr %s", pAddr);
-        return false;        
-    }
-    sockAddr.toString(pSockAddr, 64);
-    m_dispatchAddr = pSockAddr;
-    
+   
     //MEMCACHEDADDR
     pAddr = m_confParser.getConfig("CACHED.ADDR");
     if (pAddr == NULL || sockAddr.set(pAddr, 0))
     {
-        LS_ERROR (  "LcReplConf fails to load Repl MemCached SvrAddr %s", pAddr);
+        LS_ERROR("LcReplConf fails to load Repl MemCached SvrAddr %s", pAddr);
         return false;
     }
-    sockAddr.toString(pSockAddr, 64);
-    m_cachedAddr = pSockAddr;
+    //sockAddr.toString(pSockAddr, 256);
+    m_cachedAddr = pAddr;
     
     pAddr = m_confParser.getConfig("CACHED.PRIADDR");
     if (pAddr == NULL || sockAddr.set(pAddr, 0))
     {
-        LS_ERROR (  "LcReplConf fails to load Repl MemCached SvrAddr %s", pAddr);
+        LS_ERROR("LcReplConf fails to load Repl MemCached SvrAddr %s", pAddr);
         return false;
     }
-    sockAddr.toString(pSockAddr, 64);
-    m_cachedPriAddr = pSockAddr;
-    
-    //usock path
-    pAddr = m_confParser.getConfig("RepldSockPath");
-    if (pAddr == NULL)
-    {
-        LS_ERROR (  "LcReplConf fails to load repld sock path %s", pAddr);
-        return false;
-    }
-    m_repldUsPath = pAddr;
+    //sockAddr.toString(pSockAddr, 256);
+    m_cachedPriAddr = pAddr;
+
+
 
     pAddr = m_confParser.getConfig("CachedSockPath");
     if (pAddr == NULL)
     {
-        LS_ERROR (  "LcReplConf fails to load cached sock path %s", pAddr);
+        LS_ERROR("LcReplConf fails to load cached sock path %s", pAddr);
         return false;
     }
     m_cachedUsPath = pAddr;
 
     //GzipStream
-    const char *ptr = m_confParser.getConfig("REPL.GZIPSTREAM");
-    if(ptr != NULL && !strcasecmp(ptr, "YES"))
-        m_bGzipStream = true;
-    
-    //timeout
-    int v;
-    ptr = m_confParser.getConfig("REPL.HEARTBEATREQ");
-    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
-        m_hbFreq = v;
-    LS_DBG_M ("repld heartbeatreq:%d", getHbFreq());
-    
-    ptr = m_confParser.getConfig("REPL.HEARTBEATRETRY");
-    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
-        m_hbTimeout = v;
-    LS_DBG_M ("repld heartbtimeout:%d", getHbTimeout());
+    const char *ptr;
     //SubFileNum
     ptr = m_confParser.getConfig("CACHED.SLICES");
     if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
@@ -186,14 +140,12 @@ bool LcReplConf::parse(const char *szFile)
     if ( (ptr = m_confParser.getConfig("CACHED.SHMHASHNAME")) != NULL)
         m_shmHashName = ptr;
 
-    ptr = m_confParser.getConfig("REPL.MAXTIDPACKET");
-    m_maxTidPacket = ptr ? atoi(ptr) : DEF_MAXTIDPACKET;
-
-    ptr = m_confParser.getConfig("REPL.VALMAXSZ");
+    ptr = m_confParser.getConfig("CACHED.VALMAXSZ");
     m_valMaxSz = ptr ? atoi(ptr) : DEF_VALMAXSZ;
     
-    ptr = m_confParser.getConfig("REPL.MEMMAXSZ");
+    ptr = m_confParser.getConfig("CACHED.MEMMAXSZ");
     m_memMaxSz = ptr ? atoi(ptr) : DEF_MEMMAXSZ;
+
 
     if ( (ptr = m_confParser.getConfig("CACHED.USECAS")) != NULL)
     {
@@ -241,6 +193,59 @@ bool LcReplConf::parse(const char *szFile)
         m_pShmFiles[i] = (char*)m_confParser.getConfig(pBuf);
         LS_DBG_M("%s=%s", pBuf, pBuf2);
     }
+    
+    const char *pEntry = m_confParser.getConfig("REPL.LBADDRS");
+    setLBAddrs(pEntry);
+ 
+    ptr = m_confParser.getConfig("REPL.GZIPSTREAM");
+    if(ptr != NULL && !strcasecmp(ptr, "YES"))
+        m_bGzipStream = true;
+    
+    //timeout
+    ptr = m_confParser.getConfig("REPL.HEARTBEATREQ");
+    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
+        m_hbFreq = v;
+    LS_DBG_M("repld heartbeatreq:%d", getHbFreq());
+    
+    ptr = m_confParser.getConfig("REPL.HEARTBEATRETRY");
+    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
+        m_hbTimeout = v;
+    LS_DBG_M("repld heartbtimeout:%d", getHbTimeout());
+    
+    //LISTENSVRADDR
+    pAddr = m_confParser.getConfig("REPL.LISTENSVRADDR");
+    if (setLisenSvrAddr(pAddr))
+    {
+        m_lsntnrSvrIp = getIpOfAddr(pAddr, str);
+        if ( !isAllowedIP(getLocalLsntnrIp() ))
+        {
+            LS_ERROR("Repl ListenSvrIp %s is not in LB Addrs"
+                , getLocalLsntnrIp());
+            return false;
+        }
+    }
+    
+    //dispatch addr
+    pAddr = m_confParser.getConfig("REPL.DispatchAddr");
+    if ( pAddr == NULL || sockAddr.set(pAddr, 0) )
+    {
+        LS_ERROR("LcReplConf fails to load Repl DispatchAddr %s", pAddr);
+        return false;        
+    }
+    sockAddr.toString(pSockAddr, 64);
+    m_dispatchAddr = pSockAddr;
+    
+    //usock path
+    pAddr = m_confParser.getConfig("RepldSockPath");
+    if (pAddr != NULL)
+    {
+        m_repldUsPath = pAddr;
+    }
+    
+    ptr = m_confParser.getConfig("REPL.MAXTIDPACKET");
+    m_maxTidPacket = ptr ? atoi(ptr) : DEF_MAXTIDPACKET;
+
+    
     
     return true;
 }

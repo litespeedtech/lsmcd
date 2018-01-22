@@ -638,6 +638,8 @@ am__EXEEXT_TRUE
 LTLIBOBJS
 RT_LIB_OPTION
 DL_LIB_OPTION
+SASLFLAGS
+LIB_SASL
 LIBOBJS
 OPENSSL_LDFLAGS
 OPENSSL_LIBS
@@ -780,6 +782,7 @@ enable_rpath
 with_libdir
 with_zlib
 with_openssl
+with_sasl
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1440,6 +1443,7 @@ Optional Packages:
                     /usr/local or /usr if not found in /usr/local
   --without-zlib to disable zlib usage completely
   --with-openssl=DIR      root of the OpenSSL directory
+  --with-sasl=DIR        Compile with libsasl in <DIR>
 
 Some influential environment variables:
   CXX         C++ compiler command
@@ -2780,8 +2784,8 @@ test "$program_suffix" != NONE &&
 ac_script='s/[\\$]/&&/g;s/;s,x,x,$//'
 program_transform_name=`$as_echo "$program_transform_name" | sed "$ac_script"`
 
-# expand $ac_aux_dir to an absolute path
-am_aux_dir=`cd $ac_aux_dir && pwd`
+# Expand $ac_aux_dir to an absolute path.
+am_aux_dir=`cd "$ac_aux_dir" && pwd`
 
 if test x"${MISSING+set}" != xset; then
   case $am_aux_dir in
@@ -7120,7 +7124,7 @@ ia64-*-hpux*)
   rm -rf conftest*
   ;;
 
-x86_64-*kfreebsd*-gnu|x86_64-*linux*|ppc*-*linux*|powerpc*-*linux*| \
+x86_64-*kfreebsd*-gnu|x86_64-*linux*|powerpc*-*linux*| \
 s390*-*linux*|s390*-*tpf*|sparc*-*linux*)
   # Find out which ABI we are using.
   echo 'int i;' > conftest.$ac_ext
@@ -7138,7 +7142,10 @@ s390*-*linux*|s390*-*tpf*|sparc*-*linux*)
 	  x86_64-*linux*)
 	    LD="${LD-ld} -m elf_i386"
 	    ;;
-	  ppc64-*linux*|powerpc64-*linux*)
+	  powerpc64le-*linux*)
+	    LD="${LD-ld} -m elf32lppclinux"
+	    ;;
+	  powerpc64-*linux*)
 	    LD="${LD-ld} -m elf32ppclinux"
 	    ;;
 	  s390x-*linux*)
@@ -7157,7 +7164,10 @@ s390*-*linux*|s390*-*tpf*|sparc*-*linux*)
 	  x86_64-*linux*)
 	    LD="${LD-ld} -m elf_x86_64"
 	    ;;
-	  ppc*-*linux*|powerpc*-*linux*)
+	  powerpcle-*linux*)
+	    LD="${LD-ld} -m elf64lppc"
+	    ;;
+	  powerpc-*linux*)
 	    LD="${LD-ld} -m elf64ppc"
 	    ;;
 	  s390*-*linux*|s390*-*tpf*)
@@ -16933,6 +16943,50 @@ fi
 done
 
 
+
+# Check whether --with-sasl was given.
+if test "${with_sasl+set}" = set; then :
+  withval=$with_sasl; with_sasl="$withval"
+else
+  with_sasl="yes"
+fi
+
+
+	SASLFLAGS=""
+	LIB_SASL=""
+
+	cmu_saved_CPPFLAGS=$CPPFLAGS
+	cmu_saved_LDFLAGS=$LDFLAGS
+	cmu_saved_LIBS=$LIBS
+	if test -d ${with_sasl}; then
+          ac_cv_sasl_where_lib=${with_sasl}/lib
+          ac_cv_sasl_where_inc=${with_sasl}/include
+
+	  SASLFLAGS="-I$ac_cv_sasl_where_inc"
+	  LIB_SASL="-L$ac_cv_sasl_where_lib"
+	  CPPFLAGS="${cmu_saved_CPPFLAGS} -I${ac_cv_sasl_where_inc}"
+	  LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
+	fi
+
+#	AC_CHECK_HEADER(sasl.h,
+#	  AC_CHECK_LIB(sasl, sasl_getprop,
+#                       ac_cv_found_sasl=yes,
+#		       ac_cv_found_sasl=no), ac_cv_found_sasl=no)
+
+#	LIBS="$cmu_saved_LIBS"
+#	LDFLAGS="$cmu_saved_LDFLAGS"
+#	CPPFLAGS="$cmu_saved_CPPFLAGS"
+#	if test "$ac_cv_found_sasl" = yes; then
+    if test "${with_sasl}" != no; then
+      LIB_SASL="$LIB_SASL -lsasl2"
+	else
+	  LIB_SASL=""
+	  SASLFLAGS=""
+	fi
+
+
+
+
 RT_LIB_OPTION=" -lrt"
 DL_LIB_OPTION=" -ldl"
 if test `uname -s` = "Linux"
@@ -16952,7 +17006,7 @@ then
     RT_LIB_OPTION=
 fi
 
-LDFLAGS="$LDFLAGS $PCRE_LDFLAGS"
+LDFLAGS="$LDFLAGS $PCRE_LDFLAGS $LIB_SASL"
 echo "Final LDFLAGS='$LDFLAGS'"
 
 

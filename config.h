@@ -38,7 +38,7 @@
 #define KDELIBSUFF "\"64\""
 
 /* Name of package */
-#define PACKAGE "lscached"
+#define PACKAGE "lsmcd"
 
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT ""
@@ -62,4 +62,4 @@
 #define STDC_HEADERS 1
 
 /* Version number of package */
-#define VERSION "1.1RC1"
+#define VERSION "1.2"

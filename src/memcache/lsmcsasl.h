@@ -19,7 +19,7 @@
 #define LSSHMSASL_H
 
 // define to include sasl interface
-//#define USE_SASL
+#define USE_SASL
 
 // define to verify plaintext password
 #define ENABLE_SASL_PWDB

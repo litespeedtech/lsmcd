@@ -68,16 +68,17 @@ AC_ARG_WITH(sasl,
 	  LDFLAGS="${cmu_saved_LDFLAGS} -L${ac_cv_sasl_where_lib}"
 	fi
 
-	AC_CHECK_HEADER(sasl.h,
-	  AC_CHECK_LIB(sasl, sasl_getprop, 
-                       ac_cv_found_sasl=yes,
-		       ac_cv_found_sasl=no), ac_cv_found_sasl=no)
+#	AC_CHECK_HEADER(sasl.h,
+#	  AC_CHECK_LIB(sasl, sasl_getprop, 
+#                       ac_cv_found_sasl=yes,
+#		       ac_cv_found_sasl=no), ac_cv_found_sasl=no)
 
-	LIBS="$cmu_saved_LIBS"
-	LDFLAGS="$cmu_saved_LDFLAGS"
-	CPPFLAGS="$cmu_saved_CPPFLAGS"
-	if test "$ac_cv_found_sasl" = yes; then
-	  LIB_SASL="$LIB_SASL -lsasl"
+#	LIBS="$cmu_saved_LIBS"
+#	LDFLAGS="$cmu_saved_LDFLAGS"
+#	CPPFLAGS="$cmu_saved_CPPFLAGS"
+#	if test "$ac_cv_found_sasl" = yes; then
+    if test "${with_sasl}" != no; then
+      LIB_SASL="$LIB_SASL -lsasl2"
 	else
 	  LIB_SASL=""
 	  SASLFLAGS=""

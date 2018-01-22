@@ -109,6 +109,7 @@ AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_FUNC_MMAP
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS(malloc bzero dup2 ftruncate getcwd gethostbyaddr gethostbyname gettimeofday inet_ntoa localtime_r memchr memmove memset mkdir munmap select socket strcasecmp strchr strcspn strdup strerror strncasecmp strpbrk strrchr strspn strstr strtol)
+CMU_SASL
 
 RT_LIB_OPTION=" -lrt" 
 DL_LIB_OPTION=" -ldl"
@@ -129,7 +130,7 @@ then
     RT_LIB_OPTION=
 fi
 
-LDFLAGS="$LDFLAGS $PCRE_LDFLAGS"
+LDFLAGS="$LDFLAGS $PCRE_LDFLAGS $LIB_SASL"
 echo "Final LDFLAGS='$LDFLAGS'"
 AC_SUBST([DL_LIB_OPTION])
 AC_SUBST([RT_LIB_OPTION])

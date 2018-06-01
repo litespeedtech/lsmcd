@@ -67,14 +67,7 @@ private:
     LsMcSasl(const LsMcSasl &other);
     LsMcSasl &operator=(const LsMcSasl &other);
 
-    sasl_conn_t *getSaslConn()
-    {
-        m_authenticated = false;
-        return ((m_pSaslConn != NULL)
-            || (sasl_server_new(s_pAppName,
-                NULL, NULL, NULL, NULL, NULL, 0, &m_pSaslConn) == SASL_OK)) ?
-            m_pSaslConn : NULL;
-    }
+    sasl_conn_t *getSaslConn();
 
     void clrSaslConn()
     {

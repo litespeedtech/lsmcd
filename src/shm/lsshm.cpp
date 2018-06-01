@@ -470,6 +470,8 @@ LsShmStatus_t LsShm::openLockShmFile(int mode)
         unlink(m_pFileName);
     if ((m_iFd = ::open(m_pFileName, O_RDWR | O_CREAT, 0640)) < 0)
     {
+        LS_DBG("[SHM] [PID:%d] Initial ERROR %s opening file: %s\n",
+                getpid(), strerror(errno), m_pFileName);
         if ((GPath::createMissingPath(m_pFileName, 0755) < 0)
             || ((m_iFd = ::open(m_pFileName, O_RDWR | O_CREAT, 0640)) < 0))
         {

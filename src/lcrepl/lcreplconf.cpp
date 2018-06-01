@@ -133,6 +133,8 @@ bool LcReplConf::parse(const char *szFile)
     
     if ( (ptr = m_confParser.getConfig("CACHED.SHMDIR")) != NULL ) 
         m_shmDir = ptr;
+    else
+        m_shmDir = "/dev/shm/lsmcd";
 
     if ( (ptr = m_confParser.getConfig("CACHED.SHMNAME")) != NULL)
         m_shmName = ptr;
@@ -149,18 +151,20 @@ bool LcReplConf::parse(const char *szFile)
 
     if ( (ptr = m_confParser.getConfig("CACHED.USECAS")) != NULL)
     {
-        m_useCas = strcmp(ptr, "TRUE") ? false : true;
+        m_useCas = strcasecmp(ptr, "TRUE") ? false : true;
     }
+    LS_DBG_M("About to test USESASL\n");
     
     if ((ptr = m_confParser.getConfig("CACHED.USESASL")) != NULL )
     {
-        if ( !strcmp(ptr, "TRUE"))
+        LS_DBG_M("CACHED.USESASL = %s\n", ptr);
+        if ( !strcasecmp(ptr, "TRUE"))
             m_useSasl = true;        
     }
     
     if ((ptr = m_confParser.getConfig("CACHED.NOMEMFAIL")) != NULL )
     {
-        if ( !strcmp(ptr, "TRUE"))
+        if ( !strcasecmp(ptr, "TRUE"))
             m_noMemFail = true;        
     }
     

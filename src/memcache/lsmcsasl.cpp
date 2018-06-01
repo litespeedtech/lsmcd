@@ -23,6 +23,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sasl/saslplug.h>
+#include <log4cxx/logger.h>
+
 
 const char *LsMcSasl::s_pAppName = "memcached";
 char       *LsMcSasl::s_pSaslPwdb = NULL;
@@ -39,6 +41,8 @@ static int chkSaslPwdb(sasl_conn_t *conn,
                        struct propctx *propctx)
 {
     size_t userlen = strlen(user);
+    LS_DBG_M("chkSaslPwdb\n");
+    
     if ((passlen + userlen) > (PWENT_MAXLEN - 4))
     {
         fprintf(stderr,
@@ -85,6 +89,22 @@ static int chkSaslPwdb(sasl_conn_t *conn,
 #endif  // ENABLE_SASL_PWDB
 
 
+sasl_conn_t *LsMcSasl::getSaslConn()
+{
+    m_authenticated = false;
+    LS_DBG_M("getSaslConn(), m_pSaslConn: %p\n", m_pSaslConn);
+    if (m_pSaslConn)
+        return m_pSaslConn;
+    int result = sasl_server_new(s_pAppName, NULL, NULL, NULL, NULL, NULL, 0, 
+                                 &m_pSaslConn);
+    if (result == SASL_OK)
+        LS_DBG_M("   sasl_server_new says ok, Ptr: %p\n", m_pSaslConn);
+    else
+        LS_DBG_M("   sasl_server_new return code: %d\n", result);
+    return m_pSaslConn;
+}
+
+
 #ifdef HAVE_SASL_CB_GETCONF
 /* The locations we may search for a SASL config file if the user didn't
  * specify one in the environment variable SASL_CONF_PATH
@@ -99,6 +119,7 @@ const char * const locations[] =
 static int getSaslConf(void *context, const char **ppath)
 {
     char *path = getenv("SASL_CONF_PATH");
+    LS_DBG_M("getSASLConf\n");
     if (path == NULL)
     {
         const char * const *pp = locations;
@@ -107,6 +128,7 @@ static int getSaslConf(void *context, const char **ppath)
         {
             snprintf(fname, sizeof(fname), "%s/%s.conf",
                      path, LsMcSasl::s_pAppName);
+            LS_DBG_M("Trying path: %s\n", fname);
             if (access(fname, F_OK) == 0)
                 break;
         }
@@ -120,6 +142,7 @@ static int getSaslConf(void *context, const char **ppath)
     }
     // sasl.h says path must be allocated on heap, freed by library
     *ppath = ((path != NULL) ? strdup(path) : NULL);
+    LS_DBG_M("   SASLConf: %s\n", (*ppath != NULL) ? *ppath : "NULL");
     return (*ppath != NULL) ? SASL_OK : SASL_FAIL;
 }
 #endif  // HAVE_SASL_CB_GETCONF
@@ -139,9 +162,11 @@ static sasl_callback_t saslCallbacks[] =
 
 int LsMcSasl::initSasl()
 {
+    LS_DBG_M("initSASL\n");
 #ifdef ENABLE_SASL_PWDB
     if ((s_pSaslPwdb = getenv("MEMCACHED_SASL_PWDB")) == NULL)
     {
+        LS_DBG_M("MEMCACHED_SASL_PWDB NOT DEFINED!\n");
         if (verbose)
         {
             fprintf(stderr,
@@ -153,13 +178,17 @@ int LsMcSasl::initSasl()
     }
 #endif
 
-    if (sasl_server_init(saslCallbacks, s_pAppName) != SASL_OK)
+    int result;
+    result = sasl_server_init(saslCallbacks, s_pAppName);
+    if (result != SASL_OK)
     {
-        fprintf(stderr, "Error initializing sasl.\n");
+        LS_DBG_M("Error initializing SASL: %d\n", result);
+        fprintf(stderr, "Error initializing sasl: %d.\n", result);
         return -1;
     }
     if (verbose)
         fprintf(stderr, "Initialized SASL.\n");
+    LS_DBG_M("Initialized SASL\n");
     return 0;
 }
 
@@ -168,16 +197,22 @@ int LsMcSasl::listMechs(const char **pResult)
 {
     unsigned int len;
     *pResult = NULL;
-    return ((getSaslConn() == NULL)
-        || (sasl_listmech(m_pSaslConn,
-            NULL, "", " ", "", pResult, &len, NULL) != SASL_OK)) ?
-        -1 : len;
+    LS_DBG_M("SASL listMechs (only PLAIN for now)\n");
+    if (getSaslConn() == NULL)
+        LS_DBG_M("SASLConn is NULL, can't list Mechs\n");
+    else
+    {
+        *pResult = "PLAIN";
+        return 5;
+    }
+    return -1;
 }
 
 
 int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     const char **pResult, unsigned int *pLen)
 {
+    LS_DBG_M("SASL chkAuth\n");
     if (getSaslConn() == NULL)
         return -1;
     int ret;
@@ -187,16 +222,32 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     *pLen = 0;
     ::memcpy(mech, pBuf, mechLen);
     mech[mechLen] = '\0';
+    char sval[valLen + 1];
+    memcpy(sval, pVal, valLen);
+    sval[valLen] = 0;
+    LS_DBG_M("SASL server_start, mech: %s, pval: %s\n", mech, sval);
     ret = sasl_server_start(m_pSaslConn, mech, pVal, valLen, pResult, pLen);
     if (ret == SASL_OK)
     {
+        LS_DBG_M("SASL authenticated!\n");
         m_authenticated = true;
+        char *user = NULL;
+        if (sasl_getprop(m_pSaslConn, SASL_USERNAME, (const void **)&user) == SASL_OK)
+            LS_DBG_M("SASL user: %s\n", user);
+        else
+            LS_DBG_M("ERROR getting username!\n");
         ret = 0;
     }
     else if (ret == SASL_CONTINUE)
+    {
+        LS_DBG_M("SASL_CONTINUE\n");
         ret = 1;
+    }
     else
+    {
+        LS_ERROR("SASL Error in sasl_server_start: %d\n", ret);
         ret = -1;
+    }
     return ret;
 }
 
@@ -204,22 +255,42 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
 int LsMcSasl::chkAuthStep(char *pBuf, unsigned int valLen,
     const char **pResult, unsigned int *pLen)
 {
+    LS_DBG_M("SASL chkAuthStep\n");
     if (getSaslConn() == NULL)
+    {
+        LS_DBG_M("No SASL connection!\n");  
         return -1;
+    }
     int ret;
     const char *pVal = ((valLen > 0) ? pBuf : NULL);
     *pResult = NULL;
     *pLen = 0;
+    char sval[valLen + 1];
+    memcpy(sval, pVal, valLen);
+    sval[valLen] = 0;
+    LS_DBG_M("SASL server_step, pval: %s\n", sval);
     ret = sasl_server_step(m_pSaslConn, pVal, valLen, pResult, pLen);
     if (ret == SASL_OK)
     {
+        LS_DBG_M("SASL authenticated\n");
         m_authenticated = true;
+        char *user = NULL;
+        if (sasl_getprop(m_pSaslConn, SASL_USERNAME, (const void **)&user) == SASL_OK)
+            LS_DBG_M("SASL user: %s\n", user);
+        else
+            LS_DBG_M("ERROR getting username!\n");
         ret = 0;
     }
     else if (ret == SASL_CONTINUE)
+    {
+        LS_DBG_M("SASL_CONTINUE\n");
         ret = 1;
+    }
     else
+    {
+        LS_ERROR("SASL Error in sasl_server_step: %d\n", ret);
         ret = -1;
+    }
     return ret;
 }
 

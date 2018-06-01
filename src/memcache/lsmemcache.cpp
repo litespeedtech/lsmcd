@@ -474,9 +474,11 @@ int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
     if (pParms->m_iMemMaxSz > 0)
         m_mcparms.m_iMemMaxSz = pParms->m_iMemMaxSz;
 #ifdef USE_SASL
+    LS_DBG_M("SASL defined: %s\n",m_mcparms.m_usesasl ? "YES" : "NO");
     setVerbose(getVerbose());
     if (m_mcparms.m_usesasl && (LsMcSasl::initSasl() < 0))
     {
+        LS_DBG_M("initSASL FAILED!\n");
         delete m_pHashMulti;
         m_pHashMulti = NULL;
         return -1;
@@ -2355,8 +2357,14 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
     }
 
 #ifdef USE_SASL
+    LS_DBG_M("SASL test, parm for sasl: %s, isAuthenticated: %s, opcode: %d\n",
+             m_mcparms.m_usesasl ? "YES" : "NO",
+             (m_mcparms.m_usesasl && isAuthenticated(pHdr->opcode)) ? "YES" : "NO",
+             pHdr->opcode);
+
     if (m_mcparms.m_usesasl && !isAuthenticated(pHdr->opcode))
     {
+        LS_DBG_M("SASL: Response is AUTHERROR for code %d!\n", pHdr->opcode);
         binErrRespond(pHdr, MC_BINSTAT_AUTHERROR);
         return 0;   // close connection
     }
@@ -2471,14 +2479,17 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
             break;
 #ifdef USE_SASL
         case MC_BINCMD_SASL_LIST:
+            LS_DBG_M("SASL_LIST command\n");
             doBinSaslList(pHdr);
             break;
         case MC_BINCMD_SASL_AUTH:
         case MC_BINCMD_SASL_STEP:
+            LS_DBG_M("SASL_AUTH or STEP command\n");
             doBinSaslAuth(pHdr);
             break;
 #endif
         default:
+            LS_DBG_M("UNKNOWN command (SASL?): %d\n", cmd);
             binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD);
             break;
     }
@@ -3111,8 +3122,10 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr)
     const char *result;
     int len;
     uint8_t resBuf[sizeof(McBinCmdHdr)];
+    LS_DBG_M("doBinSaslList (hdr size: %d)\n",sizeof(McBinCmdHdr));
     if (!m_mcparms.m_usesasl)
     {
+        LS_DBG_M("SASL turned off\n");
         binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD);
         return;
     }
@@ -3122,6 +3135,7 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr)
         {
             LS_INFO("Failed to list SASL mechanisms.\n");
         }
+        LS_DBG_M("No SASL mechanism\n");
         binErrRespond(pHdr, MC_BINSTAT_AUTHERROR);
     }
     else
@@ -3130,6 +3144,7 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr)
             (uint8_t)0, (uint16_t)0, (uint32_t)len, MC_BINSTAT_SUCCESS, resBuf);
         binRespond(resBuf, sizeof(McBinCmdHdr));
         binRespond((uint8_t *)result, len);
+        LS_DBG_M("SASL enabled and on\n");
     }
     return;
 }
@@ -3141,8 +3156,10 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr)
     const char *result;
     unsigned int len;
     uint8_t resBuf[sizeof(McBinCmdHdr)];
+    LS_DBG_M("doBinSaslAuth\n");
     if (!m_mcparms.m_usesasl)
     {
+        LS_DBG_M("SASL off\n");
         binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD);
         return;
     }
@@ -3150,6 +3167,7 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr)
     unsigned int valLen = (unsigned int)ntohl(pHdr->totbody) - mechLen;
     if (mechLen > SASLMECH_MAXLEN)
     {
+        LS_DBG_M("SASL mech not right\n");
         binErrRespond(pHdr, MC_BINSTAT_EINVAL);
         return;
     }
@@ -3166,6 +3184,7 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr)
     if (ret == 0)
     {
         static const char authok[] = "Authenticated";
+        LS_DBG_M("SASL worked!\n");
         setupBinResHdr(pHdr,
             (uint8_t)0, (uint16_t)0, (uint32_t)(sizeof(authok) - 1),
             MC_BINSTAT_SUCCESS, resBuf);
@@ -3177,6 +3196,7 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr)
     }
     else if (ret > 0)
     {
+        LS_DBG_M("NO SASL for YOU!\n");
         setupBinResHdr(pHdr,
             (uint8_t)0, (uint16_t)0, (uint32_t)len,
             MC_BINSTAT_AUTHCONTINUE, resBuf);
@@ -3186,6 +3206,7 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr)
     }
     else /* if (ret < 0) */
     {
+        LS_DBG_M("SASL really off!\n");
         binErrRespond(pHdr, MC_BINSTAT_AUTHERROR);
         lock();
         statAuthCmd();

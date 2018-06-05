@@ -3,9 +3,14 @@ set -x
 
 PROG="$0"
 EXECUTABLE=lsmcd
-#BASE_DIR=`dirname "$PROG"`
-BASE_DIR=/usr/local/lsmcd
-cd "$BASE_DIR"
+BASE_DIR=`dirname "$PROG"`
+if [ $BASE_DIR == '.' ]; then
+   BASE_DIR=`pwd`
+fi
+cd $BASE_DIR
+cd ..
+BASE_DIR=`pwd`
+#BASE_DIR=/usr/local/lsmcd
 #BASE_DIR=`pwd`
 
 if [ ! -x "$BASE_DIR"/bin/"$EXECUTABLE" ]; then
@@ -29,7 +34,13 @@ else
 fi
 
 PIDFILE=$TMPDIR/lsmcd.pid
-
+if [ ! -d $TMPDIR ]; then
+    mkdir $TMPDIR
+    if [ $? -ne 0 ]; then
+        echo "Temporary directory problem in node.conf"
+        exit 1
+    fi
+fi
 
 RUNNING=0
 SYS_NAME=`uname -s`
@@ -55,8 +66,13 @@ ret=0
 
 start()
 {
+    ret=255
     if [ -f "$PIDFILE" ]; then
         PID=`cat $PIDFILE`
+        if [ $? -ne 0 ]; then
+            ret=255
+            return
+        fi
     else
         PID=""
     fi
@@ -73,7 +89,17 @@ start()
             sleep 1
             NEW_PID=`cat $PIDFILE`
         fi
-        echo "[OK] $DESC: pid=$NEW_PID."
+        if [ $? -ne 0 ]; then
+            ret=255
+            return;
+        fi
+        usleep 10000
+        if [ ! -d /proc/$NEW_PID ]; then
+            echo "[ERROR] Process terminated after starting"
+            ret=255
+        else
+            echo "[OK] $DESC: pid=$NEW_PID."
+        fi
 
     else
         echo "[ERROR] Failed to start $DESC!"
@@ -152,4 +178,5 @@ case "$1" in
         ret=3
         ;;
 esac
+echo "Final rc: " $ret
 exit $ret

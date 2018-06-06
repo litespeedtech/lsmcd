@@ -73,7 +73,7 @@ static void sig_usr1( int sig )
     sEvents |= HS_USR1 ;
 }
 
-#define WAC_VERSION     "1.1"
+#define WAC_VERSION     "1.2"
 
 LsmcdImpl::LsmcdImpl()
         : m_iNoCrashGuard( 0 )

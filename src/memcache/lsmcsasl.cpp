@@ -18,6 +18,8 @@
 #include <memcache/lsmcsasl.h>
 
 #ifdef USE_SASL
+#include <lsr/xxhash.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -195,10 +197,11 @@ int LsMcSasl::initSasl()
 
 int LsMcSasl::listMechs(const char **pResult)
 {
-    unsigned int len;
     *pResult = NULL;
     LS_DBG_M("SASL listMechs (only PLAIN for now)\n");
-    if (getSaslConn() == NULL)
+    if (!m_pSaslConn)
+        m_pSaslConn = getSaslConn();
+    if (!m_pSaslConn)
         LS_DBG_M("SASLConn is NULL, can't list Mechs\n");
     else
     {
@@ -216,7 +219,7 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     if (getSaslConn() == NULL)
         return -1;
     int ret;
-    char mech[SASLMECH_MAXLEN + 1];
+    char mech[mechLen + 1];
     const char *pVal = ((valLen > 0) ? (pBuf + mechLen) : NULL);
     *pResult = NULL;
     *pLen = 0;
@@ -225,15 +228,47 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     char sval[valLen + 1];
     memcpy(sval, pVal, valLen);
     sval[valLen] = 0;
-    LS_DBG_M("SASL server_start, mech: %s, pval: %s\n", mech, sval);
+    LS_DBG_M("SASL server_start, conn: %p mech: %s, pval: %s\n", m_pSaslConn, 
+             mech, sval);
     ret = sasl_server_start(m_pSaslConn, mech, pVal, valLen, pResult, pLen);
+    if (ret == -1)
+    {
+        /* I looked in the cyrus sasl source code and sasl_server_start of -1 
+         * doesn't appear to make any sense.  So I tried this sequence and it
+         * worked, and I'm leaving it in.  Yuch.  */
+        LS_DBG_M("SASL server_start, failed - reinitialize and retry\n");
+        ret = sasl_server_init(saslCallbacks, s_pAppName);
+        if (ret == SASL_OK)
+            ret = sasl_server_new(s_pAppName, NULL, NULL, NULL, NULL, NULL, 0, 
+                                  &m_pSaslConn);
+        else
+            LS_DBG_M("SASL server_init, failed, ret = %d\n", ret);
+                
+        if (ret == SASL_OK)
+            ret = sasl_server_start(m_pSaslConn, mech, pVal, valLen, pResult, 
+                                    pLen);
+        else
+            LS_DBG_M("SASL server_new, failed, ret = %d\n", ret);
+            
+    }
     if (ret == SASL_OK)
     {
         LS_DBG_M("SASL authenticated!\n");
         m_authenticated = true;
+        
         char *user = NULL;
-        if (sasl_getprop(m_pSaslConn, SASL_USERNAME, (const void **)&user) == SASL_OK)
+        if (sasl_getprop(m_pSaslConn, SASL_USERNAME, 
+            (const void **)&user) == SASL_OK)
+        {
             LS_DBG_M("SASL user: %s\n", user);
+            m_pUser = strdup(user);
+            if (!m_pUser)
+            {
+                LS_ERROR("Unable to allocate memory for SASL user: %s\n", user);
+                return -1;
+            }
+            m_hUser = XXH32(m_pUser, valLen, 0);
+        }
         else
             LS_DBG_M("ERROR getting username!\n");
         ret = 0;
@@ -293,6 +328,20 @@ int LsMcSasl::chkAuthStep(char *pBuf, unsigned int valLen,
     }
     return ret;
 }
+
+
+char *LsMcSasl::getUser()
+{
+    return m_pUser;
+}
+
+
+uint32_t LsMcSasl::getUserHash()
+{
+    
+    return m_hUser;
+}
+
 
 #endif  // USE_SASL
 

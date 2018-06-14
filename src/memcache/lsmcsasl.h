@@ -45,6 +45,8 @@ public:
     LsMcSasl()
         : m_pSaslConn(NULL)
         , m_authenticated(false)
+        , m_pUser(NULL)
+        , m_hUser(0)
     {}
     ~LsMcSasl()
     {   clrSaslConn();   }
@@ -55,6 +57,8 @@ public:
                  const char **pResult, unsigned int *pLen);
     int  chkAuthStep(char *pBuf, unsigned int valLen,
                  const char **pResult, unsigned int *pLen);
+    char *getUser();
+    uint32_t getUserHash();
 
     bool isAuthenticated()
     {   return m_authenticated;  }
@@ -76,11 +80,19 @@ private:
             sasl_dispose(&m_pSaslConn);
             m_pSaslConn = NULL;
         }
+        if (m_pUser) 
+        {
+            free(m_pUser); 
+            m_pUser = NULL;
+        }
+        m_hUser = 0;
     }
 
 private:
     sasl_conn_t        *m_pSaslConn;
     bool                m_authenticated;
+    char               *m_pUser;
+    uint32_t            m_hUser; // 4 byte hash of the user name.
 #endif  // USE_SASL
 };
 

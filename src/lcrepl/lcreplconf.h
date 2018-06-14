@@ -44,7 +44,7 @@ public:
     uint32_t     getMaxTidPacket() const;
 
     bool         getUseCas() const;
-    bool         getUseSasl() const;
+    uint8_t      getUseSasl() const;
     bool         getNomemFail() const;
     uint32_t     getValMaxSz() const;
     uint32_t     getMemMaxSz() const;
@@ -80,10 +80,10 @@ private:
     AutoStr             m_user;
     AutoStr             m_group;
     
-    int            *m_pPriorities;
-    char          **m_pShmFiles;
+    int                *m_pPriorities;
+    char              **m_pShmFiles;
    
-    Config           m_confParser;
+    Config              m_confParser;
 };
 
 LcReplConf * getReplConf();

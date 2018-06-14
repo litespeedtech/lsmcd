@@ -26,6 +26,7 @@
 #include <repl/replcontainer.h>
 #include <log4cxx/logger.h>
 #include <shm/lsshmtidmgr.h>
+#include <memcache/lsmemcache.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -51,7 +52,9 @@ bool ReplShmHelper::readShmDBTid (int idx, LcNodeInfo* pStatus)
 
 int ReplShmHelper::tidSetItems(int idx, uint8_t *pData, int dataLen)
 {
-    return LsMemcache::getInstance().tidSetItems(getLsShmHash(idx), pData, dataLen);
+    return LsMemcache::getInstance().tidSetItems(&LsMemcache::getInstance(), 
+                                                 getLsShmHash(idx), pData, 
+                                                 dataLen);
 }
 
 

@@ -35,7 +35,7 @@
 #define DEF_HEARTBEATFREQ   1
 #define DEF_MAXTIDPACKET    1024000
 #define DEF_USECAS          true
-#define DEF_USESASL         false
+#define DEF_USESASL         0
 #define DEF_NOMEMFAIL       false
 #define DEF_VALMAXSZ        0
 #define DEF_MEMMAXSZ        0
@@ -58,7 +58,7 @@ static log4cxx::Logger* initLogger(const char* logFile, const char* logLevel)
 
 LcReplConf::LcReplConf()
     : m_useCas(true)
-    , m_useSasl(false)
+    , m_useSasl(0)
     , m_noMemFail(false)
     , m_sliceCnt(1)
     , m_cachedProcCnt(1)
@@ -159,7 +159,15 @@ bool LcReplConf::parse(const char *szFile)
     {
         LS_DBG_M("CACHED.USESASL = %s\n", ptr);
         if ( !strcasecmp(ptr, "TRUE"))
-            m_useSasl = true;        
+            m_useSasl = 1;        
+    }
+    
+    if ((m_useSasl) && 
+        ((ptr = m_confParser.getConfig("CACHED.SASLUSER")) != NULL ))
+    {
+        LS_DBG_M("CACHED.SASLUSER = %s\n", ptr);
+        if ( !strcasecmp(ptr, "TRUE"))
+            m_useSasl = 3;        
     }
     
     if ((ptr = m_confParser.getConfig("CACHED.NOMEMFAIL")) != NULL )
@@ -305,7 +313,7 @@ bool LcReplConf::getUseCas() const
     return m_useCas;
 }
 
-bool LcReplConf::getUseSasl() const
+uint8_t LcReplConf::getUseSasl() const
 {
     return m_useSasl;
 }

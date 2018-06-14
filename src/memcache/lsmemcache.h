@@ -32,13 +32,15 @@
 
 #define ULL_MAXLEN      24      // maximum buffer size of unsigned long long
 #define STATITEM_MAXLEN 1024    // maximum buffer size for a status item (ascii)
-#define KEY_MAXLEN      250     // maximum key length from memcached
+#define KEY_MAXLEN      246     // maximum key length from memcached (- 4 bytes overhead)
 #define VAL_MAXSIZE    (1024*1024)      // maximum size of value
 #define MEM_MAXSIZE    (64*1024*1024)   // default maximum size of hash memory
 
 #define DSTADDR_MAXLEN (46+6)   // max dest addr + port, see INET6_ADDRSTRLEN
 
 #define LSMC_MAXDELTATIME   60*60*24*30     // seconds in 30 days
+
+extern uint8_t s_user_in_key;
 
 typedef struct
 {
@@ -73,11 +75,13 @@ typedef struct
     uint64_t    auth_errors;
 } LsMcStats;
 
+#define LSMEMCACHE_WITH_SASL_USER   3
+
 typedef struct
 {
     uint8_t     x_verbose;
     uint8_t     x_withcas;
-    uint8_t     x_withsasl;
+    uint8_t     x_withsasl; // 1 is just sasl 3 is sasl + user
     uint8_t     x_notused[1];
     uint8_t     x_dstaddr[DSTADDR_MAXLEN];
     LsMcStats   x_stats;
@@ -219,6 +223,8 @@ typedef union
     } value;
 } McBinResExtra;
 
+#define LSMEMCACHE_SASL_WITH_USER 3
+
 typedef struct LsMcParms_s
 {
     bool            m_usecas;
@@ -234,7 +240,7 @@ typedef struct
     const char *cmd;
     int len;
     int arg;
-    int (*func)(LsMemcache *pThis, ls_strpair_t *pInput, int arg);
+    int (*func)(LsMemcache *pThis, int arg);
 } LsMcCmdFunc;
 
 
@@ -244,8 +250,9 @@ class LsMemcache : public TSingleton<LsMemcache>
 {
     friend class TSingleton<LsMemcache>;
 public:
-    ~LsMemcache() {}
+    ~LsMemcache();
 
+    void freeKey();
     int  initMcShm(int iCnt, const char **ppPathName,
         const char *pHashName, LsMcParms *pParms);
     int  initMcShm(const char *pDirName, const char *pShmName,
@@ -265,6 +272,8 @@ public:
     void setConn(MemcacheConn *pConn)
     {   m_pConn = pConn;  }
 
+    bool setDiskKey();
+    bool resetDiskKey();
     int  processCmd(char *pStr, int iLen);
     int  doDataUpdate(uint8_t *pBuf);
     McBinStat  chkMemSz(int arg);
@@ -317,7 +326,8 @@ public:
 
     static int tidGetNxtItems(LsShmHash *pHash, uint64_t *pTidLast,
                               uint8_t *pBuf, int iBufSz);
-    static int tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufsz);
+    static int tidSetItems(LsMemcache *pThis, LsShmHash *pHash, uint8_t *pBuf, 
+                           int iBufsz);
 
 #ifdef USE_SASL
     inline bool isAuthenticated(uint8_t cmd)
@@ -326,7 +336,7 @@ public:
             || (cmd == MC_BINCMD_SASL_AUTH)
             || (cmd == MC_BINCMD_SASL_STEP)
             || (cmd == MC_BINCMD_VERSION)
-            || m_pConn->GetSasl()->isAuthenticated());
+            || ((m_pConn) && (m_pConn->GetSasl()) && m_pConn->GetSasl()->isAuthenticated()));
     }
 #endif
 
@@ -388,7 +398,7 @@ private:
     LsMemcache &operator=(const LsMemcache &other);
 
 private:
-    
+     
     static int  multiInitFunc(LsMcHashSlice *pSlice, void *pArg);
     static int  multiConnFunc(LsMcHashSlice *pSlice, void *pArg);
     static int  multiMultiplexerFunc(LsMcHashSlice *pSlice, void *pArg);
@@ -410,12 +420,15 @@ private:
                              LsMcTidPkt *pPkt, int totSz);
     static void del2tidPack(uint64_t *pDel, uint64_t *pTid, LsMcTidPkt *pPkt,
                             int totSz);
-    static int  setTidItem(LsShmHash *pHash, LsMcTidPkt *pPkt);
-    static int  delTidItem(LsShmHash *pHash, LsMcTidPkt *pPkt, uint8_t *pBuf,
-                           int iBufsz);
+    static int  setTidItem(LsMemcache *pThis, LsShmHash *pHash, LsMcTidPkt *pPkt);
+    static int  delTidItem(LsMemcache *pThis, LsShmHash *pHash, LsMcTidPkt *pPkt, 
+                           uint8_t *pBuf, int iBufsz);
     static int tidAddPktSize(LsShmHElem *pElem);
     static int tidDelPktSize();
 
+    bool     keyDiskWire()
+    { return ((m_parmsKeyDisk.ptr) && (m_parmsKeyDisk.ptr != m_parmsKeyWire.ptr)); }
+    
     void     notifyChange();
     void     ackNoreply();
     void     respond(const char *str);
@@ -443,36 +456,21 @@ private:
     LsMcCmdFunc *getCmdFunction(const char *pCmd, int len);
     void         dataItemUpdate(uint8_t *pBuf);
 
-    static int   doCmdTest1(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdTest2(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdPrintTids(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdGet(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdUpdate(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdArithmetic(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdDelete(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdTouch(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdStats(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdFlush(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdVersion(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdQuit(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdVerbosity(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   doCmdClear(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
-    static int   notImplemented(LsMemcache *pThis,
-                            ls_strpair_t *pInput, int arg);
+    static int   doCmdTest1(LsMemcache *pThis, int arg);
+    static int   doCmdTest2(LsMemcache *pThis, int arg);
+    static int   doCmdPrintTids(LsMemcache *pThis, int arg);
+    static int   doCmdGet(LsMemcache *pThis, int arg);
+    static int   doCmdUpdate(LsMemcache *pThis, int arg);
+    static int   doCmdArithmetic(LsMemcache *pThis, int arg);
+    static int   doCmdDelete(LsMemcache *pThis, int arg);
+    static int   doCmdTouch(LsMemcache *pThis, int arg);
+    static int   doCmdStats(LsMemcache *pThis, int arg);
+    static int   doCmdFlush(LsMemcache *pThis, int arg);
+    static int   doCmdVersion(LsMemcache *pThis, int arg);
+    static int   doCmdQuit(LsMemcache *pThis, int arg);
+    static int   doCmdVerbosity(LsMemcache *pThis, int arg);
+    static int   doCmdClear(LsMemcache *pThis, int arg);
+    static int   notImplemented(LsMemcache *pThis, int arg);
 
     uint8_t  setupNoreplyCmd(uint8_t cmd);
     uint8_t *setupBinCmd(McBinCmdHdr *pHdr, uint8_t cmd, LsMcUpdOpt *pOpt);
@@ -509,13 +507,7 @@ private:
     static bool  myStrtoull(const char *pStr, uint64_t *pVal);
     void     clearKeyList();
 
-    bool     chkEndToken(char *pStr, char *pStrEnd)
-    {
-        char *tokPtr;
-        size_t tokLen;
-        advToken(pStr, pStrEnd, &tokPtr, &tokLen);
-        return (tokLen <= 0);
-    }
+    bool     chkEndToken(char *pStr, char *pStrEnd);
 
     static void  setItemExptime(LsMcDataItem *pItem, uint32_t exptime)
     {
@@ -524,33 +516,11 @@ private:
         pItem->x_exptime = (time_t)exptime;
     }
 
-    int   parmAdjLen(int valLen)
-    {
-        return (m_mcparms.m_usecas ?
-            (valLen + sizeof(m_item) + sizeof(m_item.x_data->withcas.cas)) :
-            (valLen + sizeof(m_item)));
-    }
+    int   parmAdjLen(int valLen);
 
-    LsMcHashSlice *setSlice(const void *pKey, int iLen)
-    {
-        m_hkey = m_pHashMulti->getHKey(pKey, iLen);
-        m_pCurSlice = m_pHashMulti->key2hashSlice(m_hkey);
-        m_pHash = m_pCurSlice->m_pHash;
-        m_iHdrOff = m_pCurSlice->m_iHdrOff;
-        return m_pCurSlice;
-    }
+    LsMcHashSlice *setSlice();
 
-    LsMcHashSlice *canProcessNow(const void *pKey, int iLen)
-    {
-        LsMcHashSlice *pSlice = setSlice(pKey, iLen);
-        if ((!pSlice->m_pHash->isTidMaster())
-            && (pSlice->m_pConn->GetConnFlags() & CS_REMBUSY))
-        {
-            putWaitQ(m_pConn);
-            return NULL;
-        }
-        return pSlice;
-    }
+    LsMcHashSlice *canProcessNow(const void *pKey, int iLen);
 
     bool     isSliceRemote(LsMcHashSlice *pSlice);
     bool     fwdToRemote(LsMcHashSlice *pSlice, char *pNxt);
@@ -658,21 +628,31 @@ private:
         if (m_iHdrOff != 0)
             ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.auth_errors;
     }
-    LsShmHash::iteroffset doHashUpdate(ls_strpair_s *m_parms, LsMcUpdOpt *updOpt);
-    LsShmHash::iteroffset doHashInsert(ls_strpair_s *m_parms, LsMcUpdOpt *updOpt);
+    LsShmHash::iteroffset doHashUpdate(LsMcUpdOpt *updOpt);
+    LsShmHash::iteroffset doHashInsert(LsMcUpdOpt *updOpt);
 
     static LsMcCmdFunc s_LsMcCmdFuncs[];
 
+    ls_strpair_t *mkDiskStrPair(ls_strpair_t *pair)
+    {
+        pair->key = m_parmsKeyDisk;
+        pair->val = m_parmsData;
+        return pair;
+    }
+    
     LsShmHash              *m_pHash;
-    LsMcHashSlice         *m_pCurSlice;
-    LsMcHashMulti         *m_pHashMulti;
+    LsMcHashSlice          *m_pCurSlice;
+    LsMcHashMulti          *m_pHashMulti;
     MemcacheConn           *m_pConn;
     MemcacheConn           *m_pWaitQ;
     MemcacheConn           *m_pWaitTail;
     char                   *m_pStrt;    // start of ascii command buffer
     LsShmOffset_t           m_iHdrOff;
-    ls_strpair_t            m_parms;
-    LsShmHKey               m_hkey;
+    ls_str_t                m_parmsKeyWire;
+    ls_str_t                m_parmsKeyDisk;
+    ls_str_t                m_parmsData;
+    LsShmHKey               m_KeyDiskHash;     
+    bool                    m_KeyDiskMalloc;
     LsMcDataItem            m_item;     // cmd in progress
     LsShmHash::iteroffset   m_iterOff;  // cmd in progress
     uint64_t                m_rescas;   // cmd in progress

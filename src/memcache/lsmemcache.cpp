@@ -143,9 +143,11 @@ void LsMemcache::freeKey()
     {
         LS_DBG_M("LSMemcache Destructor - free disk ptr\n");
         free(m_parmsKeyDisk.ptr);
-        m_parmsKeyDisk.ptr = NULL;
         m_KeyDiskMalloc = false;
     }
+    m_parmsKeyDisk.ptr = NULL;
+    m_parmsKeyDisk.len = 0;    
+    m_KeyDiskHash = 0;
 }
 
 
@@ -511,7 +513,10 @@ int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
         return -1;
     }
     if (m_mcparms.m_usesasl == LSMEMCACHE_WITH_SASL_USER)
+    {
+        LS_DBG_M("SASL USER IN KEY!\n");
         s_user_in_key = 1;
+    }
 #endif
 
     return 0;
@@ -726,12 +731,47 @@ void LsMemcache::onTimer()
 
 bool LsMemcache::setDiskKey()
 {
-    freeKey();
-    if ((s_user_in_key) && (m_pConn) && (m_pConn->GetSasl()) && 
-        (m_pConn->GetSasl()->getUser()) && (!m_parmsKeyDisk.ptr) &&
-        (!m_KeyDiskMalloc))
+    LS_DBG_M("setDiskKey, user in key: %s\n", s_user_in_key ? "YES" : "NO");
+    if (m_parmsKeyWire.len == 0)
     {
-        m_parmsKeyDisk.ptr = (char *)malloc(m_parmsKeyWire.len + 4);
+        LS_DBG_M("setDiskKey, NO key\n");
+        freeKey();
+        return true;
+    }
+    if ((m_KeyDiskHash) && (m_parmsKeyDisk.ptr) && (m_parmsKeyWire.ptr))
+    {
+        // Decide now if we like it
+        if (!s_user_in_key) 
+        {
+            if (m_parmsKeyDisk.ptr == m_parmsKeyWire.ptr)
+            {
+                LS_DBG_M("setDiskKey DiskKey ALREADY == WireKey\n");
+                return true;
+            }
+        }
+        else if ((m_parmsKeyDisk.len == m_parmsKeyWire.len + 4) &&
+                 (!(memcmp(m_parmsKeyDisk.ptr, m_parmsKeyWire.ptr, m_parmsKeyWire.len))))
+        {
+            LS_DBG_M("setDiskKey DiskKey ALREADY == WireKey (allowing for user)\n");
+            return true;
+        }
+    }
+    
+    freeKey();
+    if (s_user_in_key)
+        LS_DBG_M("Other parameters: Connection: %s, SASL defined: %s, SASL user"
+                 ": %s, KeyMalloced: %s", m_pConn ? "YES" : "NO",
+                 (m_pConn && m_pConn->GetSasl()) ? "YES" : "NO",
+                 (m_pConn && m_pConn->GetSasl() && m_pConn->GetSasl()->getUser()) ?
+                 m_pConn->GetSasl()->getUser() : "Can't do it",
+                 m_KeyDiskMalloc ? "YES" : "NO");
+    
+    if ((s_user_in_key) && (m_pConn) && (m_pConn->GetSasl()) && 
+        (m_pConn->GetSasl()->getUser()) && (!m_KeyDiskMalloc))
+    {
+        LS_DBG_M("setDiskKey, Allocating Disk key with user: %s, %ld bytes\n", 
+                 m_pConn->GetSasl()->getUser(), m_parmsKeyWire.len + 4);
+        m_parmsKeyDisk.ptr = (char *)malloc(m_parmsKeyWire.len + 5);
         if (!m_parmsKeyDisk.ptr) 
         {
             const char *errorStr = "Insufficent memory";
@@ -741,26 +781,29 @@ bool LsMemcache::setDiskKey()
         m_KeyDiskMalloc = true;
         m_parmsKeyDisk.len = m_parmsKeyWire.len + 4;
         uint32_t userHash = m_pConn->GetSasl()->getUserHash();
-        LS_DBG_M("UPDATE with USER 0x%x\n", userHash);
+        LS_DBG_M("UPDATE with user hash 0x%x\n", userHash);
         
         memcpy(m_parmsKeyDisk.ptr, &userHash, 4);
         memcpy(m_parmsKeyDisk.ptr + 4, m_parmsKeyWire.ptr, m_parmsKeyWire.len);
+        m_parmsKeyDisk.ptr[m_parmsKeyDisk.len] = 0; // Let's NULL terminate it.
     }
     else 
     {
-        LS_DBG_M("setDiskKey %ld bytes\n", m_parmsKeyWire.len);
+        LS_DBG_M("setDiskKey == WireKey %ld bytes\n", m_parmsKeyWire.len);
         m_parmsKeyDisk.ptr = m_parmsKeyWire.ptr;
         m_parmsKeyDisk.len = m_parmsKeyWire.len;
     }
+    m_KeyDiskHash = m_pHashMulti->getHKey(m_parmsKeyDisk.ptr, m_parmsKeyDisk.len);
+    
     return true;
 }
 
 
 bool LsMemcache::resetDiskKey() // Call after the wire key may have changed.
 {
+    m_KeyDiskHash = 0;
     if (!(setDiskKey()))
         return false;
-    m_KeyDiskHash = m_pHashMulti->getHKey(m_parmsKeyDisk.ptr, m_parmsKeyDisk.len);
     return true;
 }
 
@@ -784,6 +827,13 @@ int LsMemcache::processCmd(char *pStr, int iLen)
     if (getVerbose() > 1)
     {
         LS_INFO("<%d %s\n", m_pConn->getfd(), pStr);
+    }
+    if ((s_user_in_key) ||
+        ((m_pConn) && (m_pConn->GetSasl())))
+    {
+        LS_ERROR("TELNET COMMANDS NOT SUPPORTED WITH SASL ENABLED\n");
+        respond("TELNET COMMANDS NOT SUPPORTED WITH SASL ENABLED\n");
+        return -1;
     }
 
     m_pStrt = pStr;     // save for possible fwd
@@ -994,11 +1044,16 @@ void LsMemcache::dataItemUpdate(uint8_t *pBuf)
     int valLen;
     uint8_t *valPtr;
     LsShmHElem *iter = m_pHash->offset2iterator(m_iterOff);
-    LsMcDataItem *pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, &valLen);
+    LsMcDataItem *pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, 
+                                      &valLen);
     char chData[valLen + 1];
     memcpy(chData, valPtr, valLen);
     chData[valLen] = 0;
-    LS_DBG_M("dataItemUpdate, valLen: %d, valPtr: %p, val: %s\n", valLen, valPtr, chData);
+    char chDataNew[valLen + 1];
+    memcpy(chDataNew, pBuf, valLen);
+    chDataNew[valLen] = 0;
+    LS_DBG_M("dataItemUpdate, valLen: %d, valPtr: %p, current data: %s, new: %s\n", 
+             valLen, valPtr, chData, chDataNew);
     
     if (m_retcode == UPDRET_APPEND)
     {
@@ -1009,7 +1064,7 @@ void LsMemcache::dataItemUpdate(uint8_t *pBuf)
         valLen = m_parmsData.len;
     else
     {
-        LS_DBG_M("   updating\n");
+        LS_DBG_M("   updating (value above)\n");
         if ((m_item.x_exptime != 0)
           && (m_item.x_exptime <= LSMC_MAXDELTATIME))
         {
@@ -2441,6 +2496,7 @@ int LsMemcache::doCmdVersion(LsMemcache *pThis, int arg)
 
 int LsMemcache::doCmdQuit(LsMemcache *pThis, int arg)
 {
+    pThis->resetDiskKey();
     if (!pThis->chkEndToken(pThis->m_parmsKeyWire.ptr,
                             pThis->m_parmsKeyWire.ptr + pThis->m_parmsKeyWire.len))
     {
@@ -2598,10 +2654,12 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
             // no break
         case MC_BINCMD_GET:
         case MC_BINCMD_GETK:
+            LS_DBG_M("Binary GET command\n");
             doBinGet(pHdr, cmd, doTouch);
             break;
         case MC_BINCMD_SET:
             // locked in setup
+            LS_DBG_M("Binary SET command\n");
             statSetCmd();
             ls_strpair_t pair;
             m_iterOff = m_pHash->setIteratorWithKey(m_KeyDiskHash, 
@@ -2610,6 +2668,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
             break;
         case MC_BINCMD_ADD:
             // locked in setup
+            LS_DBG_M("Binary ADD command\n");
             statSetCmd();
             m_iterOff = doHashInsert(&updOpt);
             m_retcode = updOpt.m_iRetcode;
@@ -2617,41 +2676,61 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
             break;
         case MC_BINCMD_REPLACE:
             // locked in setup
+            LS_DBG_M("Binary REPLACE command\n");
             statSetCmd();
             m_iterOff = doHashUpdate(&updOpt);
             m_retcode = updOpt.m_iRetcode;
             if (pHdr->cas != 0)
             {
                 if (m_retcode == UPDRET_NOTFOUND)
+                {
+                    LS_DBG_M("Key not found\n");
                     statCasMiss();
+                }
                 else if (m_retcode == UPDRET_CASFAIL)
+                {
+                    LS_DBG_M("CAS fail\n");
                     statCasBad();
+                }
                 else
+                {
+                    LS_DBG_M("REPLACE ok to try");
                     statCasHit();
+                }
             }
             doBinDataUpdate(pVal, pHdr);
             break;
         case MC_BINCMD_DELETE:
+            LS_DBG_M("Binary DELETE command\n");
             doBinDelete(pHdr);
             break;
         case MC_BINCMD_INCREMENT:
         case MC_BINCMD_DECREMENT:
+            LS_DBG_M("Binary %s command\n",
+                     (cmd == MC_BINCMD_INCREMENT) ? "INCR" : "DECR");
             doBinArithmetic(pHdr, cmd, &updOpt);
             break;
         case MC_BINCMD_QUIT:
+            LS_DBG_M("Binary QUIT command\n");
+            resetDiskKey();
             binOkRespond(pHdr);
             return 0;   // close connection
         case MC_BINCMD_FLUSH:
+            LS_DBG_M("Binary FLUSH command\n");
             doBinFlush(pHdr);
             break;
         case MC_BINCMD_NOOP:
+            LS_DBG_M("Binary NOOP command\n");
             binOkRespond(pHdr);
             break;
         case MC_BINCMD_VERSION:
+            LS_DBG_M("Binary VERSION command\n");
             doBinVersion(pHdr);
             break;
         case MC_BINCMD_APPEND:
         case MC_BINCMD_PREPEND:
+            LS_DBG_M("Binary %s command\n", 
+                     (cmd == MC_BINCMD_APPEND) ? "APPEND" : "PREPEND");
             // locked in setup
             statSetCmd();
             m_iterOff = doHashUpdate(&updOpt);
@@ -2661,9 +2740,11 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
             doBinDataUpdate(pVal, pHdr);
             break;
         case MC_BINCMD_STAT:
+            LS_DBG_M("Binary STAT command\n");
             doBinStats(pHdr);
             break;
         case MC_BINCMD_VERBOSITY:
+            LS_DBG_M("Binary VERBOSITY command\n");
         {
             McBinReqExtra *pReqX = (McBinReqExtra *)(pHdr + 1);
             setVerbose((uint8_t)ntohl(pReqX->verbosity.level));
@@ -2672,7 +2753,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen)
             break;
 #ifdef USE_SASL
         case MC_BINCMD_SASL_LIST:
-            LS_DBG_M("SASL_LIST command\n");
+            LS_DBG_M("Binary SASL_LIST command\n");
             doBinSaslList(pHdr);
             break;
         case MC_BINCMD_SASL_AUTH:
@@ -2782,6 +2863,8 @@ uint8_t *LsMemcache::setupBinCmd(
             setSlice();
         }
         pHdr->cas = (uint64_t)ntohll(pHdr->cas);
+        // No data
+        m_parmsData.len = 0;
     }
     else
     {
@@ -2919,7 +3002,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch)
 {
     uint8_t resBuf[sizeof(McBinCmdHdr)+sizeof(McBinResExtra)];
     int keyLen = ((cmd == MC_BINCMD_GATK) || (cmd == MC_BINCMD_GETK)) ?
-        m_parmsKeyDisk.len : 0;
+        m_parmsKeyWire.len : 0;
     if (getVerbose() > 1)
     {
         LS_INFO("<%d %s %.*s\n", m_pConn->getfd(), (doTouch ? "TOUCH" : "GET"),
@@ -2972,7 +3055,10 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch)
             setupBinResHdr(pHdr,
                 (uint8_t)extra, (uint16_t)keyLen, (uint32_t)extra + keyLen + valLen,
                 MC_BINSTAT_SUCCESS, resBuf);
-            LS_DBG_M("doBinGet, Responding valLen: %d\n", valLen);
+            char valData[valLen + 1];
+            memcpy(valData, valPtr, valLen);
+            valData[valLen] = 0;
+            LS_DBG_M("doBinGet, Responding valLen: %d, val: %s\n", valLen, valData);
             binRespond(resBuf, sizeof(McBinCmdHdr) + extra);
             if (keyLen != 0)
                 binRespond((uint8_t *)m_parmsKeyWire.ptr, m_parmsKeyWire.len);

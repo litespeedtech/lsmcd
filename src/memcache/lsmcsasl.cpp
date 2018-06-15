@@ -260,14 +260,20 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
         if (sasl_getprop(m_pSaslConn, SASL_USERNAME, 
             (const void **)&user) == SASL_OK)
         {
-            LS_DBG_M("SASL user: %s\n", user);
+            if (m_pUser)
+            {
+                free(m_pUser);
+                m_pUser = NULL;
+                m_hUser = 0;
+            }
             m_pUser = strdup(user);
             if (!m_pUser)
             {
                 LS_ERROR("Unable to allocate memory for SASL user: %s\n", user);
                 return -1;
             }
-            m_hUser = XXH32(m_pUser, valLen, 0);
+            m_hUser = XXH32(m_pUser, strlen(m_pUser), 0);
+            LS_DBG_M("SASL user: %s, hash: 0x%x\n", m_pUser, m_hUser);
         }
         else
             LS_DBG_M("ERROR getting username!\n");

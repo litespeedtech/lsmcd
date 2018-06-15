@@ -228,7 +228,7 @@ typedef union
 typedef struct LsMcParms_s
 {
     bool            m_usecas;
-    bool            m_usesasl;
+    uint8_t         m_usesasl;
     bool            m_nomemfail;    // fail if nomem (rather than purge)
     uint32_t        m_iValMaxSz;
     LsShmXSize_t    m_iMemMaxSz;

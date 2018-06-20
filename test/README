@@ -1,0 +1,30 @@
+memcapable is a client utility which is part of the libmemcached project.
+However, it was not written for SASL!  What a HUGE limitation.  So I modified
+it but was too lazy to include as part of libmemcached (who wants to fight
+the world).  So anyway, it's here and you might want to use it if you need
+to test lsmcd with SASL.  
+
+To compile it:
+   - Install libmemcached from distribution.  
+   - cd into the clients directory and delete the existing memcapable.cc.
+   - Set a symbolic link to the memcapable.cc here.
+   - Compile the system as normal which will place a memcapable executable
+     in the clients directory
+     
+To use it with SASL you need to export the environment variables SASL_USERNAME
+and SASL_PASSWORD to the user and password you wish validated.  The program
+works consistently with lsmcd.  With the distributed memcached some tests pass
+and some do not.  I believe these are bugs in memcached but am unwilling to 
+debug their product.  Of course if this turns out not to be true, we will need
+to investigate further.
+
+A note about SASL support with memcached.  Once it is enabled the telnet (ASCII)
+support stops working.  memcached simply does crazy things.  lsmcd reports a
+real error so if someone does it inadvertently they'll know why.  This 
+memcapable.cc automatically disables ALL ASCII functions when a SASL parameter 
+is set so there will be no accidental use of commands that will fail.
+
+Please blame Bob Perper for this whole nonsense.  When updating lsmcd's SASL
+support as well as adding SASL user key/data separation by keyword specification
+I needed to retest the entire package.  This became the best mechanism as it
+already tested everything, just didn't do SASL.

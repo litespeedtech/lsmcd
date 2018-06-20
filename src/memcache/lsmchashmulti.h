@@ -20,18 +20,66 @@
 
 #include <lsdef.h>
 #include <shm/lsshmhash.h>
+#include <lsr/ls_hash.h>
 
+class LsShm;
+class LsShmPool;
+class LsMemcache;
+
+class LsMcHashByUser
+{
+public:
+    LsMcHashByUser(); 
+    ~LsMcHashByUser();
+    bool init(
+        LsMemcache      *pMemcache,
+        LsShm           *pShm,
+        LsShmPool       *pGPool,
+        const char      *pHashname,
+        LsShmHasher_fn   fnHasher, 
+        LsShmValComp_fn  fnValComp,
+        int              mode,
+        bool             usesasl,
+        bool             anonymous,
+        bool             byUser);
+    void del();
+        
+    LsShmHash  *getHash(char *user); // user can be NULL if !byUser or anon.
+    LsMemcache *getMemcache()
+    { return m_pMemcache; }
+    
+private:
+    LsMcHashByUser(const LsMcHashByUser &other);
+    LsMcHashByUser &operator=(const LsMcHashByUser &other);
+    
+    int hash_delete_fn(const void *pKey, void *pData);
+    LsShmHash *getDataFromHashTableData(const char *keydata)
+    { return (LsShmHash *)(keydata + strlen(keydata) + 1); }
+    bool insert_user_entry(const char *user, LsShmHash *hash);
+    
+    LsShm           *m_pShm;
+    LsShmPool       *m_pGPool;    
+    const char      *m_pHashname;
+    LsShmHasher_fn   m_fnHasher;
+    LsShmValComp_fn  m_fnValComp;
+    int              m_mode;
+    bool             m_usesasl;
+    bool             m_anonymous;
+    bool             m_byUser;
+    ls_hash_t       *m_userHashes;
+    LsShmHash       *m_pHashDefault;
+    LsMemcache      *m_pMemcache;
+};
 
 class MemcacheConn;
 class Multiplexer;
 typedef struct
 {
-    uint8_t         m_idx;    
-    LsShmHash      *m_pHash;
-    LsShmOffset_t   m_iHdrOff;
-    MemcacheConn   *m_pConn;
+    uint8_t          m_idx;    
+    LsMcHashByUser   m_hashByUser;
+    LsShmOffset_t    m_iHdrOff;
+    MemcacheConn    *m_pConn;
 } LsMcHashSlice;
-
 
 class LsMcHashMulti
 {
@@ -39,9 +87,10 @@ public:
     LsMcHashMulti();
     ~LsMcHashMulti();
 
-    int  init(int iCnt, const char **ppPathName, const char *pHashName,
-            LsShmHasher_fn fnHashKey, LsShmValComp_fn fnValComp,
-            int mode);
+    int  init(LsMemcache *memcache, int iCnt, const char **ppPathName, 
+              const char *pHashName, LsShmHasher_fn fnHashKey, 
+              LsShmValComp_fn fnValComp, int mode, bool usesasl, bool anonymous, 
+              bool byUser);
 
     int  foreach(int (*func)(LsMcHashSlice *pSlice, void *pArg), void *pArg);
 
@@ -62,6 +111,9 @@ public:
 
     void setMultiplexer(Multiplexer *pMultiplexer)
     {   m_pMultiplexer = pMultiplexer;  }
+    
+    LsMemcache *getMemcache()
+    {   return m_pMemcache; }
 
 //     LOG4CXX_NS::Logger *getLogger()
 //     {   return m_pLastSlice->m_pHash->getLogger();  }
@@ -80,9 +132,10 @@ private:
     int             m_iCnt;
     LsShmHasher_fn  m_fnHashKey;
     uint32_t        m_iLastHashKey;
-    LsMcHashSlice *m_pSlices;
-    LsMcHashSlice *m_pLastSlice;
+    LsMcHashSlice  *m_pSlices;
+    LsMcHashSlice  *m_pLastSlice;
     Multiplexer    *m_pMultiplexer;
+    LsMemcache     *m_pMemcache;
 };
 
 #endif // LSSHMHASHMULTI_H

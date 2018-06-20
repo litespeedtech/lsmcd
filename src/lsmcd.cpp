@@ -602,6 +602,8 @@ void Lsmcd::setMcParms(LsMcParms *pParms)
     //LcReplConf& replConf = LcReplConf::getInstance();
     pParms->m_usecas    = getReplConf()->getUseCas();
     pParms->m_usesasl   = getReplConf()->getUseSasl();
+    pParms->m_anonymous = getReplConf()->getAnonymous();
+    pParms->m_byUser    = getReplConf()->getByUser();
     pParms->m_nomemfail = getReplConf()->getNomemFail();
     pParms->m_iValMaxSz = getReplConf()->getValMaxSz();
     pParms->m_iMemMaxSz = getReplConf()->getMemMaxSz();

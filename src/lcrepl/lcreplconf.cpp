@@ -39,6 +39,8 @@
 #define DEF_NOMEMFAIL       false
 #define DEF_VALMAXSZ        0
 #define DEF_MEMMAXSZ        0
+#define DEF_ANONYMOUS       false
+#define DEF_BYUSER          false
 
 static log4cxx::Logger* initLogger(const char* logFile, const char* logLevel)
 {
@@ -64,9 +66,10 @@ LcReplConf::LcReplConf()
     , m_cachedProcCnt(1)
     , m_user("nobody")
     , m_group("nobody")
+    , m_anonymous(false)
+    , m_byUser(false)
     , m_pPriorities(NULL)
     , m_pShmFiles(NULL)
-   
 {}
 
 LcReplConf::~LcReplConf()
@@ -162,6 +165,18 @@ bool LcReplConf::parse(const char *szFile)
             m_useSasl = true;        
     }
     
+    if ((ptr = m_confParser.getConfig("CACHED.ANONYMOUS")) != NULL )
+    {
+        if ( !strcasecmp(ptr, "TRUE"))
+            m_anonymous = true;        
+    }
+    
+    if ((ptr = m_confParser.getConfig("CACHED.DATABYUSER")) != NULL )
+    {
+        if ( !strcasecmp(ptr, "TRUE"))
+            m_byUser = true;        
+    }
+    
     if ((ptr = m_confParser.getConfig("CACHED.NOMEMFAIL")) != NULL )
     {
         if ( !strcasecmp(ptr, "TRUE"))
@@ -174,6 +189,7 @@ bool LcReplConf::parse(const char *szFile)
     if ((ptr = m_confParser.getConfig("Group")) != NULL )
         m_group = ptr;
 
+    
     ptr = m_confParser.getConfig("CachedProcCnt");
     if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
         m_cachedProcCnt = v;
@@ -366,6 +382,16 @@ const char * LcReplConf::getUser()
 const char * LcReplConf::getGroup()
 {
     return m_group.c_str();
+}
+
+bool LcReplConf::getAnonymous()
+{
+    return m_anonymous;
+}
+
+bool LcReplConf::getByUser()
+{
+    return m_byUser;
 }
 
 uint16_t LcReplConf::getCachedProcCnt() const 

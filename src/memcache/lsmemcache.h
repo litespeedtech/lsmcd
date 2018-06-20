@@ -223,6 +223,8 @@ typedef struct LsMcParms_s
 {
     bool            m_usecas;
     bool            m_usesasl;
+    bool            m_anonymous;
+    bool            m_byUser;
     bool            m_nomemfail;    // fail if nomem (rather than purge)
     uint32_t        m_iValMaxSz;
     LsShmXSize_t    m_iMemMaxSz;
@@ -244,8 +246,11 @@ class LsMemcache : public TSingleton<LsMemcache>
 {
     friend class TSingleton<LsMemcache>;
 public:
-    ~LsMemcache() {}
+    ~LsMemcache() { if (m_pUser) free(m_pUser); }
 
+    char *setUser(const char *user);
+    char *getUser();
+    
     int  initMcShm(int iCnt, const char **ppPathName,
         const char *pHashName, LsMcParms *pParms);
     int  initMcShm(const char *pDirName, const char *pShmName,
@@ -253,13 +258,13 @@ public:
     int  initMcEvents();
     int  reinitMcConn(Multiplexer *pMultiplexer);
 
-    LsShmHash *getHash() const
-    {   return m_pHash;  }
+    LsShmHash *getHash() 
+    {   return m_pCurSlice->m_hashByUser.getHash(getUser());  }
 
-    LsShmHash *getHash(int indx) const
+    LsShmHash *getHash(int indx) 
     {
         return ((m_pHashMulti != NULL) ?
-            m_pHashMulti->indx2hashSlice(indx)->m_pHash : NULL);
+            m_pHashMulti->indx2hashSlice(indx)->m_hashByUser.getHash(getUser()) : NULL);
     }
     void DEBUG();
     void setConn(MemcacheConn *pConn)
@@ -336,7 +341,7 @@ public:
     uint8_t  getVerbose()
     {
         return ((m_iHdrOff != 0) ?
-            ((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_verbose: 0);
+            ((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_verbose: 0);
     }
 
     void     setVerbose(uint8_t iLevel)
@@ -344,7 +349,7 @@ public:
         if (m_pHashMulti != NULL)
             m_pHashMulti->foreach(multiVerboseFunc, (void *)(long)iLevel);
         else if (m_iHdrOff != 0)
-            ((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_verbose = iLevel;
+            ((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_verbose = iLevel;
 #ifdef USE_SASL
         LsMcSasl::verbose = iLevel;
 #endif
@@ -353,14 +358,14 @@ public:
 
     void lock()
     {
-        m_pHash->disableAutoLock();
-        m_pHash->lockChkRehash();
+        m_pCurSlice->m_hashByUser.getHash(getUser())->disableAutoLock();
+        m_pCurSlice->m_hashByUser.getHash(getUser())->lockChkRehash();
     }
 
     void unlock()
     {
-        m_pHash->unlock();
-        m_pHash->enableAutoLock();
+        m_pCurSlice->m_hashByUser.getHash(getUser())->unlock();
+        m_pCurSlice->m_hashByUser.getHash(getUser())->enableAutoLock();
     }
 
     bool useMulti()
@@ -378,9 +383,8 @@ public:
         multiFlushFunc(m_pHashMulti->indx2hashSlice(which), NULL);
         return LS_OK;
     }
+    void m_pHash();
 
-//     LOG4CXX_NS::Logger *getLogger()
-//     {   return m_pHash->getLogger();  }
 
 private:
     LsMemcache();
@@ -397,7 +401,8 @@ private:
     static int  multiFlushFunc(LsMcHashSlice *pSlice, void *pArg);
     static int  multiVerboseFunc(LsMcHashSlice *pSlice, void *pArg)
     {
-        LsShmHash *pHash = pSlice->m_pHash;
+        LsShmHash *pHash = pSlice->m_hashByUser.getHash(pSlice->m_hashByUser.
+                                                        getMemcache()->getUser());
         LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
         if (iHdrOff != 0)
             ((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_verbose = (uint8_t)(long)pArg;
@@ -432,7 +437,7 @@ private:
     uint64_t getCas()
     {
         return ((m_iHdrOff != 0) ?
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_data->cas : 0);
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_data->cas : 0);
     }
 
     void     saveCas(LsMcDataItem *pItem)
@@ -535,7 +540,6 @@ private:
     {
         m_hkey = m_pHashMulti->getHKey(pKey, iLen);
         m_pCurSlice = m_pHashMulti->key2hashSlice(m_hkey);
-        m_pHash = m_pCurSlice->m_pHash;
         m_iHdrOff = m_pCurSlice->m_iHdrOff;
         return m_pCurSlice;
     }
@@ -543,7 +547,7 @@ private:
     LsMcHashSlice *canProcessNow(const void *pKey, int iLen)
     {
         LsMcHashSlice *pSlice = setSlice(pKey, iLen);
-        if ((!pSlice->m_pHash->isTidMaster())
+        if ((!pSlice->m_hashByUser.getHash(getUser())->isTidMaster())
             && (pSlice->m_pConn->GetConnFlags() & CS_REMBUSY))
         {
             putWaitQ(m_pConn);
@@ -560,112 +564,111 @@ private:
     void statSetCmd()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.set_cmds;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.set_cmds;
     }
 
     void statFlushCmd()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.flush_cmds;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.flush_cmds;
     }
 
     void statGetHit()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.get_hits;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.get_hits;
     }
 
     void statGetMiss()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.get_misses;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.get_misses;
     }
 
     void statTouchHit()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.touch_hits;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.touch_hits;
     }
 
     void statTouchMiss()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.touch_misses;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.touch_misses;
     }
 
     void statDeleteHit()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.delete_hits;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.delete_hits;
     }
 
     void statDeleteMiss()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.delete_misses;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.delete_misses;
     }
 
     void statIncrHit()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.incr_hits;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.incr_hits;
     }
 
     void statIncrMiss()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.incr_misses;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.incr_misses;
     }
 
     void statDecrHit()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.decr_hits;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.decr_hits;
     }
 
     void statDecrMiss()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.decr_misses;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.decr_misses;
     }
 
     void statCasHit()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.cas_hits;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.cas_hits;
     }
 
     void statCasMiss()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.cas_misses;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.cas_misses;
     }
 
     void statCasBad()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.cas_badval;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.cas_badval;
     }
 
     void statAuthCmd()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.auth_cmds;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.auth_cmds;
     }
 
     void statAuthErr()
     {
         if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pHash->offset2ptr(m_iHdrOff))->x_stats.auth_errors;
+            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats.auth_errors;
     }
     LsShmHash::iteroffset doHashUpdate(ls_strpair_s *m_parms, LsMcUpdOpt *updOpt);
     LsShmHash::iteroffset doHashInsert(ls_strpair_s *m_parms, LsMcUpdOpt *updOpt);
 
     static LsMcCmdFunc s_LsMcCmdFuncs[];
 
-    LsShmHash              *m_pHash;
-    LsMcHashSlice         *m_pCurSlice;
-    LsMcHashMulti         *m_pHashMulti;
+    LsMcHashSlice          *m_pCurSlice;
+    LsMcHashMulti          *m_pHashMulti;
     MemcacheConn           *m_pConn;
     MemcacheConn           *m_pWaitQ;
     MemcacheConn           *m_pWaitTail;
@@ -682,6 +685,7 @@ private:
     LsMcParms               m_mcparms;
     LsMcStrPool             m_keyPool;
     LsMcStrList             m_keyList;
+    char                   *m_pUser;
 };
 
 #endif // LSSHMMEMCACHE_H

@@ -195,7 +195,6 @@ int LsMcSasl::initSasl()
 
 int LsMcSasl::listMechs(const char **pResult)
 {
-    unsigned int len;
     *pResult = NULL;
     LS_DBG_M("SASL listMechs (only PLAIN for now)\n");
     if (getSaslConn() == NULL)

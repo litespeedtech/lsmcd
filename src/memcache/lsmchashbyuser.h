@@ -53,8 +53,6 @@ private:
     LsMcHashByUser &operator=(const LsMcHashByUser &other);
     
     int hash_delete_fn(const void *pKey, void *pData);
-    LsShmHash *getDataFromHashTableData(const char *keydata)
-    { return (LsShmHash *)(keydata + strlen(keydata) + 1); }
     bool insert_user_entry(const char *user, LsShmHash *hash);
     
     LsShm           *m_pShm;

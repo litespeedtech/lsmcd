@@ -424,7 +424,7 @@ private:
     static int tidAddPktSize(LsShmHElem *pElem);
     static int tidDelPktSize();
 
-    void     notifyChange();
+    void     notifyChange(MemcacheConn *pConn);
     void     ackNoreply(MemcacheConn *pConn);
     void     respond(const char *str, MemcacheConn *pConn);
     void     sendResult(MemcacheConn *pConn, const char *fmt, ...);
@@ -450,7 +450,7 @@ private:
     }
 
     LsMcCmdFunc *getCmdFunction(const char *pCmd, int len);
-    void         dataItemUpdate(uint8_t *pBuf);
+    void         dataItemUpdate(uint8_t *pBuf, MemcacheConn *pConn);
 
     static int   doCmdTest1(LsMemcache *pThis,
                             ls_strpair_t *pInput, int arg, MemcacheConn *pConn);
@@ -690,8 +690,12 @@ private:
             ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->    
                 offset2ptr(m_iHdrOff))->x_stats.auth_errors;
     }
-    LsShmHash::iteroffset doHashUpdate(ls_strpair_s *m_parms, LsMcUpdOpt *updOpt);
-    LsShmHash::iteroffset doHashInsert(ls_strpair_s *m_parms, LsMcUpdOpt *updOpt);
+    LsShmHash::iteroffset doHashUpdate(ls_strpair_s *m_parms, 
+                                       LsMcUpdOpt *updOpt,
+                                       MemcacheConn *pConn);
+    LsShmHash::iteroffset doHashInsert(ls_strpair_s *m_parms, 
+                                       LsMcUpdOpt *updOpt,
+                                       MemcacheConn *pConn);
 
     static LsMcCmdFunc s_LsMcCmdFuncs[];
 

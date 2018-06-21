@@ -232,7 +232,10 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
         m_authenticated = true;
         char *user = NULL;
         if (sasl_getprop(m_pSaslConn, SASL_USERNAME, (const void **)&user) == SASL_OK)
+        {
             LS_DBG_M("SASL user: %s\n", user);
+            m_pUser = user;
+        }
         else
             LS_DBG_M("ERROR getting username!\n");
         ret = 0;

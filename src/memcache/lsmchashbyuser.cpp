@@ -40,7 +40,7 @@ LsMcHashByUser::LsMcHashByUser()
     ,m_pHashDefault(NULL)
 {
     LS_DBG_M("HashByUser contructor\n");
-}
+} 
     
 void LsMcHashByUser::del()
 {
@@ -58,7 +58,7 @@ void LsMcHashByUser::del()
             if (pData)
             {
                 LS_DBG_M("HashByUser clean up %s\n", (char *)pData);
-                getDataFromHashTableData((const char *)pData)->close();
+                getHash((char *)pData)->close();
                 free(pData);
             }
         }
@@ -112,7 +112,9 @@ bool LsMcHashByUser::init(
             return false; 
         }
     }
-    if ((!usesasl) || (!byUser) || ((anonymous) && (byUser)))
+    // Always create a default hash but don't allow its use under some conditions.
+    //if ((!usesasl) || (!byUser) || ((anonymous) && (byUser)))
+    if (!m_pHashDefault)
     {
         LS_DBG_M("HashByUser Allocate default hash\n");
         m_pHashDefault = pGPool->getNamedHash(pHashname, 500000, fnHasher, 
@@ -130,7 +132,7 @@ bool LsMcHashByUser::init(
 
 bool LsMcHashByUser::insert_user_entry(const char* user, LsShmHash* hash)
 {
-    int user_len = strlen(user);
+    int user_len = strlen(user) + 1;
     int user_entry_len = user_len + 1 + sizeof(LsShmHash *);
     char *user_entry;
     user_entry = (char *)malloc(user_entry_len);
@@ -141,9 +143,9 @@ bool LsMcHashByUser::insert_user_entry(const char* user, LsShmHash* hash)
     }
     LS_DBG_M("HashByUser insert user: %s\n", user);
     
-    memcpy(user_entry, user, user_len + 1);
-    memcpy(&user_entry[user_len + 1], &hash, sizeof(hash));
-    if (ls_hash_insert(m_userHashes, (const void *)user, (void *)user) == NULL)
+    memcpy(user_entry, user, user_len);
+    memcpy(user_entry + user_len, &hash, sizeof(void *)); 
+    if (ls_hash_insert(m_userHashes, (const void *)user_entry, (void *)user_entry) == NULL)
     {
         free(user_entry);
         hash->close();
@@ -167,14 +169,15 @@ LsShmHash *LsMcHashByUser::getHash(char *user)
         LS_ERROR("You must specify a user at all times with your configuration\n");
         return NULL;
     }
-    LS_DBG_M("HashByUser getHash user: %s\n", user);
+    LS_DBG_M("HashByUser getHash user: %s, this: %p\n", user, this);
     ls_hash_iter it = ls_hash_find(m_userHashes, user);
     if (it != NULL)
     {
         
         char *keydata = (char *)ls_hash_getdata(it);
-        pHash = getDataFromHashTableData(keydata);
-        LS_DBG_M("getHash hash: %p\n", pHash);
+        memcpy(&pHash, keydata + strlen(user) + 1, sizeof(void *)); 
+
+        LS_DBG_M("getHash keydata: %s pHash: %p\n", keydata, pHash);
         
         return pHash;
     }

@@ -29,6 +29,7 @@ struct sockaddr;
 class Multiplexer;
 class LsMcSasl;
 struct ReplPacketHeader;
+class LsShmHash;
 
 class MemcacheConn : public EventReactor
 {
@@ -111,6 +112,8 @@ public:
     void        ClrCmdWait()                {   _ConnFlags &= ~CS_CMDWAIT;   }
     MemcacheConn * GetLink() const          {   return _pLink;   }
     void        SetLink(MemcacheConn *pLink){   _pLink = pLink;   }
+    void        setHash(LsShmHash *pHash);
+    LsShmHash  *getHash();                
     
 private:    
     int onRead();
@@ -144,7 +147,7 @@ private:
     LsMcSasl *     _pSasl;
     MemcacheConn *  _pLink;
     static int      s_ConnTimeout;
-    
+    LsShmHash      *m_pHash;
 };
 
 #endif

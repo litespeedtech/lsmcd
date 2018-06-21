@@ -126,10 +126,11 @@ uint64_t htonll(uint64_t val)
 {
    return swap64(val);
 }
-
+ 
 
 char *LsMemcache::setUser(const char *user)
 {
+    LS_DBG_M("lsmemcache::setUser: %s\n", user);
     return m_pUser = strdup(user);
 }
 
@@ -373,14 +374,13 @@ static const char *g_pShmName = "SHMMCTEST";
 static const char *g_pHashName = "SHMMCHASH";
 
 
-void LsMemcache::notifyChange()
+void LsMemcache::notifyChange(MemcacheConn *pConn)
 {
     LS_DBG_M("LsMemcache::notifyChange pid:%d, pHash:%p is %s, sliceIdx:%d", 
-             getpid(), m_pCurSlice->m_hashByUser.getHash(getUser()), 
-             m_pCurSlice->m_hashByUser.getHash(getUser())->isTidMaster() ? 
-                "master" : "slave", 
+             getpid(), pConn->getHash(), 
+             pConn->getHash()->isTidMaster() ? "master" : "slave", 
              m_pCurSlice->m_idx);
-    if (m_pCurSlice->m_hashByUser.getHash(getUser())->isTidMaster())
+    if (pConn->getHash()->isTidMaster())
     {
         Lsmcd::getInstance().getUsockConn()->cachedNotifyData(
             Lsmcd::getInstance().getProcId(), m_pCurSlice->m_idx );
@@ -487,6 +487,8 @@ int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
 
     m_mcparms.m_usecas = pParms->m_usecas;
     m_mcparms.m_usesasl = pParms->m_usesasl;
+    m_mcparms.m_anonymous = pParms->m_anonymous;
+    m_mcparms.m_byUser = pParms->m_byUser;
     m_mcparms.m_nomemfail = pParms->m_nomemfail;
     if (pParms->m_iValMaxSz > 0)
         m_mcparms.m_iValMaxSz = pParms->m_iValMaxSz;
@@ -632,7 +634,7 @@ bool LsMemcache::isSliceRemote(LsMcHashSlice *pSlice)
 bool LsMemcache::fwdToRemote(LsMcHashSlice *pSlice, char *pNxt, 
                              MemcacheConn *pConn)
 {
-    if (!pSlice->m_hashByUser.getHash(getUser())->isTidMaster())
+    if (!pConn->getHash()->isTidMaster())
     {
         if (isSliceRemote(pSlice))
         {
@@ -653,8 +655,7 @@ bool LsMemcache::fwdToRemote(LsMcHashSlice *pSlice, char *pNxt,
 bool LsMemcache::fwdBinToRemote(LsMcHashSlice *pSlice, McBinCmdHdr *pHdr, 
                                 MemcacheConn *pConn)
 {
-    if (!pSlice->m_hashByUser.getHash(pSlice->m_hashByUser.
-        getMemcache()->getUser())->isTidMaster())
+    if (!pConn->getHash()->isTidMaster())
     {
         if (isSliceRemote(pSlice))
         {
@@ -917,9 +918,9 @@ int LsMemcache::doDataUpdate(uint8_t *pBuf, MemcacheConn *pConn)
 
     if (m_iterOff.m_iOffset != 0)
     {
-        dataItemUpdate(pBuf);
+        dataItemUpdate(pBuf, pConn);
         unlock();
-        notifyChange();
+        notifyChange(pConn);
         if (m_retcode != UPDRET_NONE)
             respond("STORED" "\r\n", pConn);
         m_iterOff.m_iOffset = 0;
@@ -939,12 +940,11 @@ int LsMemcache::doDataUpdate(uint8_t *pBuf, MemcacheConn *pConn)
 }
 
 
-void LsMemcache::dataItemUpdate(uint8_t *pBuf)
+void LsMemcache::dataItemUpdate(uint8_t *pBuf, MemcacheConn *pConn)
 {
     int valLen;
     uint8_t *valPtr;
-    LsShmHElem *iter = m_pCurSlice->m_hashByUser.getHash(getUser())->
-            offset2iterator(m_iterOff);
+    LsShmHElem *iter = pConn->getHash()->offset2iterator(m_iterOff);
     LsMcDataItem *pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, 
                                       &valLen);
     if (m_retcode == UPDRET_APPEND)
@@ -1250,8 +1250,7 @@ int LsMemcache::doCmdTest1(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 
         if (--cnt >= 0)
         {
-            ret = tidSetItems(pThis->m_pCurSlice->m_hashByUser.
-                getHash(pThis->getUser()), buf.data, size);
+            ret = tidSetItems(pConn->getHash(), buf.data, size);
             fprintf(stdout, "tidSetItems ret=%d\n", ret);
         }
     }
@@ -1287,8 +1286,7 @@ int LsMemcache::doCmdTest2(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 #ifdef notdef
     uint64_t tid = 0;
     int cnt = 0;
-    while (pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->
-              deqTidLst(&tid) == LS_OK)
+    while (pConn->getHash()->deqTidLst(&tid) == LS_OK)
     {
         if (tid & TIDLST_DELETE)
             fprintf(stdout, "deqTidLst DELETE tid=%llu\n", tid & ~TIDLST_DELETE);
@@ -1373,9 +1371,7 @@ int LsMemcache::doCmdPrintTids(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 
         if (--cnt >= 0)
         {
-            ret = tidSetItems(
-                pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser()), 
-                buf.data, size);
+            ret = tidSetItems(pConn->getHash(), buf.data, size);
         }
     }
     if (curOutLen == 0)
@@ -1449,21 +1445,17 @@ int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 
         pThis->setSlice(pTok->ptr, pTok->len);
         pThis->lock();
-        iterOff = pThis->m_pCurSlice->m_hashByUser.
-            getHash(pThis->getUser())->findIteratorWithKey(pThis->m_hkey,
-                                                           &pThis->m_parms);
+        iterOff = pConn->getHash()->findIteratorWithKey(pThis->m_hkey,
+                                                        &pThis->m_parms);
         if (iterOff.m_iOffset != 0)
         {
-            iter = pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->
-                offset2iterator(iterOff);
+            iter = pConn->getHash()->offset2iterator(iterOff);
             pItem = mcIter2data(iter, pThis->m_mcparms.m_usecas, &valPtr, 
                                 &valLen);
             if (pThis->isExpired(pItem))
             {
-                pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->
-                    eraseIterator(iterOff);
-                iter = pThis->m_pCurSlice->m_hashByUser.getHash(
-                    pThis->getUser())->offset2iterator(iterOff); // remap?
+                pConn->getHash()->eraseIterator(iterOff);
+                iter = pConn->getHash()->offset2iterator(iterOff); // remap?
                 pThis->statGetMiss();
             }
             else if (arg & LSMC_WITHCAS)
@@ -1510,19 +1502,18 @@ int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 
 
 LsShmHash::iteroffset LsMemcache::doHashInsert(ls_strpair_t *pParms,
-                                               LsMcUpdOpt *pOpt)
+                                               LsMcUpdOpt *pOpt,
+                                               MemcacheConn *pConn)
 {
-    LsShmHash::iteroffset iterOff = m_pCurSlice->m_hashByUser.
-        getHash(getUser())->findIteratorWithKey(m_hkey, pParms);
+    LsShmHash::iteroffset iterOff = pConn->getHash()->
+        findIteratorWithKey(m_hkey, pParms);
     if (iterOff.m_iOffset != 0)
     {
-        if (LsMemcache::isExpired(
-            (LsMcDataItem *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2iteratorData(iterOff)))
+        if (LsMemcache::isExpired((LsMcDataItem *)pConn->getHash()->
+            offset2iteratorData(iterOff)))
         {
             pOpt->m_iRetcode = UPDRET_DONE;
-            iterOff = m_pCurSlice->m_hashByUser.getHash(getUser())->
-                doSet(iterOff, m_hkey, pParms);
+            iterOff = pConn->getHash()->doSet(iterOff, m_hkey, pParms);
         }
         else
         {
@@ -1531,36 +1522,34 @@ LsShmHash::iteroffset LsMemcache::doHashInsert(ls_strpair_t *pParms,
         }
         return iterOff;
     }
-    return m_pCurSlice->m_hashByUser.getHash(getUser())->doInsert(iterOff, 
-                                                                  m_hkey, 
-                                                                  pParms);
+    return pConn->getHash()->doInsert(iterOff, m_hkey, pParms);
 }
 
 
 LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
-                                               LsMcUpdOpt *pOpt)
+                                               LsMcUpdOpt *pOpt, 
+                                               MemcacheConn *pConn)
 {
-    LsShmHash::iteroffset iterOff = m_pCurSlice->m_hashByUser.
-        getHash(getUser())->findIteratorWithKey(m_hkey, pParms);
+    LsShmHash::iteroffset iterOff = pConn->getHash()->
+        findIteratorWithKey(m_hkey, pParms);
     if (iterOff.m_iOffset == 0)
     {
         pOpt->m_iRetcode = UPDRET_NOTFOUND;
         return iterOff;
     }
-    LsShmHElem *iter = m_pCurSlice->m_hashByUser.
-        getHash(getUser())->offset2iterator(iterOff);
+    LsShmHElem *iter = pConn->getHash()->offset2iterator(iterOff);
     LsMcDataItem *pItem = (LsMcDataItem *)iter->getVal();
     if (LsMemcache::isExpired(pItem))
     {
-        m_pCurSlice->m_hashByUser.getHash(getUser())->eraseIterator(iterOff);
+        pConn->getHash()->eraseIterator(iterOff);
         pOpt->m_iRetcode = UPDRET_NOTFOUND;
-        return m_pCurSlice->m_hashByUser.getHash(getUser())->end();
+        return pConn->getHash()->end();
     }
     if (((pOpt->m_iFlags & LSMC_WITHCAS) || (pOpt->m_cas != 0))
         && (pItem->x_data->withcas.cas != pOpt->m_cas))
     {
         pOpt->m_iRetcode = UPDRET_CASFAIL;
-        return m_pCurSlice->m_hashByUser.getHash(getUser())->end();
+        return pConn->getHash()->end();
     }
 
     int cmd = (pOpt->m_iFlags & LSMC_CMDMASK);
@@ -1576,7 +1565,7 @@ LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
         if (pItem == NULL)
         {
             pOpt->m_iRetcode = UPDRET_NONNUMERIC;
-            return m_pCurSlice->m_hashByUser.getHash(getUser())->end();;
+            return pConn->getHash()->end();
         }
         if (cmd == MC_BINCMD_INCREMENT)
         {
@@ -1600,21 +1589,17 @@ LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
         uint8_t *valPtr;
         int valLen;
         int lenExp = ls_str_len(&pParms->val);
-        iterOff = m_pCurSlice->m_hashByUser.getHash(getUser())->
-            iterGrowValue(iterOff, lenExp, 0);
+        iterOff = pConn->getHash()->iterGrowValue(iterOff, lenExp, 0);
         if (iterOff.m_iOffset == 0 || cmd == MC_BINCMD_APPEND)
             return iterOff;
-        iter = m_pCurSlice->m_hashByUser.getHash(getUser())->
-            offset2iterator(iterOff);
+        iter = pConn->getHash()->offset2iterator(iterOff);
         mcIter2data(iter, pOpt->m_iFlags & LSMC_USECAS, &valPtr, &valLen);
         ::memmove(valPtr + lenExp, valPtr, valLen - lenExp);
         return iterOff;
     }
 
 
-    return m_pCurSlice->m_hashByUser.getHash(getUser())->doUpdate(iterOff, 
-                                                                  m_hkey, 
-                                                                  pParms);
+    return pConn->getHash()->doUpdate(iterOff, m_hkey, pParms);
 }
 
 
@@ -1686,7 +1671,7 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
             return 0;
         }
     }
-    if (!pSlice->m_hashByUser.getHash(pThis->getUser())->isTidMaster())
+    if (!pConn->getHash()->isTidMaster())
     {
         if (length != 0)
             length += 2;
@@ -1735,29 +1720,33 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
     switch (arg)
     {
         case MC_BINCMD_ADD:
-            pThis->m_iterOff = pThis->doHashInsert(&pThis->m_parms, &updOpt);
+            pThis->m_iterOff = pThis->doHashInsert(&pThis->m_parms, &updOpt, 
+                                                   pConn);
             pThis->m_retcode = UPDRET_DONE;
             break;
         case MC_BINCMD_SET:
-            pThis->m_iterOff = pThis->m_pCurSlice->m_hashByUser.
-                getHash(pThis->getUser())->setIteratorWithKey(pThis->m_hkey,
-                                                              &pThis->m_parms);
+            pThis->m_iterOff = pConn->getHash()->setIteratorWithKey(pThis->m_hkey,
+                                                                    &pThis->m_parms);
             pThis->m_retcode = UPDRET_DONE;
             break;
         case MC_BINCMD_REPLACE:
-            pThis->m_iterOff = pThis->doHashUpdate(&pThis->m_parms, &updOpt);
+            pThis->m_iterOff = pThis->doHashUpdate(&pThis->m_parms, &updOpt,
+                                                   pConn);
             pThis->m_retcode = UPDRET_DONE;
             break;
         case MC_BINCMD_APPEND:
-            pThis->m_iterOff = pThis->doHashUpdate(&pThis->m_parms, &updOpt);
+            pThis->m_iterOff = pThis->doHashUpdate(&pThis->m_parms, &updOpt,
+                                                   pConn);
             pThis->m_retcode = UPDRET_APPEND;
             break;
         case MC_BINCMD_PREPEND:
-            pThis->m_iterOff = pThis->doHashUpdate(&pThis->m_parms, &updOpt);
+            pThis->m_iterOff = pThis->doHashUpdate(&pThis->m_parms, &updOpt,
+                                                   pConn);
             pThis->m_retcode = UPDRET_PREPEND;
             break;
         case MC_BINCMD_REPLACE|LSMC_WITHCAS:
-            pThis->m_iterOff = pThis->doHashUpdate(&pThis->m_parms, &updOpt);
+            pThis->m_iterOff = pThis->doHashUpdate(&pThis->m_parms, &updOpt, 
+                                                   pConn);
             pThis->m_retcode = updOpt.m_iRetcode;
             if (pThis->m_retcode == UPDRET_NOTFOUND)
                 pThis->statCasMiss();
@@ -1884,7 +1873,7 @@ int LsMemcache::doCmdArithmetic(LsMemcache *pThis, ls_strpair_t *pInput,
 
     pThis->lock();
     if ((pThis->m_iterOff =
-        pThis->doHashUpdate(&pThis->m_parms, &updOpt)).m_iOffset != 0)
+        pThis->doHashUpdate(&pThis->m_parms, &updOpt, pConn)).m_iOffset != 0)
     {
         if (arg == MC_BINCMD_INCREMENT)
             pThis->statIncrHit();
@@ -1972,20 +1961,18 @@ int LsMemcache::doCmdDelete(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         return 0;
 
     pThis->lock();
-    if ((iterOff = pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->
+    if ((iterOff = pConn->getHash()->
         findIteratorWithKey(pThis->m_hkey, &pThis->m_parms)).m_iOffset != 0)
     {
-        expired = pThis->isExpired((LsMcDataItem *)pThis->m_pCurSlice->
-            m_hashByUser.getHash(pThis->getUser())->
+        expired = pThis->isExpired((LsMcDataItem *)pConn->getHash()->
             offset2iteratorData(iterOff));
-        pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->
-            eraseIterator(iterOff);
+        pConn->getHash()->eraseIterator(iterOff);
     }
     if ((iterOff.m_iOffset != 0) && !expired)
     {
         pThis->statDeleteHit();
         pThis->unlock();
-        pThis->notifyChange();
+        pThis->notifyChange(pConn);
         pThis->respond("DELETED" "\r\n", pConn);
     }
     else
@@ -2036,23 +2023,21 @@ int LsMemcache::doCmdTouch(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         return 0;
 
     pThis->lock();
-    if ((iterOff = pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->
-        findIteratorWithKey(pThis->m_hkey, &pThis->m_parms)).m_iOffset != 0)
+    if ((iterOff = pConn->getHash()->findIteratorWithKey(
+        pThis->m_hkey, &pThis->m_parms)).m_iOffset != 0)
     {
-        LsShmHElem *iter = pThis->m_pCurSlice->m_hashByUser.
-            getHash(pThis->getUser())->offset2iterator(iterOff);
+        LsShmHElem *iter = pConn->getHash()->offset2iterator(iterOff);
         LsMcDataItem *pItem = (LsMcDataItem *)iter->getVal();
         if (pThis->isExpired(pItem))
-            pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->
-                eraseIterator(iterOff);
+            pConn->getHash()->eraseIterator(iterOff);
         else
         {
             setItemExptime(pItem, (uint32_t)exptime);
-            pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->
-                getTidMgr()->tidReplaceTid(iter, iterOff, (uint64_t *)NULL);
+            pConn->getHash()->getTidMgr()->tidReplaceTid(iter, iterOff, 
+                                                         (uint64_t *)NULL);
             pThis->statTouchHit();
             pThis->unlock();
-            pThis->notifyChange();
+            pThis->notifyChange(pConn);
             pThis->respond("TOUCHED" "\r\n", pConn);
             return 0;
         }
@@ -2097,10 +2082,9 @@ int LsMemcache::doCmdStats(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
                 else
                 {
                     pThis->lock();
-                    ::memset(&((LsMcHdr *)pThis->m_pCurSlice->m_hashByUser.
-                        getHash(pThis->getUser())->
-                        offset2ptr(pThis->m_iHdrOff))->x_stats, 
-                                   0, sizeof(LsMcStats));
+                    ::memset(&((LsMcHdr *)pConn->getHash()->
+                                offset2ptr(pThis->m_iHdrOff))->x_stats, 
+                             0, sizeof(LsMcStats));
                     pThis->unlock();
                 }
                 pThis->respond("RESET" "\r\n", pConn);
@@ -2125,9 +2109,9 @@ int LsMemcache::doCmdStats(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
     {
         pThis->lock();
         ::memcpy((void *)&stats,
-            (void *)&((LsMcHdr *)pThis->m_pCurSlice->m_hashByUser.
-                getHash(pThis->getUser())->offset2ptr(pThis->m_iHdrOff))->
-                x_stats, sizeof(stats));
+                 (void *)&((LsMcHdr *)pConn->getHash()->offset2ptr(
+                     pThis->m_iHdrOff))->x_stats, 
+                 sizeof(stats));
         pThis->unlock();
     }
     pThis->sendResult(pConn, "STAT pid %lu\r\n", (long)getpid());
@@ -2288,10 +2272,10 @@ int LsMemcache::doCmdFlush(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
             return 0;
 
         pThis->lock();
-        pThis->m_pCurSlice->m_hashByUser.getHash(pThis->getUser())->clear();
+        pConn->getHash()->clear();
         pThis->statFlushCmd();
         pThis->unlock();
-        pThis->notifyChange();
+        pThis->notifyChange(pConn);
     }
     pThis->respond("OK" "\r\n", pConn);
     return 0;
@@ -2460,14 +2444,34 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
                 && isAuthenticated(pHdr->opcode, pConn)) ? "YES" : "NO",
              pHdr->opcode);
 
-    if (m_mcparms.m_usesasl && !isAuthenticated(pHdr->opcode, pConn))
+    if (m_mcparms.m_usesasl) 
     {
-        LS_ERROR("SASL: Response is AUTHERROR for code %d!\n", pHdr->opcode);
-        binErrRespond(pHdr, MC_BINSTAT_AUTHERROR, pConn);
-        return 0;   // close connection
+        if (!isAuthenticated(pHdr->opcode, pConn))
+        {
+            if ((m_mcparms.m_anonymous) && (!pConn->GetSasl()->getUser()))
+            {
+                LS_DBG_M("Using anonymous user\n");
+                // set hash for anonymous user
+                pConn->setHash(m_pCurSlice->m_hashByUser.getHash(NULL));
+            }
+            else
+            {
+                LS_ERROR("SASL: Response is AUTHERROR for code %d!\n", pHdr->opcode);
+                binErrRespond(pHdr, MC_BINSTAT_AUTHERROR, pConn);
+                return 0;   // close connection
+            }
+        }
+        else
+        {
+            // Set hash for specific user
+            pConn->setHash(m_pCurSlice->m_hashByUser.getHash(getUser()));
+        }
     }
+    else
 #endif
-
+    {
+        pConn->setHash(m_pCurSlice->m_hashByUser.getHash(getUser()));
+    }
     cmd = setupNoreplyCmd(pHdr->opcode);
     // special case: handle set with cas the same as replace
     if ((cmd == MC_BINCMD_SET) && (pHdr->cas != 0))
@@ -2510,21 +2514,20 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
         case MC_BINCMD_SET:
             // locked in setup
             statSetCmd();
-            m_iterOff = m_pCurSlice->m_hashByUser.getHash(getUser())->
-                setIteratorWithKey(m_hkey, &m_parms);
+            m_iterOff = pConn->getHash()->setIteratorWithKey(m_hkey, &m_parms);
             doBinDataUpdate(pVal, pHdr, pConn);
             break;
         case MC_BINCMD_ADD:
             // locked in setup
             statSetCmd();
-            m_iterOff = doHashInsert(&m_parms, &updOpt);
+            m_iterOff = doHashInsert(&m_parms, &updOpt, pConn);
             m_retcode = updOpt.m_iRetcode;
             doBinDataUpdate(pVal, pHdr, pConn);
             break;
         case MC_BINCMD_REPLACE:
             // locked in setup
             statSetCmd();
-            m_iterOff = doHashUpdate(&m_parms, &updOpt);
+            m_iterOff = doHashUpdate(&m_parms, &updOpt, pConn);
             m_retcode = updOpt.m_iRetcode;
             if (pHdr->cas != 0)
             {
@@ -2560,7 +2563,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
         case MC_BINCMD_PREPEND:
             // locked in setup
             statSetCmd();
-            m_iterOff = doHashUpdate(&m_parms, &updOpt);
+            m_iterOff = doHashUpdate(&m_parms, &updOpt, pConn);
             // memcached compatibility
             m_retcode = ((updOpt.m_iRetcode == UPDRET_NOTFOUND) ?
                 UPDRET_DONE: updOpt.m_iRetcode);
@@ -2822,21 +2825,19 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
                 (int)m_parms.key.len, m_parms.key.ptr);
     }
     lock();
-    if ((m_iterOff = m_pCurSlice->m_hashByUser.getHash(getUser())->
-        findIteratorWithKey(m_hkey, &m_parms)).m_iOffset != 0)
+    if ((m_iterOff = pConn->getHash()->findIteratorWithKey(
+        m_hkey, &m_parms)).m_iOffset != 0)
     {
         LsShmHElem *iter;
         LsMcDataItem *pItem;
         int valLen;
         uint8_t *valPtr;
-        iter = m_pCurSlice->m_hashByUser.getHash(getUser())->
-            offset2iterator(m_iterOff);
+        iter = pConn->getHash()->offset2iterator(m_iterOff);
         pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, &valLen);
         if (isExpired(pItem))
         {
-            m_pCurSlice->m_hashByUser.getHash(getUser())->
-                eraseIterator(m_iterOff);
-            notifyChange();
+            pConn->getHash()->eraseIterator(m_iterOff);
+            notifyChange(pConn);
             if (doTouch)
                 statTouchMiss();
             else
@@ -2850,12 +2851,11 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
             if (doTouch)
             {
                 setItemExptime(pItem, (uint32_t)m_item.x_exptime);
-                m_pCurSlice->m_hashByUser.getHash(getUser())->getTidMgr()->
-                    tidReplaceTid(iter, m_iterOff, (uint64_t *)NULL);
-                notifyChange();
+                pConn->getHash()->getTidMgr()->tidReplaceTid(iter, m_iterOff, 
+                                                             (uint64_t *)NULL);
+                notifyChange(pConn);
                 statTouchHit();
-                pItem = mcIter2data(m_pCurSlice->m_hashByUser.
-                    getHash(getUser())->offset2iterator(m_iterOff), 
+                pItem = mcIter2data(pConn->getHash()->offset2iterator(m_iterOff), 
                                     m_mcparms.m_usecas, &valPtr, &valLen);
             }
             else
@@ -2907,9 +2907,9 @@ int LsMemcache::doBinDataUpdate(uint8_t *pBuf, McBinCmdHdr *pHdr,
     m_parms.key.len = 0;
     if (m_iterOff.m_iOffset != 0)
     {
-        dataItemUpdate(pBuf);
+        dataItemUpdate(pBuf, pConn);
         unlock();
-        notifyChange();
+        notifyChange(pConn);
         if (m_retcode != UPDRET_NONE)
             binOkRespond(pHdr, pConn);
         m_iterOff.m_iOffset = 0;
@@ -2933,19 +2933,17 @@ int LsMemcache::doBinDataUpdate(uint8_t *pBuf, McBinCmdHdr *pHdr,
 void LsMemcache::doBinDelete(McBinCmdHdr *pHdr, MemcacheConn *pConn)
 {
     lock();
-    if ((m_iterOff = m_pCurSlice->m_hashByUser.getHash(getUser())->
-        findIteratorWithKey(m_hkey, &m_parms)).m_iOffset != 0)
+    if ((m_iterOff = pConn->getHash()->findIteratorWithKey(
+        m_hkey, &m_parms)).m_iOffset != 0)
     {
         LsMcDataItem *pItem =
-            (LsMcDataItem *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-            offset2iteratorData(m_iterOff);
+            (LsMcDataItem *)pConn->getHash()->offset2iteratorData(m_iterOff);
         if (isExpired(pItem))
         {
-            m_pCurSlice->m_hashByUser.getHash(getUser())->
-                eraseIterator(m_iterOff);
+            pConn->getHash()->eraseIterator(m_iterOff);
             statDeleteMiss();
             unlock();
-            notifyChange();
+            notifyChange(pConn);
             binErrRespond(pHdr, MC_BINSTAT_KEYENOENT, pConn);
         }
         else if (m_mcparms.m_usecas && (pHdr->cas != 0)
@@ -2956,11 +2954,10 @@ void LsMemcache::doBinDelete(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         }
         else
         {
-            m_pCurSlice->m_hashByUser.getHash(getUser())->
-                eraseIterator(m_iterOff);
+            pConn->getHash()->eraseIterator(m_iterOff);
             statDeleteHit();
             unlock();
-            notifyChange();
+            notifyChange(pConn);
             binOkRespond(pHdr, pConn);
         }
     }
@@ -2986,7 +2983,7 @@ void LsMemcache::doBinArithmetic(
 
     pOpt->m_pMisc = (void *)numBuf;
     lock();
-    if ((m_iterOff = doHashUpdate(&m_parms, pOpt)).m_iOffset != 0)
+    if ((m_iterOff = doHashUpdate(&m_parms, pOpt, pConn)).m_iOffset != 0)
     {
         if (cmd == MC_BINCMD_INCREMENT)
             statIncrHit();
@@ -3019,8 +3016,8 @@ void LsMemcache::doBinArithmetic(
             m_parms.val.len = parmAdjLen(
                 snprintf(numBuf, sizeof(numBuf), "%llu",
                   (unsigned long long)ntohll(pReqX->incrdecr.initval)));
-            if ((m_iterOff = m_pCurSlice->m_hashByUser.getHash(getUser())->
-                insertIteratorWithKey(m_hkey, &m_parms)).m_iOffset != 0)
+            if ((m_iterOff = pConn->getHash()->insertIteratorWithKey(
+                m_hkey, &m_parms)).m_iOffset != 0)
             {
                 m_retcode = UPDRET_NONE;
                 doBinDataUpdate((uint8_t *)numBuf, pHdr, pConn);
@@ -3072,8 +3069,8 @@ void LsMemcache::doBinFlush(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     else
     {
         LsMcHashSlice *pSlice = m_pHashMulti->indx2hashSlice(0);
-        if ((!pSlice->m_hashByUser.getHash(getUser())->isTidMaster())
-            && (pSlice->m_pConn->GetConnFlags() & CS_REMBUSY))
+        if ((!pConn->getHash()->isTidMaster()) && 
+            (pSlice->m_pConn->GetConnFlags() & CS_REMBUSY))
         {
             putWaitQ(pConn);
             return;  // cannot process now
@@ -3082,10 +3079,10 @@ void LsMemcache::doBinFlush(McBinCmdHdr *pHdr, MemcacheConn *pConn)
             return;
 
         lock();
-        m_pCurSlice->m_hashByUser.getHash(getUser())->clear();
+        pConn->getHash()->clear();
         statFlushCmd();
         unlock();
-        notifyChange();
+        notifyChange(pConn);
     }
     binOkRespond(pHdr, pConn);
     return;
@@ -3120,9 +3117,8 @@ void LsMemcache::doBinStats(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         else
         {
             lock();
-            ::memset(&((LsMcHdr *)m_pCurSlice->m_hashByUser.
-                getHash(getUser())->offset2ptr(m_iHdrOff))->x_stats, 0, 
-                     sizeof(LsMcStats));
+            ::memset(&((LsMcHdr *)pConn->getHash()->
+                        offset2ptr(m_iHdrOff))->x_stats, 0, sizeof(LsMcStats));
             unlock();
         }
         binOkRespond(pHdr, pConn);
@@ -3299,8 +3295,8 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         char user[userLen + 1];
         memcpy(user, (char *)(pHdr + 1) + mechLen, userLen);
         user[userLen] = 0;
-        LS_DBG_M("SASL worked, user: %s! mechLen: %d, userLen: %d\n", user, 
-                 mechLen, userLen);
+        LS_DBG_M("SASL worked, user: %s! mechLen: %d, userLen: %d, usesasl: %s, byUser: %s\n", 
+                 user, mechLen, userLen, m_mcparms.m_usesasl ? "YES":"NO", m_mcparms.m_byUser ? "YES" : "NO");
         if (m_mcparms.m_usesasl && m_mcparms.m_byUser)
             setUser(user);
         setupBinResHdr(pHdr,

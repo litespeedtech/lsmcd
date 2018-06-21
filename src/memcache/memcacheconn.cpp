@@ -37,7 +37,7 @@ MemcacheConn::MemcacheConn()
     , m_pMultiplexer(NULL)
     , _pSasl(NULL)
     , _pLink(NULL)
-
+    , m_pHash(NULL)
 {
 }
 
@@ -51,6 +51,20 @@ MemcacheConn::~MemcacheConn()
 //{
 //
 //}
+
+
+void MemcacheConn::setHash(LsShmHash *pHash)
+{   
+    LS_DBG_M("Conn setHash %p\n", pHash); 
+    m_pHash = pHash;  
+}
+
+
+LsShmHash  *MemcacheConn::getHash()
+{   
+    LS_DBG_M("Conn getHash %p\n", m_pHash); 
+    return m_pHash;   
+}
 
 
 int MemcacheConn::protocolErr()

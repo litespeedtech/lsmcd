@@ -103,6 +103,8 @@ int LsMcHashMulti::init(LsMemcache *memcache, int iCnt, const char **ppPathName,
             pDirName = NULL;
             pShmName = (char *)*ppPathName;
         }
+        LS_DBG_M("McHashMulti init, ShmName: %s, HashName: %s, slice: %d\n", 
+                 pShmName, pHashName, lstIdx - iCnt);
         if ((pShm = LsShm::open(pShmName, 0, pDirName)) == NULL)
         {
             LS_ERROR("LsShm::open [%s] failed!\n", *ppPathName);

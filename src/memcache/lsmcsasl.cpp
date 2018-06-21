@@ -91,7 +91,7 @@ static int chkSaslPwdb(sasl_conn_t *conn,
 
 sasl_conn_t *LsMcSasl::getSaslConn()
 {
-    m_authenticated = false;
+    //m_authenticated = false;
     LS_DBG_M("getSaslConn(), m_pSaslConn: %p\n", m_pSaslConn);
     if (m_pSaslConn)
         return m_pSaslConn;

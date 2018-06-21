@@ -30,7 +30,8 @@ class ReplShmHelper : public TSingleton<ReplShmHelper>
 {
     friend class TSingleton<ReplShmHelper>;
 public:    
-    LsShmHash * getLsShmHash(int idx) const      {   return LsMemcache::getInstance().getHash(idx); }
+    LsShmHash * getLsShmHash(int idx) const      
+    {   return LsMemcache::getInstance().getHash(idx); }
     
     int         tidGetNxtItems(int idx, uint64_t* tid, uint8_t* pBuf, int isize);
     
@@ -42,7 +43,8 @@ public:
     
     int32_t     getMaxPacketSize();
     bool        incMaxPacketSize(int offBytes);
-    uint64_t    bcastNewTidData (int idx, uint64_t iLstTid, void *pInst, for_each_fn2 func);
+    uint64_t    bcastNewTidData (int idx, uint64_t iLstTid, void *pInst, 
+                                 for_each_fn2 func);
 private:
     ReplShmHelper();
     ~ReplShmHelper();

@@ -6,6 +6,7 @@ cmake_policy(SET CMP0002 OLD)
 ########### next target ###############
 
 SET(shm_STAT_SRCS
+    lsmchashbyuser.cpp
     lsmchashmulti.cpp
     lsmemcache.cpp
     lsmcsasl.cpp

@@ -266,7 +266,6 @@ int MemcacheConn::processIncoming()
 {
     ReplPacketHeader header;
     int consumed;
-    LsMemcache::getInstance().setConn(this);
     LS_DBG_M("MemcacheConn processIncoming pid:%d, addr:%p, m_bufIncoming size:%d", getpid(), this, m_bufIncoming.size());
     if (_Protocol == MC_UNKNOWN)
     {
@@ -322,17 +321,17 @@ int MemcacheConn::processIncoming()
             case MC_ASCII:
                 LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p,6", getpid(), this);
                 consumed = LsMemcache::getInstance().processCmd(
-                    m_bufIncoming.begin(), m_bufIncoming.size());
+                    m_bufIncoming.begin(), m_bufIncoming.size(), this);
                 break;
             case MC_BINARY:
                 LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p,7", getpid(), this);
                 consumed = LsMemcache::getInstance().processBinCmd(
-                    (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size());
+                    (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size(), this);
                 break;
             case MC_INTERNAL:
                 LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p,8", getpid(), this);
                 consumed = LsMemcache::getInstance().processInternal(
-                    (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size());
+                    (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size(), this);
                 break;
             default:
                 // should not get here

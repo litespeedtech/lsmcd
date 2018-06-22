@@ -19,6 +19,7 @@
 #define LSSHMMEMCACHE_H
 
 #include <lsdef.h>
+#include <log4cxx/logger.h>
 #include "memcacheconn.h"
 #include <shm/lsshmhash.h>
 #include "lsmchashmulti.h"
@@ -545,17 +546,10 @@ private:
             (valLen + sizeof(m_item)));
     }
 
-    LsMcHashSlice *setSlice(const void *pKey, int iLen)
-    {
-        m_hkey = m_pHashMulti->getHKey(pKey, iLen);
-        m_pCurSlice = m_pHashMulti->key2hashSlice(m_hkey);
-        m_iHdrOff = m_pCurSlice->m_iHdrOff;
-        return m_pCurSlice;
-    }
-
+    LsMcHashSlice *setSlice(const void *pKey, int iLen, MemcacheConn *pConn);
     LsMcHashSlice *canProcessNow(const void *pKey, int iLen, MemcacheConn *pConn)
     {
-        LsMcHashSlice *pSlice = setSlice(pKey, iLen);
+        LsMcHashSlice *pSlice = setSlice(pKey, iLen, pConn);
         if ((!pSlice->m_hashByUser.getHash(getUser())->isTidMaster())
             && (pSlice->m_pConn->GetConnFlags() & CS_REMBUSY))
         {

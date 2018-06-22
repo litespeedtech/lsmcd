@@ -908,6 +908,8 @@ LsMcCmdFunc *LsMemcache::getCmdFunction(const char *pCmd, int len)
  */
 int LsMemcache::doDataUpdate(uint8_t *pBuf, MemcacheConn *pConn)
 {
+    LS_DBG_M("doDataUpdate, pConn: %p, key.len: %ld, offset: %d\n", pConn, 
+             m_parms.key.len, m_iterOff.m_iOffset);
     if (m_parms.key.len <= 0)
     {
         unlock();
@@ -947,6 +949,8 @@ void LsMemcache::dataItemUpdate(uint8_t *pBuf, MemcacheConn *pConn)
     LsShmHElem *iter = pConn->getHash()->offset2iterator(m_iterOff);
     LsMcDataItem *pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, 
                                       &valLen);
+    LS_DBG_M("dataItemUpdate, pConn: %p, iter: %p, retcode: %d, valLen: %d\n",
+             pConn, iter, m_retcode, valLen);
     if (m_retcode == UPDRET_APPEND)
     {
         valLen = m_parms.val.len;
@@ -1443,7 +1447,7 @@ int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         pThis->m_parms.key.ptr = pTok->ptr;
         pThis->m_parms.key.len = pTok->len;
 
-        pThis->setSlice(pTok->ptr, pTok->len);
+        pThis->setSlice(pTok->ptr, pTok->len, pConn);
         pThis->lock();
         iterOff = pConn->getHash()->findIteratorWithKey(pThis->m_hkey,
                                                         &pThis->m_parms);
@@ -2405,6 +2409,42 @@ int LsMemcache::doCmdClear(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 }
 
 
+LsMcHashSlice *LsMemcache::setSlice(const void *pKey, int iLen, 
+                                    MemcacheConn *pConn)
+{
+    m_hkey = m_pHashMulti->getHKey(pKey, iLen);
+    m_pCurSlice = m_pHashMulti->key2hashSlice(m_hkey);
+    m_iHdrOff = m_pCurSlice->m_iHdrOff;
+#ifdef USE_SASL
+    if (m_mcparms.m_usesasl) 
+    {
+        if (!pConn->GetSasl()->isAuthenticated())
+        {
+            LS_DBG_M("SetHash Using anonymous user\n");
+            // set hash for anonymous user
+            pConn->setHash(m_pCurSlice->m_hashByUser.getHash(NULL));
+        }
+        else
+        {
+            LS_DBG_M("SetHash using user: %s\n", getUser());
+            pConn->setHash(m_pCurSlice->m_hashByUser.getHash(getUser()));
+        }
+    }
+    else
+#endif
+    {
+        LS_DBG_M("No SASL set hash no user\n");
+        pConn->setHash(m_pCurSlice->m_hashByUser.getHash(getUser()));
+    }
+        
+    char key[iLen + 1];
+    memcpy(key, pKey, iLen);
+    key[iLen] = 0;
+    LS_DBG_M("setSlice: key: %s, hkey: 0x%x, pCurSlice: %p, HdrOff: %d\n", 
+             key, m_hkey, m_pCurSlice, m_iHdrOff);
+    return m_pCurSlice;
+}
+
 int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
 {
     McBinCmdHdr *pHdr;
@@ -2441,37 +2481,17 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
     LS_DBG_M("SASL test, parm for sasl: %s, isAuthenticated: %s, opcode: %d\n",
              m_mcparms.m_usesasl ? "YES" : "NO",
              (m_mcparms.m_usesasl 
-                && isAuthenticated(pHdr->opcode, pConn)) ? "YES" : "NO",
+                && pConn->GetSasl()->isAuthenticated()) ? "YES" : "NO",
              pHdr->opcode);
-
-    if (m_mcparms.m_usesasl) 
+    // Do the set user and set hash when the slice is set.
+    if ((m_mcparms.m_usesasl) && (!pConn->GetSasl()->isAuthenticated()) &&
+        (!m_mcparms.m_anonymous) && (!pConn->GetSasl()->getUser()))
     {
-        if (!isAuthenticated(pHdr->opcode, pConn))
-        {
-            if ((m_mcparms.m_anonymous) && (!pConn->GetSasl()->getUser()))
-            {
-                LS_DBG_M("Using anonymous user\n");
-                // set hash for anonymous user
-                pConn->setHash(m_pCurSlice->m_hashByUser.getHash(NULL));
-            }
-            else
-            {
-                LS_ERROR("SASL: Response is AUTHERROR for code %d!\n", pHdr->opcode);
-                binErrRespond(pHdr, MC_BINSTAT_AUTHERROR, pConn);
-                return 0;   // close connection
-            }
-        }
-        else
-        {
-            // Set hash for specific user
-            pConn->setHash(m_pCurSlice->m_hashByUser.getHash(getUser()));
-        }
+        LS_ERROR("SASL: Response is AUTHERROR for code %d!\n", pHdr->opcode);
+        binErrRespond(pHdr, MC_BINSTAT_AUTHERROR, pConn);
+        return 0;   // close connection
     }
-    else
 #endif
-    {
-        pConn->setHash(m_pCurSlice->m_hashByUser.getHash(getUser()));
-    }
     cmd = setupNoreplyCmd(pHdr->opcode);
     // special case: handle set with cas the same as replace
     if ((cmd == MC_BINCMD_SET) && (pHdr->cas != 0))
@@ -2680,7 +2700,7 @@ uint8_t *LsMemcache::setupBinCmd(
         }
         else
         {
-            setSlice(m_parms.key.ptr, m_parms.key.len);
+            setSlice(m_parms.key.ptr, m_parms.key.len, pConn);
         }
         pHdr->cas = (uint64_t)ntohll(pHdr->cas);
     }
@@ -2702,7 +2722,7 @@ uint8_t *LsMemcache::setupBinCmd(
         }
         else
         {
-            setSlice(m_parms.key.ptr, m_parms.key.len);
+            setSlice(m_parms.key.ptr, m_parms.key.len, pConn);
         }
         m_parms.val.ptr = NULL;
         m_parms.val.len = bodyLen - keyLen - pHdr->extralen;
@@ -2816,6 +2836,7 @@ bool LsMemcache::isRemoteEligible(uint8_t cmd)
 void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch, 
                           MemcacheConn *pConn)
 {
+    LS_DBG_M("doBinGet, pConn: %p, pHash: %p\n", pConn, pConn->getHash());
     uint8_t resBuf[sizeof(McBinCmdHdr)+sizeof(McBinResExtra)];
     int keyLen = ((cmd == MC_BINCMD_GATK) || (cmd == MC_BINCMD_GETK)) ?
         m_parms.key.len : 0;
@@ -2904,6 +2925,8 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
 int LsMemcache::doBinDataUpdate(uint8_t *pBuf, McBinCmdHdr *pHdr, 
                                 MemcacheConn *pConn)
 {
+    LS_DBG_M("doBinDataUpdate, pHash: %p, iterOff: %d\n", pConn->getHash(), 
+             m_iterOff.m_iOffset);
     m_parms.key.len = 0;
     if (m_iterOff.m_iOffset != 0)
     {

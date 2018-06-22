@@ -229,7 +229,6 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     if (ret == SASL_OK)
     {
         LS_DBG_M("SASL authenticated!\n");
-        m_authenticated = true;
         char *user = NULL;
         if (sasl_getprop(m_pSaslConn, SASL_USERNAME, (const void **)&user) == SASL_OK)
         {
@@ -238,6 +237,7 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
         }
         else
             LS_DBG_M("ERROR getting username!\n");
+        m_authenticated = true;
         ret = 0;
     }
     else if (ret == SASL_CONTINUE)
@@ -275,12 +275,13 @@ int LsMcSasl::chkAuthStep(char *pBuf, unsigned int valLen,
     if (ret == SASL_OK)
     {
         LS_DBG_M("SASL authenticated\n");
-        m_authenticated = true;
         char *user = NULL;
         if (sasl_getprop(m_pSaslConn, SASL_USERNAME, (const void **)&user) == SASL_OK)
             LS_DBG_M("SASL user: %s\n", user);
         else
             LS_DBG_M("ERROR getting username!\n");
+        m_pUser = user;
+        m_authenticated = true;
         ret = 0;
     }
     else if (ret == SASL_CONTINUE)

@@ -75,11 +75,7 @@ private:
     LsMcHashMulti &operator=(const LsMcHashMulti &other);
 
 private:
-    int  key2hashNum(LsShmHKey hkey)
-    {
-        return ((m_iCnt > 1) ?
-            ((m_iLastHashKey = hkey) % m_iCnt) : 0);
-    }
+    int  key2hashNum(LsShmHKey hkey);
 
     int             m_iCnt;
     LsShmHasher_fn  m_fnHashKey;

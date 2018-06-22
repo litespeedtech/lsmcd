@@ -252,6 +252,8 @@ public:
 
     char *setUser(const char *user);
     char *getUser();
+    bool  sliceByUser()
+    { return m_mcparms.m_usesasl && m_mcparms.m_byUser && getUser(); }
     
     int  initMcShm(int iCnt, const char **ppPathName,
         const char *pHashName, LsMcParms *pParms);

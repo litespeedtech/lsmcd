@@ -247,7 +247,8 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     }
     else
     {
-        LS_ERROR("SASL Error in sasl_server_start: %d\n", ret);
+        LS_ERROR("SASL Error in sasl_server_start: %s\n", 
+                 sasl_errstring(ret,NULL,NULL));
         ret = -1;
     }
     return ret;

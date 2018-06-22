@@ -131,7 +131,15 @@ uint64_t htonll(uint64_t val)
 char *LsMemcache::setUser(const char *user)
 {
     LS_DBG_M("lsmemcache::setUser: %s\n", user);
-    return m_pUser = strdup(user);
+    if ((m_pUser) && (user) && (!(strcmp(m_pUser, user))))
+        return m_pUser;
+    if ((!m_pUser) && (!user))
+        return m_pUser;
+    if (m_pUser)
+        free(m_pUser);
+    if (user)
+        return m_pUser = strdup(user);
+    return m_pUser = NULL;
 }
 
 
@@ -2481,13 +2489,13 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
     LS_DBG_M("SASL test, parm for sasl: %s, isAuthenticated: %s, opcode: %d\n",
              m_mcparms.m_usesasl ? "YES" : "NO",
              (m_mcparms.m_usesasl 
-                && pConn->GetSasl()->isAuthenticated()) ? "YES" : "NO",
+                && isAuthenticated(pHdr->opcode, pConn)) ? "YES" : "NO",
              pHdr->opcode);
     // Do the set user and set hash when the slice is set.
-    if ((m_mcparms.m_usesasl) && (!pConn->GetSasl()->isAuthenticated()) &&
+    if ((m_mcparms.m_usesasl) && (!isAuthenticated(pHdr->opcode, pConn)) &&
         (!m_mcparms.m_anonymous) && (!pConn->GetSasl()->getUser()))
     {
-        LS_ERROR("SASL: Response is AUTHERROR for code %d!\n", pHdr->opcode);
+        LS_ERROR("Successful SASL authentication not performed\n");
         binErrRespond(pHdr, MC_BINSTAT_AUTHERROR, pConn);
         return 0;   // close connection
     }
@@ -2602,6 +2610,11 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
 #ifdef USE_SASL
         case MC_BINCMD_SASL_LIST:
             LS_DBG_M("SASL_LIST command\n");
+            if (!m_mcparms.m_usesasl)
+            {
+                binOkRespond(pHdr, pConn);
+                break;
+            }
             doBinSaslList(pHdr, pConn);
             break;
         case MC_BINCMD_SASL_AUTH:
@@ -3255,7 +3268,7 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     LS_DBG_M("doBinSaslList (hdr size: %ld)\n",sizeof(McBinCmdHdr));
     if (!m_mcparms.m_usesasl)
     {
-        LS_DBG_M("SASL turned off\n");
+        LS_ERROR("SASL turned off - SASL requests will fail\n");
         binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD, pConn);
         return;
     }
@@ -3265,7 +3278,7 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         {
             LS_INFO("Failed to list SASL mechanisms.\n");
         }
-        LS_DBG_M("No SASL mechanism\n");
+        LS_ERROR("SASL mechanisms not available\n");
         binErrRespond(pHdr, MC_BINSTAT_AUTHERROR, pConn);
     }
     else
@@ -3291,6 +3304,7 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     {
         LS_DBG_M("SASL off\n");
         binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD, pConn);
+        setUser(NULL);
         return;
     }
     unsigned int mechLen = (unsigned int)ntohs(pHdr->keylen);

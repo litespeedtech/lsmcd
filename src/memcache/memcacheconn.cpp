@@ -85,7 +85,9 @@ int MemcacheConn::InitConn(int fd, struct sockaddr *pAddr)
                     m_iSSPort );
         m_peerAddr = achBuf;
         LS_DBG_M ("Memcache New connection from %s", m_peerAddr.c_str()) ;
-        }
+        LS_DBG_M("New connection - reset user\n");
+        LsMemcache::getInstance().setUser(NULL);
+    }
 #ifdef USE_SASL
     _pSasl = new LsMcSasl();
     if (_pSasl == NULL)
@@ -126,6 +128,8 @@ int MemcacheConn::CloseConnection()
         _pSasl = NULL;
     }
 #endif
+    LS_DBG_M("Close connection - reset user\n");
+    LsMemcache::getInstance().setUser(NULL);
     getMultiplexer()->remove( this );
     ::close( getfd() );
     m_iConnState = CS_DISCONNECTED;

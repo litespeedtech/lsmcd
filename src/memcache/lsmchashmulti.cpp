@@ -56,6 +56,23 @@ LsMcHashMulti::~LsMcHashMulti()
 }
 
 
+int  LsMcHashMulti::key2hashNum(LsShmHKey hkey)
+{
+    if (m_iCnt <= 1)
+        return 0;
+    if (m_pMemcache->sliceByUser())
+    {
+        char *pUser = m_pMemcache->getUser();
+        unsigned int hashNum = XXH32(pUser, strlen(pUser), 0) % m_iCnt;
+        LS_DBG_M("key2hashNum return %d for user: %s\n", hashNum, pUser); 
+        return (int)hashNum;
+    }
+    unsigned int hashNum = (m_iLastHashKey = hkey) % m_iCnt;
+    LS_DBG_M("key2hashNum return %d for hkey: 0x%x\n", hashNum, hkey);
+    return (int)hashNum;
+}
+
+
 int LsMcHashMulti::init(LsMemcache *memcache, int iCnt, const char **ppPathName, 
                         const char *pHashName, LsShmHasher_fn fnHashKey, 
                         LsShmValComp_fn fnValComp, int mode, bool usesasl, 

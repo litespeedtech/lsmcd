@@ -247,13 +247,42 @@ typedef TPointerList<ls_str_t> LsMcStrList;
 class LsMemcache : public TSingleton<LsMemcache>
 {
     friend class TSingleton<LsMemcache>;
+private:
+    static bool multiValidate(LsMcHashSlice *pSlice, MemcacheConn *pConn);
+     
+    static int  multiInitFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
+                              void *pArg);
+    static int  multiConnFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
+                              void *pArg);
+    static int  multiMultiplexerFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
+                                     void *pArg);
+    static int  multiStatFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
+                              void *pArg);
+    static int  multiStatResetFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
+                                   void *pArg);
+    static int  multiFlushFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
+                               void *pArg);
+    static int  multiVerboseFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
+                                 void *pArg)
+    {
+        if (!multiValidate(pSlice, pConn))
+            return LS_OK; // Deal with it later
+            
+        LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
+        if (iHdrOff != 0)
+            ((LsMcHdr *)pConn->getHash()->offset2ptr(iHdrOff))->x_verbose = 
+                (uint8_t)(long)pArg;
+        return LS_OK;
+    }
 public:
-    ~LsMemcache() { if (m_pUser) free(m_pUser); }
+    ~LsMemcache() { }
 
-    char *setUser(const char *user);
-    char *getUser();
-    bool  sliceByUser()
-    { return m_mcparms.m_usesasl && m_mcparms.m_byUser && getUser(); }
+    static void setConfigMultiUser(bool multiUser) 
+    { m_bConfigMultiUser = multiUser; }
+    static bool getConfigMultiUser(void)    { return m_bConfigMultiUser; }
+    static void setConfigReplication(bool replication)
+    { m_bConfigReplication = replication; }
+    static bool getConfigReplication(void)  { return m_bConfigReplication; }
     
     int  initMcShm(int iCnt, const char **ppPathName,
         const char *pHashName, LsMcParms *pParms);
@@ -262,13 +291,10 @@ public:
     int  initMcEvents();
     int  reinitMcConn(Multiplexer *pMultiplexer);
 
-    LsShmHash *getHash() 
-    {   return m_pCurSlice->m_hashByUser.getHash(getUser());  }
-
-    LsShmHash *getHash(int indx) 
+    LsShmHash *getReplHash(int indx) 
     {
         return ((m_pHashMulti != NULL) ?
-            m_pHashMulti->indx2hashSlice(indx)->m_hashByUser.getHash(getUser()) 
+            m_pHashMulti->indx2hashSlice(indx)->m_hashByUser.getHash(NULL) 
             : NULL);
     }
     
@@ -276,7 +302,7 @@ public:
 
     int  processCmd(char *pStr, int iLen, MemcacheConn *pConn);
     int  doDataUpdate(uint8_t *pBuf, MemcacheConn *pConn);
-    McBinStat  chkMemSz(int arg);
+    McBinStat  chkMemSz(MemcacheConn *pConn, int arg);
     int  processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn);
     int  processInternal(uint8_t *pBuf, int iLen, MemcacheConn *pConn);
     void putWaitQ(MemcacheConn *pConn);
@@ -342,36 +368,46 @@ public:
     inline bool chkItemSize(uint32_t size)
     {   return (size <= m_mcparms.m_iValMaxSz);   }
 
-    uint8_t  getVerbose()
+    uint8_t  getVerbose(MemcacheConn *pConn)
     {
-        return ((m_iHdrOff != 0) ?
-            ((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_verbose: 0);
+        /* Can be called REALLY early where nothing in the connection is setup 
+         * yet.  Just be fault tolerant. */
+        if ((!pConn) || (!pConn->getSlice()) || (!pConn->getHash()))
+            return 0;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+        {
+            uint8_t verbose = ((LsMcHdr *)pConn->getHash()->offset2ptr(
+                        pConn->getSlice()->m_iHdrOff))->x_verbose;
+            if (verbose)
+                LS_DBG_M("getVerbose: %d\n", verbose);
+            return verbose;
+        }
+        return 0;
     }
 
-    void     setVerbose(uint8_t iLevel)
+    void     setVerbose(MemcacheConn *pConn, uint8_t iLevel)
     {
         if (m_pHashMulti != NULL)
-            m_pHashMulti->foreach(multiVerboseFunc, (void *)(long)iLevel);
-        else if (m_iHdrOff != 0)
-            ((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_verbose = iLevel;
+            m_pHashMulti->foreach(multiVerboseFunc, pConn, (void *)(long)iLevel);
+        else if (pConn->getSlice()->m_iHdrOff != 0)
+            ((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_verbose = iLevel;
 #ifdef USE_SASL
         LsMcSasl::verbose = iLevel;
 #endif
         return;
     }
 
-    void lock()
+    void lock(MemcacheConn *pConn)
     {
-        m_pCurSlice->m_hashByUser.getHash(getUser())->disableAutoLock();
-        m_pCurSlice->m_hashByUser.getHash(getUser())->lockChkRehash();
+        pConn->getHash()->disableAutoLock();
+        pConn->getHash()->lockChkRehash();
     }
 
-    void unlock()
+    void unlock(MemcacheConn *pConn)
     {
-        m_pCurSlice->m_hashByUser.getHash(getUser())->unlock();
-        m_pCurSlice->m_hashByUser.getHash(getUser())->enableAutoLock();
+        pConn->getHash()->unlock();
+        pConn->getHash()->enableAutoLock();
     }
 
     bool useMulti()
@@ -380,13 +416,13 @@ public:
     void setMultiplexer(Multiplexer *pMultiplexer)
     {   if (m_pHashMulti != NULL) m_pHashMulti->setMultiplexer(pMultiplexer);  }
 
-    int setSliceDst(int which, char *pAddr);
+    int setSliceDst(int which, char *pAddr, MemcacheConn *pConn);
 
-    int clearSlice(int which)
+    int clearSlice(int which, MemcacheConn *pConn)
     {
         if ((m_pHashMulti == NULL) || (which >= m_pHashMulti->getMultiCnt()))
             return LS_FAIL;
-        multiFlushFunc(m_pHashMulti->indx2hashSlice(which), NULL);
+        multiFlushFunc(m_pHashMulti->indx2hashSlice(which), pConn, NULL);
         return LS_OK;
     }
     void m_pHash();
@@ -399,22 +435,6 @@ private:
 
 private:
     
-    static int  multiInitFunc(LsMcHashSlice *pSlice, void *pArg);
-    static int  multiConnFunc(LsMcHashSlice *pSlice, void *pArg);
-    static int  multiMultiplexerFunc(LsMcHashSlice *pSlice, void *pArg);
-    static int  multiStatFunc(LsMcHashSlice *pSlice, void *pArg);
-    static int  multiStatResetFunc(LsMcHashSlice *pSlice, void *pArg);
-    static int  multiFlushFunc(LsMcHashSlice *pSlice, void *pArg);
-    static int  multiVerboseFunc(LsMcHashSlice *pSlice, void *pArg)
-    {
-        LsShmHash *pHash = pSlice->m_hashByUser.getHash(pSlice->m_hashByUser.
-                                                        getMemcache()->getUser());
-        LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
-        if (iHdrOff != 0)
-            ((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_verbose = (uint8_t)(long)pArg;
-        return LS_OK;
-    }
-
     static int  getNxtTidItem(LsShmHash *pHash, uint64_t *pTidLast,
                               void **ppBlk, LsMcTidPkt *pPkt, int iBufSz);
     static void iter2tidPack(LsShmHElem *pElem, uint64_t *pTid,
@@ -440,11 +460,11 @@ private:
         return pRet;
     }
 
-    uint64_t getCas()
+    uint64_t getCas(MemcacheConn *pConn)
     {
-        return ((m_iHdrOff != 0) ?
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_data->cas : 0);
+        return ((pConn->getSlice()->m_iHdrOff != 0) ?
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_data->cas : 0);
     }
 
     void     saveCas(LsMcDataItem *pItem)
@@ -552,8 +572,10 @@ private:
     LsMcHashSlice *canProcessNow(const void *pKey, int iLen, MemcacheConn *pConn)
     {
         LsMcHashSlice *pSlice = setSlice(pKey, iLen, pConn);
-        if ((!pSlice->m_hashByUser.getHash(getUser())->isTidMaster())
-            && (pSlice->m_pConn->GetConnFlags() & CS_REMBUSY))
+        if (!getConfigReplication())
+            return pSlice;
+        if ((!pSlice->m_hashByUser.getHash(NULL)->isTidMaster())
+            && (pSlice->m_pConnSlaveToMaster->GetConnFlags() & CS_REMBUSY))
         {
             putWaitQ(pConn);
             return NULL;
@@ -568,123 +590,123 @@ private:
     void     fwdCommand(LsMcHashSlice *pSlice, const char *buf, int len, 
                         MemcacheConn *pConn);
 
-    void statSetCmd()
+    void statSetCmd(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.set_cmds;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.set_cmds;
     }
 
-    void statFlushCmd()
+    void statFlushCmd(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.flush_cmds;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.flush_cmds;
     }
 
-    void statGetHit()
+    void statGetHit(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.get_hits;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.get_hits;
     }
 
-    void statGetMiss()
+    void statGetMiss(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.get_misses;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.get_misses;
     }
 
-    void statTouchHit()
+    void statTouchHit(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.touch_hits;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.touch_hits;
     }
 
-    void statTouchMiss()
+    void statTouchMiss(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.touch_misses;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.touch_misses;
     }
 
-    void statDeleteHit()
+    void statDeleteHit(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.delete_hits;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.delete_hits;
     }
 
-    void statDeleteMiss()
+    void statDeleteMiss(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.delete_misses;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.delete_misses;
     }
 
-    void statIncrHit()
+    void statIncrHit(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.incr_hits;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.incr_hits;
     }
 
-    void statIncrMiss()
+    void statIncrMiss(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.incr_misses;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.incr_misses;
     }
 
-    void statDecrHit()
+    void statDecrHit(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.decr_hits;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.decr_hits;
     }
 
-    void statDecrMiss()
+    void statDecrMiss(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.decr_misses;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.decr_misses;
     }
 
-    void statCasHit()
+    void statCasHit(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.cas_hits;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.cas_hits;
     }
 
-    void statCasMiss()
+    void statCasMiss(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.cas_misses;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.cas_misses;
     }
 
-    void statCasBad()
+    void statCasBad(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.cas_badval;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.cas_badval;
     }
 
-    void statAuthCmd()
+    void statAuthCmd(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->
-                offset2ptr(m_iHdrOff))->x_stats.auth_cmds;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.auth_cmds;
     }
 
-    void statAuthErr()
+    void statAuthErr(MemcacheConn *pConn)
     {
-        if (m_iHdrOff != 0)
-            ++((LsMcHdr *)m_pCurSlice->m_hashByUser.getHash(getUser())->    
-                offset2ptr(m_iHdrOff))->x_stats.auth_errors;
+        if (pConn->getSlice()->m_iHdrOff != 0)
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
+                m_iHdrOff))->x_stats.auth_errors;
     }
     LsShmHash::iteroffset doHashUpdate(ls_strpair_s *m_parms, 
                                        LsMcUpdOpt *updOpt,
@@ -695,12 +717,10 @@ private:
 
     static LsMcCmdFunc s_LsMcCmdFuncs[];
 
-    LsMcHashSlice          *m_pCurSlice;
     LsMcHashMulti          *m_pHashMulti;
     MemcacheConn           *m_pWaitQ;
     MemcacheConn           *m_pWaitTail;
     char                   *m_pStrt;    // start of ascii command buffer
-    LsShmOffset_t           m_iHdrOff;
     ls_strpair_t            m_parms;
     LsShmHKey               m_hkey;
     LsMcDataItem            m_item;     // cmd in progress
@@ -712,7 +732,9 @@ private:
     LsMcParms               m_mcparms;
     LsMcStrPool             m_keyPool;
     LsMcStrList             m_keyList;
-    char                   *m_pUser;
+    
+    static bool             m_bConfigMultiUser;
+    static bool             m_bConfigReplication;
 };
 
 #endif // LSSHMMEMCACHE_H

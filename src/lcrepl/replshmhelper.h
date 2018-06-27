@@ -31,7 +31,7 @@ class ReplShmHelper : public TSingleton<ReplShmHelper>
     friend class TSingleton<ReplShmHelper>;
 public:    
     LsShmHash * getLsShmHash(int idx) const      
-    {   return LsMemcache::getInstance().getHash(idx); }
+    {   return LsMemcache::getInstance().getReplHash(idx); }
     
     int         tidGetNxtItems(int idx, uint64_t* tid, uint8_t* pBuf, int isize);
     

@@ -38,13 +38,37 @@ MemcacheConn::MemcacheConn()
     , _pSasl(NULL)
     , _pLink(NULL)
     , m_pHash(NULL)
+    , m_pUser(NULL)
 {
 }
 
 
 MemcacheConn::~MemcacheConn()
-{
+{ 
+    if (m_pUser) 
+        free(m_pUser); 
 }
+
+char *MemcacheConn::setUser(const char *user)
+{
+    LS_DBG_M("memcacheconn::setUser: %s\n", user);
+    if ((m_pUser) && (user) && (!(strcmp(m_pUser, user))))
+        return m_pUser;
+    if ((!m_pUser) && (!user))
+        return m_pUser;
+    if (m_pUser)
+        free(m_pUser);
+    if (user)
+        return m_pUser = strdup(user);
+    return m_pUser = NULL;
+}
+
+
+char *MemcacheConn::getUser()
+{
+    return m_pUser;
+}
+
 
 
 //void MemcacheConn::ResetReq()
@@ -67,6 +91,14 @@ LsShmHash  *MemcacheConn::getHash()
 }
 
 
+void MemcacheConn::clearForNewConn()
+{
+    setHash(NULL);
+    //setUser(NULL); We can leave the existing user.
+    setSlice(NULL);
+}
+
+
 int MemcacheConn::protocolErr()
 {
 
@@ -86,7 +118,6 @@ int MemcacheConn::InitConn(int fd, struct sockaddr *pAddr)
         m_peerAddr = achBuf;
         LS_DBG_M ("Memcache New connection from %s", m_peerAddr.c_str()) ;
         LS_DBG_M("New connection - reset user\n");
-        LsMemcache::getInstance().setUser(NULL);
     }
 #ifdef USE_SASL
     _pSasl = new LsMcSasl();
@@ -117,7 +148,7 @@ int MemcacheConn::CloseConnection()
 {
     if ( m_iConnState == CS_DISCONNECTED )
         return 0;
-    if (LsMemcache::getInstance().getVerbose() > 1)
+    if (LsMemcache::getInstance().getVerbose(this) > 1)
     {
         LS_INFO("<%d connection closed.\n", getfd());
     }
@@ -128,8 +159,9 @@ int MemcacheConn::CloseConnection()
         _pSasl = NULL;
     }
 #endif
-    LS_DBG_M("Close connection - reset user\n");
-    LsMemcache::getInstance().setUser(NULL);
+    LS_DBG_M("Close connection - reset user and other cached stuff\n");
+    setUser(NULL);
+    clearForNewConn();
     getMultiplexer()->remove( this );
     ::close( getfd() );
     m_iConnState = CS_DISCONNECTED;
@@ -284,7 +316,9 @@ int MemcacheConn::processIncoming()
 {
     ReplPacketHeader header;
     int consumed;
-    LS_DBG_M("MemcacheConn processIncoming pid:%d, addr:%p, m_bufIncoming size:%d", getpid(), this, m_bufIncoming.size());
+    LS_DBG_M("MemcacheConn processIncoming pid:%d, addr:%p, m_bufIncoming "
+             "size:%d", getpid(), this, m_bufIncoming.size());
+    //clearForNewConn();
     if (_Protocol == MC_UNKNOWN)
     {
         LS_DBG_L("MemcacheConn processIncoming 1");
@@ -301,7 +335,7 @@ int MemcacheConn::processIncoming()
         _Protocol =
             (((unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_BINARY_REQ) ?
             MC_BINARY : MC_ASCII);
-        if (LsMemcache::getInstance().getVerbose() > 1)
+        if (LsMemcache::getInstance().getVerbose(this) > 1)
         {
             LS_INFO("%d: Client using the %s protocol\n", getfd(),
                     (char *)((_Protocol == MC_BINARY) ? "binary" : "ascii"));

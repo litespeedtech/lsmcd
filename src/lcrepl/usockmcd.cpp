@@ -103,16 +103,16 @@ int UsockClnt::recvRoleChange()
         {
             if (pNewAddr[0] != '\0')
             {
-                LS_INFO("cached onNotified pid:%d, slice[%d] MASTER => SLAVE, pointing to master:%s"
-                    , getpid(), idx, pNewAddr);
-                LsMemcache::getInstance().setSliceDst(idx, pNewAddr);
+                LS_INFO("cached onNotified pid:%d, slice[%d] MASTER => SLAVE, "
+                        "pointing to master:%s", getpid(), idx, pNewAddr);
+                LsMemcache::getInstance().setSliceDst(idx, pNewAddr, NULL);
                 m_pRoleData->setRoleAddr(idx, pNewAddr, sizeof(pNewAddr) );    
             }
             else
             {   
-                LS_INFO("cached onNotified pid:%d, slice[%d] SLAVE =>MASTER"
-                    , getpid(), idx);
-                LsMemcache::getInstance().setSliceDst(idx, NULL);
+                LS_INFO("cached onNotified pid:%d, slice[%d] SLAVE =>MASTER", 
+                        getpid(), idx);
+                LsMemcache::getInstance().setSliceDst(idx, NULL, NULL);
                 m_pRoleData->setRoleAddr(idx, NULL, 0);
             }
         }

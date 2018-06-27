@@ -33,9 +33,6 @@ LsMcHashByUser::LsMcHashByUser()
     ,m_fnHasher(NULL)
     ,m_fnValComp(NULL)
     ,m_mode(0)
-    ,m_usesasl(false)
-    ,m_anonymous(false)
-    ,m_byUser(false)
     ,m_userHashes(NULL)
     ,m_pHashDefault(NULL)
 {
@@ -80,29 +77,22 @@ LsMcHashByUser::~LsMcHashByUser()
 
 
 bool LsMcHashByUser::init(
-    LsMemcache      *pMemcache,
     LsShm           *pShm,
     LsShmPool       *pGPool,
     const char      *pHashname,
     LsShmHasher_fn   fnHasher,
     LsShmValComp_fn  fnValComp,
-    int              mode,
-    bool             usesasl,
-    bool             anonymous,
-    bool             byUser)
+    int              mode)
+
 {
-    m_pMemcache = pMemcache;
     m_pShm      = pShm;
     m_pGPool    = pGPool;
     m_pHashname = pHashname;
     m_fnHasher  = fnHasher;
     m_fnValComp = fnValComp;
     m_mode      = mode;
-    m_usesasl   = usesasl;
-    m_anonymous = anonymous;
-    m_byUser    = byUser;
     
-    if ((usesasl) && (byUser) && (!m_userHashes))
+    if (LsMemcache::getConfigMultiUser() && (!m_userHashes))
     {
         LS_DBG_M("HashByUser creating user hashes\n");
         m_userHashes = ls_hash_new(0, ls_hash_hfstring, ls_hash_cmpstring, NULL);
@@ -113,12 +103,12 @@ bool LsMcHashByUser::init(
         }
     }
     // Always create a default hash but don't allow its use under some conditions.
-    //if ((!usesasl) || (!byUser) || ((anonymous) && (byUser)))
     if (!m_pHashDefault)
     {
         LS_DBG_M("HashByUser Allocate default hash\n");
-        m_pHashDefault = pGPool->getNamedHash(pHashname, 500000, fnHasher, 
-                                              fnValComp, mode);
+        m_pHashDefault = pGPool->getNamedHash(pHashname, 
+            LsMemcache::getConfigMultiUser() ? 1000 : 500000, fnHasher, 
+            fnValComp, mode);
         if (!m_pHashDefault)
         {
             LS_ERROR("Error creating default hash: %s\n", pHashname);
@@ -186,10 +176,8 @@ LsShmHash *LsMcHashByUser::getHash(char *user)
     snprintf(userHashName, userHashNameLen, "%s.%s", m_pHashname, user);
     LS_DBG_M("HashByUser getHash for user use name: %s", userHashName);
     pHash = m_pGPool->getNamedHash(userHashName,
-                                   500000, 
-                                   m_fnHasher, 
-                                   m_fnValComp, 
-                                   m_mode);
+        LsMemcache::getConfigMultiUser() ? 1000 : 500000, m_fnHasher, 
+        m_fnValComp, m_mode);
     if (!pHash)
     {
         LS_ERROR("Error creating hash for user: %s (%s)\n", user, userHashName);

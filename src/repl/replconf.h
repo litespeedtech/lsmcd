@@ -16,7 +16,6 @@
 *    along with this program. If not, see http://www.gnu.org/licenses/.      *
 *****************************************************************************/
 
-
 #ifndef __REPLCONF_H__
 #define __REPLCONF_H__
 

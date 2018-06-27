@@ -33,7 +33,6 @@ LsMcHashMulti::LsMcHashMulti()
     , m_pSlices(NULL)
     , m_pLastSlice(NULL)
     , m_pMultiplexer(NULL)
-    , m_pMemcache(NULL)
 {
 }
 
@@ -46,7 +45,7 @@ LsMcHashMulti::~LsMcHashMulti()
         while (m_iCnt > 0)
         {
             pSlice->m_hashByUser.del();
-            delete pSlice->m_pConn;
+            delete pSlice->m_pConnSlaveToMaster;
             ++pSlice;
             --m_iCnt;
         }
@@ -56,15 +55,17 @@ LsMcHashMulti::~LsMcHashMulti()
 }
 
 
-int  LsMcHashMulti::key2hashNum(LsShmHKey hkey)
+int  LsMcHashMulti::key2hashNum(LsShmHKey hkey, MemcacheConn *pConn)
 {
     if (m_iCnt <= 1)
         return 0;
-    if (m_pMemcache->sliceByUser())
+    if ((LsMemcache::getConfigMultiUser()) &&
+        (pConn->getUser()))
     {
-        char *pUser = m_pMemcache->getUser();
+        char *pUser = pConn->getUser();
         unsigned int hashNum = XXH32(pUser, strlen(pUser), 0) % m_iCnt;
         LS_DBG_M("key2hashNum return %d for user: %s\n", hashNum, pUser); 
+        
         return (int)hashNum;
     }
     unsigned int hashNum = (m_iLastHashKey = hkey) % m_iCnt;
@@ -73,10 +74,9 @@ int  LsMcHashMulti::key2hashNum(LsShmHKey hkey)
 }
 
 
-int LsMcHashMulti::init(LsMemcache *memcache, int iCnt, const char **ppPathName, 
+int LsMcHashMulti::init(int iCnt, const char **ppPathName, 
                         const char *pHashName, LsShmHasher_fn fnHashKey, 
-                        LsShmValComp_fn fnValComp, int mode, bool usesasl, 
-                        bool anonymous, bool byUser)
+                        LsShmValComp_fn fnValComp, int mode)
 {
     char *pDirName;
     char *pShmName;
@@ -85,7 +85,6 @@ int LsMcHashMulti::init(LsMemcache *memcache, int iCnt, const char **ppPathName,
     LsMcHashSlice *pSlice;
     char buf[4096];
 
-    m_pMemcache = memcache;
     if ((iCnt < 1) || (ppPathName == NULL) || (pHashName == NULL))
         return LS_FAIL;
     if (fnHashKey == NULL)
@@ -136,9 +135,8 @@ int LsMcHashMulti::init(LsMemcache *memcache, int iCnt, const char **ppPathName,
             break;
         }
 
-        if (!(pSlice->m_hashByUser.init(memcache, pShm, pGPool, pHashName, 
-                                        fnHashKey, fnValComp, mode, usesasl, 
-                                        anonymous, byUser)))
+        if (!(pSlice->m_hashByUser.init(pShm, pGPool, pHashName, 
+                                        fnHashKey, fnValComp, mode)))
         {
             ret = LS_FAIL;
             break;
@@ -146,7 +144,7 @@ int LsMcHashMulti::init(LsMemcache *memcache, int iCnt, const char **ppPathName,
         pSlice->m_idx = lstIdx - iCnt;
         LS_DBG_M(" LsMcHashMulti::init m_idx:%d", pSlice->m_idx);
         pSlice->m_iHdrOff = 0;
-        pSlice->m_pConn = NULL;
+        pSlice->m_pConnSlaveToMaster = NULL;
 
         m_pLastSlice = pSlice;
         ++ppPathName;
@@ -169,13 +167,14 @@ int LsMcHashMulti::init(LsMemcache *memcache, int iCnt, const char **ppPathName,
 
 
 int LsMcHashMulti::foreach(
-    int (*func)(LsMcHashSlice *pSlice, void *pArg), void *pArg)
+    int (*func)(LsMcHashSlice *pSlice, MemcacheConn *pConn, void *pArg), 
+    MemcacheConn *pConn, void *pArg)
 {
     int cnt = m_iCnt;
     LsMcHashSlice *pSlice = &m_pSlices[0];
     while (--cnt >= 0)
     {
-        if ((*func)(pSlice, pArg) == LS_FAIL)
+        if ((*func)(pSlice, pConn, pArg) == LS_FAIL)
             return LS_FAIL;
         ++pSlice;
     }

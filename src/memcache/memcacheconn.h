@@ -15,6 +15,8 @@
 #include <zlib.h>
 
 #include "repl/replpacket.h"
+#include "memcache/lsmchashmulti.h"
+
 //#include "replicate/replpeer.h"
 
 /* _ConnFlags */
@@ -100,7 +102,7 @@ public:
     int GetConnState( ){ return m_iConnState; }
     long GetLastActiveTime () { return m_iLastActiveTime; }
 
-    LsMcSasl * GetSasl() const             {   return _pSasl;   }
+    LsMcSasl   *GetSasl() const             {   return _pSasl;   }
     uint8_t     GetProtocol() const         {   return _Protocol;   }
     uint8_t     GetConnFlags() const        {   return _ConnFlags;   }
     void        SetConnInternal()           {   _Protocol = MC_INTERNAL;   }
@@ -110,10 +112,15 @@ public:
     void        ClrRespWait()               {   _ConnFlags &= ~CS_RESPWAIT;   }
     void        SetCmdWait()                {   _ConnFlags |= CS_CMDWAIT;   }
     void        ClrCmdWait()                {   _ConnFlags &= ~CS_CMDWAIT;   }
-    MemcacheConn * GetLink() const          {   return _pLink;   }
+    MemcacheConn *GetLink() const           {   return _pLink;   }
     void        SetLink(MemcacheConn *pLink){   _pLink = pLink;   }
     void        setHash(LsShmHash *pHash);
-    LsShmHash  *getHash();                
+    LsShmHash  *getHash();   
+    char       *setUser(const char *user);
+    char       *getUser();
+    void        setSlice(LsMcHashSlice *pSlice) { m_pSlice = pSlice; };
+    LsMcHashSlice *getSlice()               { return m_pSlice; }
+    void        clearForNewConn();
     
 private:    
     int onRead();
@@ -144,10 +151,13 @@ private:
     uint8_t         _ConnFlags;
     
     Multiplexer *   m_pMultiplexer;
-    LsMcSasl *     _pSasl;
+    LsMcSasl *      _pSasl;
     MemcacheConn *  _pLink;
     static int      s_ConnTimeout;
     LsShmHash      *m_pHash;
+    char           *m_pUser;
+    LsMcHashSlice  *m_pSlice;
+    
 };
 
 #endif

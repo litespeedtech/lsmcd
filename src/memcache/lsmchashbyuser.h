@@ -32,21 +32,15 @@ public:
     LsMcHashByUser(); 
     ~LsMcHashByUser();
     bool init(
-        LsMemcache      *pMemcache,
         LsShm           *pShm,
         LsShmPool       *pGPool,
         const char      *pHashname,
         LsShmHasher_fn   fnHasher, 
         LsShmValComp_fn  fnValComp,
-        int              mode,
-        bool             usesasl,
-        bool             anonymous,
-        bool             byUser);
+        int              mode);
     void del();
         
     LsShmHash  *getHash(char *user); // user can be NULL if !byUser or anon.
-    LsMemcache *getMemcache()
-    { return m_pMemcache; }
     
 private:
     LsMcHashByUser(const LsMcHashByUser &other);
@@ -61,12 +55,8 @@ private:
     LsShmHasher_fn   m_fnHasher;
     LsShmValComp_fn  m_fnValComp;
     int              m_mode;
-    bool             m_usesasl;
-    bool             m_anonymous;
-    bool             m_byUser;
     ls_hash_t       *m_userHashes;
     LsShmHash       *m_pHashDefault;
-    LsMemcache      *m_pMemcache;
 };
 
 #endif // HashbyUser include

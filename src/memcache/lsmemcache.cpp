@@ -1798,6 +1798,11 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 
 McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
 {
+    if (arg == MC_BINCMD_FLUSH)
+    {
+        LS_DBG_M("Do not do chkMemSz for a flush\n");
+        return MC_BINSTAT_SUCCESS;
+    }
     if (!chkItemSize(m_parms.val.len))
     {
         // memcached compatibility - remove `stale' data
@@ -1808,6 +1813,7 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
                     findIteratorWithKey(m_hkey,&m_parms)).m_iOffset != 0)
                 pConn->getHash()->eraseIterator(iterOff);
         }
+        LS_NOTICE("Binary data is too long\n");
         return MC_BINSTAT_E2BIG;
     }
     // size here is conservative approximate,
@@ -1846,8 +1852,14 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
                      "fail\n", total, m_mcparms.m_iMemMaxSz);
             return MC_BINSTAT_ENOMEM;
         }
-        pConn->getHash()->trimsize((int)(total - m_mcparms.m_iMemMaxSz)<<3, 
-                                   NULL, 0);
+        LS_DBG_M("About to trim.  Initial size: %d, need: %d\n", 
+                 pConn->getHash()->getHashDataSize(), 
+                 (int)(total - m_mcparms.m_iMemMaxSz)<<3);
+        int rc;
+        rc = pConn->getHash()->trimsize((int)(total - m_mcparms.m_iMemMaxSz)<<3, 
+                                        NULL, 0);
+        LS_DBG_M("After trim.  Rc: %d, size: %d\n", rc,
+                 pConn->getHash()->getHashDataSize());
     }
     return MC_BINSTAT_SUCCESS;
 }
@@ -2298,7 +2310,7 @@ int LsMemcache::doCmdFlush(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         pThis->respond(badCmdLineFmt, pConn);
         return 0;
     }
-    if (pThis->useMulti())
+    if ((pThis->useMulti()) && (!LsMemcache::getConfigMultiUser()))
     {
         if (pThis->m_pHashMulti->foreach(multiFlushFunc, pConn,
                                          (void *)pThis) == LS_FAIL)
@@ -2309,17 +2321,27 @@ int LsMemcache::doCmdFlush(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
     }
     else
     {
-        LsMcHashSlice *pSlice = pThis->m_pHashMulti->indx2hashSlice(0);
-        if ((!pSlice->m_hashByUser.getHash(pConn->getUser())->isTidMaster())
-            && (pConn->GetConnFlags() & CS_REMBUSY))
+        LsMcHashSlice *pSlice;
+        if (LsMemcache::getConfigMultiUser())
+            pSlice = pConn->getSlice();
+        else 
+            pSlice = pThis->m_pHashMulti->indx2hashSlice(0);
+        if (!pThis->useMulti())
         {
-            pThis->putWaitQ(pConn);
-
-            return -1;  // cannot process now
+            if ((!pSlice->m_hashByUser.getHash(pConn->getUser())->isTidMaster())
+                && (pConn->GetConnFlags() & CS_REMBUSY))
+            {
+                LS_DBG_M("doCmdFlush - put in wait queue and return\n");
+                pThis->putWaitQ(pConn);
+                return -1;  // cannot process now
+            }
+            if (pThis->fwdToRemote(pSlice, pNxt, pConn))
+            {
+                LS_DBG_M("doCmdFlush - forward and return\n");
+                return 0;
+            }
         }
-        if (pThis->fwdToRemote(pSlice, pNxt, pConn))
-            return 0;
-
+        LS_DBG_M("doCmdFlush - Do single node flush\n");
         pThis->lock(pConn);
         pConn->getHash()->clear();
         pThis->statFlushCmd(pConn);
@@ -2342,6 +2364,7 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
     pHash = pSlice->m_hashByUser.getHash(NULL);
     if (pHash->isTidMaster())
     {
+        LS_DBG_M("multiFlushFunc for TidMaster\n");
         LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
         pHash->disableAutoLock();
         pHash->lockChkRehash();
@@ -2359,6 +2382,7 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
     }
     else
     {
+        LS_DBG_M("multiFlushFunc for non-TidMaster\n");
         char buf[64];
         int len = snprintf(buf, sizeof(buf), "clear %d\r\n",
             (int)(pSlice - pThis->m_pHashMulti->indx2hashSlice(0)));
@@ -2740,7 +2764,10 @@ uint8_t *LsMemcache::setupBinCmd(
     LsMcHashSlice *pSlice;
 
     if (keyLen > KEY_MAXLEN)
+    {
+        LS_ERROR("keyLen %d is greater than KEY_MAXLEN %d\n", keyLen, KEY_MAXLEN);
         return NULL;
+    }
     LS_DBG_M("setupBinCmd, cmd: %d, bodyLen: %d, keyLen: %d\n", cmd, bodyLen, 
              keyLen);
     if (bodyLen == keyLen)
@@ -2794,7 +2821,11 @@ uint8_t *LsMemcache::setupBinCmd(
             case MC_BINCMD_ADD:
             case MC_BINCMD_SET:
                 if (pHdr->extralen != sizeof(pReqX->value))
+                {
+                    LS_NOTICE("Header extralen %d != expected %ld\n", 
+                             pHdr->extralen, sizeof(pReqX->value));
                     return NULL;
+                }
                 // special case
                 lock(pConn);
                 if ((ret = chkMemSz(pConn, cmd)) != MC_BINSTAT_SUCCESS)
@@ -2810,7 +2841,11 @@ uint8_t *LsMemcache::setupBinCmd(
             case MC_BINCMD_GATK:
             case MC_BINCMD_FLUSH:
                 if (pHdr->extralen != sizeof(pReqX->touch))
+                {
+                    LS_NOTICE("Header extralen %d != expected %ld\n", 
+                             pHdr->extralen, sizeof(pReqX->touch));
                     return NULL;
+                }
                 m_item.x_exptime = (time_t)ntohl(pReqX->touch.exptime);
                 break;
 
@@ -2820,7 +2855,11 @@ uint8_t *LsMemcache::setupBinCmd(
                 if (pHdr->extralen != sizeof(pReqX->incrdecr))
 #endif
                 if (pHdr->extralen != 20)	// ugly, but need for 64-bit compiler
+                {
+                    LS_NOTICE("Header extralen %d != expected 20\n", 
+                             pHdr->extralen);
                     return NULL;
+                }
                 m_parms.val.len = parmAdjLen(0);
                 pOpt->m_iFlags = cmd;
                 if (m_mcparms.m_usecas)
@@ -2964,6 +3003,8 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
     {
         if (keyLen != 0)
         {
+            LS_DBG_M("Returning message MC_BINSTAT_KEYENOENT\n");
+            
             setupBinResHdr(pHdr,
                 0, (uint16_t)keyLen, (uint32_t)keyLen,
                 MC_BINSTAT_KEYENOENT, resBuf, pConn);
@@ -2972,6 +3013,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         }
         else
         {
+            LS_DBG_M("Returning error MC_BINSTAT_KEYENOENT\n");
             binErrRespond(pHdr, MC_BINSTAT_KEYENOENT, pConn);
         }
     }
@@ -3135,29 +3177,44 @@ void LsMemcache::doBinFlush(McBinCmdHdr *pHdr, MemcacheConn *pConn)
 {
     if ((pHdr->extralen > 0) && (m_item.x_exptime != 0))
     {
+        LS_DBG_M("doBinFlush, return EINVAL\n");
         binErrRespond(pHdr, MC_BINSTAT_EINVAL, pConn);
         return;
     }
-    if (useMulti())
+    if ((useMulti()) && (!LsMemcache::getConfigMultiUser()))
     {
-        if (m_pHashMulti->foreach(multiFlushFunc, pConn, (void *)this) == LS_FAIL)
+        if (m_pHashMulti->foreach(multiFlushFunc, pConn, (void *)this) == 
+            LS_FAIL)
         {
+            LS_DBG_M("doBinFlush, return REMOTEERROR\n");
             binErrRespond(pHdr, MC_BINSTAT_REMOTEERROR, pConn);
             return;
         }
     }
     else
     {
-        LsMcHashSlice *pSlice = m_pHashMulti->indx2hashSlice(0);
-        if ((!pConn->getHash()->isTidMaster()) && 
-            (pSlice->m_pConnSlaveToMaster->GetConnFlags() & CS_REMBUSY))
+        LsMcHashSlice *pSlice;
+        if (LsMemcache::getConfigMultiUser())
+            pSlice = pConn->getSlice();
+        else
+            pSlice = m_pHashMulti->indx2hashSlice(0);
+        LS_DBG_M("doBinFlush, Single slice %p\n", pSlice);
+        if (!useMulti())
         {
-            putWaitQ(pConn);
-            return;  // cannot process now
+            if ((!pConn->getHash()->isTidMaster()) && 
+                (pSlice->m_pConnSlaveToMaster->GetConnFlags() & CS_REMBUSY))
+            {
+                LS_DBG_M("doBinFlush, putWaitQ and return\n");
+                putWaitQ(pConn);
+                return;  // cannot process now
+            }
+            if (fwdBinToRemote(pSlice, pHdr, pConn))
+            {
+                LS_DBG_M("doBinFlush, Forward and return\n");
+                return;
+            }
         }
-        if (fwdBinToRemote(pSlice, pHdr, pConn))
-            return;
-
+        LS_DBG_M("doBinFlush, Single slice local flush\n");
         lock(pConn);
         pConn->getHash()->clear();
         statFlushCmd(pConn);

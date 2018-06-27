@@ -324,6 +324,7 @@ public:
         {
             *pValPtr = pItem->x_data->val;
         }
+        LS_DBG_M("iter2data, valLen: %d, pData: %p\n", *pValLen, *pValPtr);
         return pItem;
     }
 

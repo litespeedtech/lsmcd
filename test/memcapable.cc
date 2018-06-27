@@ -497,8 +497,14 @@ static enum test_return do_validate_response_header(response *rsp,
   verify(rsp->plain.message.header.response.opcode == cc);
   verify(rsp->plain.message.header.response.datatype == PROTOCOL_BINARY_RAW_BYTES);
   if (rsp->plain.message.header.response.status != status)
+  {
       fprintf(stderr, "Unexpected status that will fail the function: %d, "
               "opcode: 0x%x\n", rsp->plain.message.header.response.status, cc);
+      fprintf(stderr, "keylen: %d, extlen: %d, bodylen: %d\n", 
+              rsp->plain.message.header.response.keylen,
+              rsp->plain.message.header.response.extlen,
+              rsp->plain.message.header.response.bodylen);
+  }
     
   verify(rsp->plain.message.header.response.status == status);
   verify(rsp->plain.message.header.response.opaque == 0xdeadbeef);
@@ -1291,7 +1297,7 @@ static enum test_return test_binary_flush_impl(const char *key, uint8_t cc)
 
   for (int ii= 0; ii < 2; ++ii)
   {
-    execute(binary_set_item(key, key));
+    //execute(binary_set_item(key, key));
     flush_command(&cmd, cc, 0, ii == 0);
     execute(send_packet(&cmd));
 
@@ -2452,6 +2458,8 @@ int main(int argc, char **argv)
       s_did_auth = false;
 #endif
       closesocket(sock);
+      if (verbose)
+          fprintf(stderr, "Reconnecting...\n");
       if ((sock= connect_server(hostname, port)) == INVALID_SOCKET)
       {
         fprintf(stderr, "Failed to connect to <%s:%s>: %s\n", hostname, port, strerror(get_socket_errno()));

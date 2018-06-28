@@ -66,6 +66,7 @@ public:
     static const char  *s_pAppName;
     static char        *s_pSaslPwdb;
     static uint8_t      verbose;
+    static char        *s_pHostName;
 
 private:
     LsMcSasl(const LsMcSasl &other);
@@ -82,6 +83,10 @@ private:
         }
     }
 
+    char *getHostName(void);
+    
+    int rebuildAuth(char *pVal, unsigned int mechLen, unsigned int valLen, 
+                    char *sval, char **ppVal, unsigned int *pValLen);
 private:
     sasl_conn_t        *m_pSaslConn;
     bool                m_authenticated;

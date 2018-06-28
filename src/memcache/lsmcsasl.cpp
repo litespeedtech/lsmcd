@@ -25,10 +25,14 @@
 #include <sasl/saslplug.h>
 #include <log4cxx/logger.h>
 
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 256
+#endif
 
 const char *LsMcSasl::s_pAppName = "memcached";
 char       *LsMcSasl::s_pSaslPwdb = NULL;
 uint8_t     LsMcSasl::verbose = 0;
+char       *LsMcSasl::s_pHostName = NULL;
 
 #ifdef ENABLE_SASL_PWDB
 
@@ -208,23 +212,106 @@ int LsMcSasl::listMechs(const char **pResult)
 }
 
 
+char *LsMcSasl::getHostName(void)
+{
+    if (s_pHostName)
+        return s_pHostName;
+    
+    char hostname[HOST_NAME_MAX + 1];
+    gethostname(hostname, sizeof(hostname));
+    LsMcSasl::s_pHostName = strdup(hostname);
+    if (!LsMcSasl::s_pHostName)
+        LS_ERROR("Insufficient memory saving host name\n");
+    
+    return s_pHostName;
+}
+
+
+int LsMcSasl::rebuildAuth(char *pVal, unsigned int mechLen, unsigned int valLen, 
+                          char *sval, char **ppVal, unsigned int *pValLen)
+{
+    /* The existing format for pVal is:
+     *      - (preceded by non-NULL terminated mech when it's pBuf) 
+     *      - NULL terminated user
+     *      - NULL terminated user 
+     *      - non-NULL terminated password.  
+     * The user MUST include the realm or it will fail.  The doc says it's our 
+     * responsibility to assure that.  Ok.  */
+    LS_DBG_M("rebuildAuth for missing server name (realm)\n"); 
+    unsigned int index = strlen(pVal) + 1;
+    unsigned int counter = 1;
+    const char *user1 = pVal;
+    const char *user2 = NULL;
+    const char *password = NULL;
+    while ((index < valLen - mechLen) && (counter < 3))
+    {
+        //LS_DBG_M("   pval[%d]: %s\n", index, &pVal[index]);
+        if (counter == 1)
+            user2 = &pVal[index];
+        else
+            password = &pVal[index];
+        index += strlen(&pVal[index]) + 1;
+        counter++;
+    }
+    if (strcmp(user1, user2)) 
+    {
+        LS_ERROR("SASL User names not matching\n");
+        return -1;
+    }
+    char *hostname = getHostName();
+    if (!hostname)
+        return -1;
+    
+    char full_username[HOST_NAME_MAX + valLen];
+    snprintf(full_username, sizeof(full_username), "%s@%s", user1, hostname);
+    LS_DBG_M("Converting user: %s to %s\n",
+             pVal, full_username);
+    unsigned int full_username_len = strlen(full_username);
+    strcpy(sval, full_username);
+    index = full_username_len + 1;
+    strcpy(&sval[index], full_username);
+    index += full_username_len + 1;
+    strcpy(&sval[index], password);
+    index += strlen(password);
+    valLen = index;
+    *pValLen = valLen;
+    *ppVal = sval;
+    //index = 0;
+    //while (index < valLen)
+    //{
+    //    LS_DBG_M("   val[%d]: %s\n", index, &sval[index]);
+    //    index += strlen(&sval[index]) + 1;
+    //}
+    LS_DBG_M("pVal: %s, valLen: %d\n", pVal, valLen);
+    return 0;
+}
+
+
 int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     const char **pResult, unsigned int *pLen)
 {
-    LS_DBG_M("SASL chkAuth\n");
+    LS_DBG_M("SASL chkAuth, mechLen: %d, valLen: %d\n", mechLen, valLen);
     if (getSaslConn() == NULL)
         return -1;
     int ret;
     char mech[SASLMECH_MAXLEN + 1];
-    const char *pVal = ((valLen > 0) ? (pBuf + mechLen) : NULL);
+    if (valLen <= 0)
+    {
+        LS_ERROR("SASL valLen unexpected value: %d\n", valLen);
+        return -1;
+    }
+    char *pVal = pBuf + mechLen;
     *pResult = NULL;
     *pLen = 0;
     ::memcpy(mech, pBuf, mechLen);
     mech[mechLen] = '\0';
-    char sval[valLen + 1];
-    memcpy(sval, pVal, valLen);
-    sval[valLen] = 0;
-    LS_DBG_M("SASL server_start, mech: %s, pval: %s\n", mech, sval);
+    char sval[valLen + HOST_NAME_MAX + 1];
+    if (!strchr(pVal,'@'))
+        if (rebuildAuth(pVal, mechLen, valLen, sval, &pVal, &valLen) == -1)
+            return -1;
+        
+    LS_DBG_M("SASL server_start, mech: %s, pval: %s, valLen: %d\n", 
+             mech, pVal, valLen);
     ret = sasl_server_start(m_pSaslConn, mech, pVal, valLen, pResult, pLen);
     if (ret == SASL_OK)
     {

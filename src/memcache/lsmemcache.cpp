@@ -3433,7 +3433,7 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         char user[userLen + 1];
         memcpy(user, (char *)(pHdr + 1) + mechLen, userLen);
         user[userLen] = 0;
-        LS_DBG_M("SASL worked, user: %s! mechLen: %d, userLen: %d, usesasl: %s,"
+        LS_DBG_M("SASL worked, user: %s, mechLen: %d, userLen: %d, usesasl: %s,"
                  " byUser: %s\n", user, mechLen, userLen, 
                  m_mcparms.m_usesasl ? "YES" : "NO", 
                  m_mcparms.m_byUser ? "YES" : "NO");

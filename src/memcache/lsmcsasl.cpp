@@ -243,15 +243,22 @@ int LsMcSasl::rebuildAuth(char *pVal, unsigned int mechLen, unsigned int valLen,
     const char *user1 = pVal;
     const char *user2 = NULL;
     const char *password = NULL;
-    while ((index < valLen - mechLen) && (counter < 3))
+    unsigned int password_len;
+    while ((index < valLen) && (counter < 3))
     {
         //LS_DBG_M("   pval[%d]: %s\n", index, &pVal[index]);
         if (counter == 1)
             user2 = &pVal[index];
         else
             password = &pVal[index];
-        index += strlen(&pVal[index]) + 1;
         counter++;
+        if (counter == 3)
+        {
+            password_len = valLen - index;
+            index = valLen;
+        }
+        else 
+            index += strlen(&pVal[index]) + 1;
     }
     if (strcmp(user1, user2)) 
     {
@@ -271,8 +278,8 @@ int LsMcSasl::rebuildAuth(char *pVal, unsigned int mechLen, unsigned int valLen,
     index = full_username_len + 1;
     strcpy(&sval[index], full_username);
     index += full_username_len + 1;
-    strcpy(&sval[index], password);
-    index += strlen(password);
+    memcpy(&sval[index], password, password_len);
+    index += password_len;
     valLen = index;
     *pValLen = valLen;
     *ppVal = sval;

@@ -3403,7 +3403,7 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     LS_DBG_M("doBinSaslAuth\n");
     if (!m_mcparms.m_usesasl)
     {
-        LS_DBG_M("SASL off\n");
+        LS_NOTICE("SASL authorization request, with SASL disabled\n");
         binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD, pConn);
         pConn->setUser(NULL);
         return;
@@ -3412,7 +3412,7 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     unsigned int valLen = (unsigned int)ntohl(pHdr->totbody) - mechLen;
     if (mechLen > SASLMECH_MAXLEN)
     {
-        LS_DBG_M("SASL mech not right\n");
+        LS_NOTICE("SASL mech type is unknown\n");
         binErrRespond(pHdr, MC_BINSTAT_EINVAL, pConn);
         return;
     }

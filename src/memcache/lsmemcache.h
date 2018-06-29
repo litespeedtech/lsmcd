@@ -36,6 +36,8 @@
 #define KEY_MAXLEN      250     // maximum key length from memcached
 #define VAL_MAXSIZE    (1024*1024)      // maximum size of value
 #define MEM_MAXSIZE    (64*1024*1024)   // default maximum size of hash memory
+#define USER_SIZE       1000    // Should be juse a default.
+#define HASH_SIZE       500000  // Should be juse a default.
 
 #define DSTADDR_MAXLEN (46+6)   // max dest addr + port, see INET6_ADDRSTRLEN
 
@@ -229,6 +231,8 @@ typedef struct LsMcParms_s
     bool            m_nomemfail;    // fail if nomem (rather than purge)
     uint32_t        m_iValMaxSz;
     LsShmXSize_t    m_iMemMaxSz;
+    uint32_t        m_userSize;
+    uint32_t        m_hashSize;
 } LsMcParms;
 
 class LsMemcache;

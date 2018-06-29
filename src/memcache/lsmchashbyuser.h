@@ -37,7 +37,9 @@ public:
         const char      *pHashname,
         LsShmHasher_fn   fnHasher, 
         LsShmValComp_fn  fnValComp,
-        int              mode);
+        int              mode,
+        uint32_t         userSize,
+        uint32_t         hashSize);
     void del();
         
     LsShmHash  *getHash(char *user); // user can be NULL if !byUser or anon.
@@ -57,6 +59,8 @@ private:
     int              m_mode;
     ls_hash_t       *m_userHashes;
     LsShmHash       *m_pHashDefault;
+    uint32_t         m_userSize;
+    uint32_t         m_hashSize;
 };
 
 #endif // HashbyUser include

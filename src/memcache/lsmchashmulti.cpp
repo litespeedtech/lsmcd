@@ -20,6 +20,7 @@
 #include <shm/lsshmtidmgr.h>
 #include <memcacheconn.h>
 #include <log4cxx/logger.h>
+#include <repl/replconf.h>
 
 
 #include <stdlib.h>
@@ -76,7 +77,8 @@ int  LsMcHashMulti::key2hashNum(LsShmHKey hkey, MemcacheConn *pConn)
 
 int LsMcHashMulti::init(int iCnt, const char **ppPathName, 
                         const char *pHashName, LsShmHasher_fn fnHashKey, 
-                        LsShmValComp_fn fnValComp, int mode)
+                        LsShmValComp_fn fnValComp, int mode, uint32_t userSize,
+                        uint32_t hashSize)
 {
     char *pDirName;
     char *pShmName;
@@ -136,7 +138,8 @@ int LsMcHashMulti::init(int iCnt, const char **ppPathName,
         }
 
         if (!(pSlice->m_hashByUser.init(pShm, pGPool, pHashName, 
-                                        fnHashKey, fnValComp, mode)))
+                                        fnHashKey, fnValComp, mode, userSize,
+                                        hashSize)))
         {
             ret = LS_FAIL;
             break;

@@ -35,6 +35,8 @@ LsMcHashByUser::LsMcHashByUser()
     ,m_mode(0)
     ,m_userHashes(NULL)
     ,m_pHashDefault(NULL)
+    ,m_userSize(1000)
+    ,m_hashSize(500000)
 {
     LS_DBG_M("HashByUser contructor\n");
 } 
@@ -82,7 +84,9 @@ bool LsMcHashByUser::init(
     const char      *pHashname,
     LsShmHasher_fn   fnHasher,
     LsShmValComp_fn  fnValComp,
-    int              mode)
+    int              mode,
+    uint32_t         userSize,
+    uint32_t         hashSize)
 
 {
     m_pShm      = pShm;
@@ -105,10 +109,10 @@ bool LsMcHashByUser::init(
     // Always create a default hash but don't allow its use under some conditions.
     if (!m_pHashDefault)
     {
-        LS_DBG_M("HashByUser Allocate default hash\n");
-        m_pHashDefault = pGPool->getNamedHash(pHashname, 
-            LsMemcache::getConfigMultiUser() ? 1000 : 500000, fnHasher, 
-            fnValComp, mode);
+        int hashSz = LsMemcache::getConfigMultiUser() ? userSize : hashSize;
+        LS_DBG_M("HashByUser Allocate default hash, size: %d\n", hashSz);
+        m_pHashDefault = pGPool->getNamedHash(pHashname, hashSz, fnHasher, 
+                                              fnValComp, mode);
         if (!m_pHashDefault)
         {
             LS_ERROR("Error creating default hash: %s\n", pHashname);
@@ -173,11 +177,12 @@ LsShmHash *LsMcHashByUser::getHash(char *user)
     }
     int userHashNameLen = strlen(m_pHashname) + 1 + strlen(user) + 1;
     char userHashName[userHashNameLen];
+    int32_t hashSz = LsMemcache::getConfigMultiUser() ? m_userSize : m_hashSize;
     snprintf(userHashName, userHashNameLen, "%s.%s", m_pHashname, user);
-    LS_DBG_M("HashByUser getHash for user use name: %s", userHashName);
-    pHash = m_pGPool->getNamedHash(userHashName,
-        LsMemcache::getConfigMultiUser() ? 1000 : 500000, m_fnHasher, 
-        m_fnValComp, m_mode);
+    LS_DBG_M("HashByUser getHash for user use name: %s, size: %d", userHashName,
+             hashSz);
+    pHash = m_pGPool->getNamedHash(userHashName, hashSz, m_fnHasher, 
+                                   m_fnValComp, m_mode);
     if (!pHash)
     {
         LS_ERROR("Error creating hash for user: %s (%s)\n", user, userHashName);

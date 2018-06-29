@@ -42,6 +42,8 @@
 #define DEF_MEMMAXSZ        0
 #define DEF_ANONYMOUS       false
 #define DEF_BYUSER          false
+#define DEF_USERSIZE        1000
+#define DEF_HASHSIZE        500000
 
 static log4cxx::Logger* initLogger(const char* logFile, const char* logLevel)
 {
@@ -69,6 +71,8 @@ LcReplConf::LcReplConf()
     , m_group("nobody")
     , m_anonymous(false)
     , m_byUser(false)
+    , m_userSize(DEF_USERSIZE)
+    , m_hashSize(DEF_HASHSIZE)
     , m_pPriorities(NULL)
     , m_pShmFiles(NULL)
 {}
@@ -131,6 +135,12 @@ bool LcReplConf::parse(const char *szFile)
     
     ptr = m_confParser.getConfig("CACHED.MEMMAXSZ");
     m_memMaxSz = ptr ? atoi(ptr) : DEF_MEMMAXSZ;
+
+    ptr = m_confParser.getConfig("CACHED.USERSIZE");
+    m_userSize = ptr ? atoi(ptr) : DEF_USERSIZE;
+
+    ptr = m_confParser.getConfig("CACHED.HASHSIZE");
+    m_hashSize = ptr ? atoi(ptr) : DEF_HASHSIZE;
 
 
     if ( (ptr = m_confParser.getConfig("CACHED.USECAS")) != NULL)
@@ -398,6 +408,16 @@ bool LcReplConf::getAnonymous()
 bool LcReplConf::getByUser()
 {
     return m_byUser;
+}
+
+uint32_t LcReplConf::getUserSize()
+{
+    return m_userSize;
+}
+
+uint32_t LcReplConf::getHashSize()
+{
+    return m_hashSize;
 }
 
 uint16_t LcReplConf::getCachedProcCnt() const 

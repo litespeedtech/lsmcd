@@ -360,6 +360,8 @@ LsMemcache::LsMemcache()
     m_mcparms.m_nomemfail = false;
     m_mcparms.m_iValMaxSz = VAL_MAXSIZE;
     m_mcparms.m_iMemMaxSz = MEM_MAXSIZE;
+    m_mcparms.m_userSize  = USER_SIZE;
+    m_mcparms.m_hashSize  = HASH_SIZE;
 }
 
 static const char *g_pShmName = "SHMMCTEST";
@@ -482,7 +484,8 @@ int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
     int mode = (LSSHM_FLAG_TID|LSSHM_FLAG_LRU);//|LSSHM_FLAG_TID_SLAVE);
     m_pHashMulti = new LsMcHashMulti;
     if (m_pHashMulti->init(iCnt, ppPathName, pHashName, LsShmHash::hashXXH32, 
-                           memcmp, mode) != LS_OK)
+                           memcmp, mode, pParms->m_userSize, 
+                           pParms->m_hashSize) != LS_OK)
     {
         delete m_pHashMulti;
         m_pHashMulti = NULL;
@@ -504,6 +507,10 @@ int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
         m_mcparms.m_iValMaxSz = pParms->m_iValMaxSz;
     if (pParms->m_iMemMaxSz > 0)
         m_mcparms.m_iMemMaxSz = pParms->m_iMemMaxSz;
+    if (pParms->m_userSize > 0)
+        m_mcparms.m_userSize = pParms->m_userSize;
+    if (pParms->m_hashSize > 0)
+        m_mcparms.m_hashSize = pParms->m_hashSize;
 #ifdef USE_SASL
     LS_DBG_M("SASL defined: %s\n",m_mcparms.m_usesasl ? "YES" : "NO");
     //setVerbose(getVerbose(pConn));

@@ -44,7 +44,8 @@ public:
 
     int  init(int iCnt, const char **ppPathName, 
               const char *pHashName, LsShmHasher_fn fnHashKey, 
-              LsShmValComp_fn fnValComp, int mode);
+              LsShmValComp_fn fnValComp, int mode, uint32_t userSize, 
+              uint32_t hashSize);
 
     int  foreach(int (*func)(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
                              void *pArg), MemcacheConn *pConn, void *pArg);

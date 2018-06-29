@@ -126,7 +126,8 @@ int LcReplGroup::onTimer1s()
     {
         s_timeOut = 4;
         connGroupLstnrs();
-        monitorRoles();
+        if (LsMemcache::getConfigReplication())
+            monitorRoles();
     }
 
     return LS_OK;   
@@ -262,7 +263,8 @@ int LcReplGroup::connGroupLstnrs()
         LS_DBG_M("LcReplGroup::connAllListenSvr addr:%s", sockAddr);
         if (!pConn->isActive() )
         {
-            LS_DBG_M("LcReplGroup::connAllListenSvr is not active,  pMultiplexer:%p", getMultiplexer());
+            LS_DBG_M("LcReplGroup::connAllListenSvr is not active,  "
+                     "pMultiplexer:%p", getMultiplexer());
             pConn->closeConnection();
             pConn->SetMultiplexer(getMultiplexer() );
 

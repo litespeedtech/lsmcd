@@ -173,13 +173,17 @@ int LsmcdImpl::PreEventLoop()
         m_pMultiplexer = new Poller();
     }
     m_pReplListener.SetMultiplexer( m_pMultiplexer );
-    m_pReplListener.SetListenerAddr(getReplConf()->getLisenSvrAddr());
-    if ( m_pReplListener.Start(-1) != LS_OK )
+    if (LsMemcache::getConfigReplication())
     {
-        LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
-        return LS_FAIL;;
+        m_pReplListener.SetListenerAddr(getReplConf()->getLisenSvrAddr());
+        if ( m_pReplListener.Start(-1) != LS_OK )
+        {
+            LS_ERROR("repl listener failed to start, addr=%s\n", 
+                     getReplConf()->getLisenSvrAddr());
+            return LS_FAIL;;
+        }
     }
-
+    
     m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
     m_pMemcacheListener.SetListenerAddr ( getReplConf()->getMemCachedAddr() );
     if ( m_pMemcacheListener.Start() != LS_OK )
@@ -187,24 +191,29 @@ int LsmcdImpl::PreEventLoop()
         LS_ERROR("Memcache Listener failed to start");
         return LS_FAIL;
     }
-    
-    m_usockLstnr.SetMultiplexer(m_pMultiplexer);
-    m_usockLstnr.SetListenerAddr( getReplConf()->getCachedUsPath() );
-    if ( m_usockLstnr.Start( 1 + getReplConf()->getCachedProcCnt()) != LS_OK )
+
+    if (LsMemcache::getConfigReplication())
     {
-        LS_ERROR("Memcache usock listener failed to start");
-        return LS_FAIL;
-    }    
-    LS_DBG_M("Memcache usock listener is up");
-    
-    m_fdPassLstnr.SetMultiplexer( m_pMultiplexer );
-    m_fdPassLstnr.SetListenerAddr(getReplConf()->getDispatchAddr());
-    if ( m_fdPassLstnr.Start(-1, &m_usockLstnr) != LS_OK )
-    {
-        LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
-        return LS_FAIL;;
+        m_usockLstnr.SetMultiplexer(m_pMultiplexer);
+        m_usockLstnr.SetListenerAddr( getReplConf()->getCachedUsPath() );
+        if ( m_usockLstnr.Start( 1 + getReplConf()->getCachedProcCnt()) != LS_OK )
+        {
+            LS_ERROR("Memcache usock listener failed to start");
+            return LS_FAIL;
+        }    
+        LS_DBG_M("Memcache usock listener is up");
     }
     
+    if (LsMemcache::getConfigReplication())
+    {
+        m_fdPassLstnr.SetMultiplexer( m_pMultiplexer );
+        m_fdPassLstnr.SetListenerAddr(getReplConf()->getDispatchAddr());
+        if ( m_fdPassLstnr.Start(-1, &m_usockLstnr) != LS_OK )
+        {
+            LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
+            return LS_FAIL;;
+        }
+    }
 //    int cnt = getReplConf()->getCachedProcCnt();
     
 //     LsRepl2CacheEvent *pR2cEventPtrs[cnt];
@@ -225,10 +234,13 @@ int LsmcdImpl::PreEventLoop()
         pLsShmHash->setEventNotifier(&m_lsShmEvent);
     }
 #endif
-    LcReplGroup::getInstance().setMultiplexer(m_pMultiplexer);
-    LcReplGroup::getInstance().initReplConn();
-    LcReplGroup::getInstance().setRef(&m_usockLstnr);
 
+    if (LsMemcache::getConfigReplication())
+    {
+        LcReplGroup::getInstance().setMultiplexer(m_pMultiplexer);
+        LcReplGroup::getInstance().initReplConn();
+        LcReplGroup::getInstance().setRef(&m_usockLstnr);
+    }
     return LS_OK;
 }
 
@@ -399,14 +411,16 @@ int LsmcdImpl::ProcessTimerEvent()
 
 int LsmcdImpl::connUsockSvr()
 {
-    char pBuf[256];
-    m_pUsockClnt = new UsockClnt();
-    m_pUsockClnt->SetMultiplexer( m_pMultiplexer );
-    snprintf(pBuf, sizeof(pBuf), "%s%d", getReplConf()->getCachedUsPath(),
-             Lsmcd::getInstance().getProcId());
-    m_pUsockClnt->setLocalAddr(pBuf);
-    m_pUsockClnt->connectTo(getReplConf()->getRepldUsPath());
-    
+    if (LsMemcache::getConfigReplication())
+    {
+        char pBuf[256];
+        m_pUsockClnt = new UsockClnt();
+        m_pUsockClnt->SetMultiplexer( m_pMultiplexer );
+        snprintf(pBuf, sizeof(pBuf), "%s%d", getReplConf()->getCachedUsPath(),
+                 Lsmcd::getInstance().getProcId());
+        m_pUsockClnt->setLocalAddr(pBuf);
+        m_pUsockClnt->connectTo(getReplConf()->getRepldUsPath());
+    }
     return 0;
 }
 

@@ -469,7 +469,6 @@ int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
     const char *pHashName, LsMcParms *pParms)
 {
     setConfigMultiUser(pParms->m_usesasl && pParms->m_byUser);
-    setConfigReplication(getReplConf()->getLBAddrs().size() >= 2);
     if ((getConfigMultiUser()) && 
         (getConfigReplication()))
     {
@@ -2373,12 +2372,10 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
             ++((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats.flush_cmds;
         pHash->unlock();
         pHash->enableAutoLock();
-        
-        Lsmcd::getInstance().getUsockConn()->cachedNotifyData(
-            Lsmcd::getInstance().getProcId(), pSlice->m_idx );
-        
-//         if (pSlice->m_pNotifier != NULL)
-//             pSlice->m_pNotifier->notify();
+
+        if (getConfigReplication())
+            Lsmcd::getInstance().getUsockConn()->cachedNotifyData(
+                Lsmcd::getInstance().getProcId(), pSlice->m_idx );
     }
     else
     {

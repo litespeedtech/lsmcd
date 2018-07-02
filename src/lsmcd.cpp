@@ -172,6 +172,11 @@ int LsmcdImpl::PreEventLoop()
         delete m_pMultiplexer;
         m_pMultiplexer = new Poller();
     }
+    
+    LsMemcache::getInstance().setMultiplexer(m_pMultiplexer);
+    if (LsMemcache::getInstance().initMcEvents() < 0)
+        return LS_FAIL;
+    
     m_pReplListener.SetMultiplexer( m_pMultiplexer );
     if (LsMemcache::getConfigReplication())
     {
@@ -222,9 +227,6 @@ int LsmcdImpl::PreEventLoop()
 //         return LS_FAIL;
 //     }
 
-    LsMemcache::getInstance().setMultiplexer(m_pMultiplexer);
-    if (LsMemcache::getInstance().initMcEvents() < 0)
-        return LS_FAIL;
 
 #ifdef notdef
     if( m_uRole == R_MASTER )

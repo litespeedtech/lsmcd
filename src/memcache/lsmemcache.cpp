@@ -398,6 +398,10 @@ int LsMemcache::multiInitFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
 {
     // This is initialization and it doesn't use the pConn - no need to validate
     LsShmHash *pHash = pSlice->m_hashByUser.getHash(NULL);
+    if (!pConn)
+        pConn = pSlice->m_pConnSlaveToMaster;
+    pConn->setHash(pSlice->m_hashByUser.getHash(NULL));
+    
     LsMcParms *pParms = (LsMcParms *)pArg;
     LsShmSize_t size;
     LsShmOffset_t off, iHelperOff;
@@ -462,7 +466,8 @@ int LsMemcache::multiInitFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
     }
     pHash->unlock();
     pHash->enableAutoLock();
-    pSlice->m_iHdrOff = off;
+    pConn->setHdrOff(off);
+    LS_DBG_M("SetHdrOff: %d for pConn: %p\n", off, pConn);
     return ((off != 0) ? ret : LS_FAIL);
 }
 
@@ -491,13 +496,6 @@ int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
         m_pHashMulti = NULL;
         return -1;
     }
-    if (m_pHashMulti->foreach(multiInitFunc, NULL, (void *)pParms) == LS_FAIL)
-    {
-        delete m_pHashMulti;
-        m_pHashMulti = NULL;
-        return -1;
-    }
-
     m_mcparms.m_usecas = pParms->m_usecas;
     m_mcparms.m_usesasl = pParms->m_usesasl;
     m_mcparms.m_anonymous = pParms->m_anonymous;
@@ -580,7 +578,15 @@ int LsMemcache::initMcEvents()
     Multiplexer *pMultiplexer;
     if ((pMultiplexer = m_pHashMulti->getMultiplexer()) == NULL)
         return LS_FAIL;
-    return m_pHashMulti->foreach(multiMultiplexerFunc, NULL, (void *)pMultiplexer);
+
+    
+    if (m_pHashMulti->foreach(multiMultiplexerFunc, NULL, 
+                              (void *)pMultiplexer) == LS_FAIL)
+        return -1;
+    
+    LsMcParms *pMcParms = &m_mcparms;    
+    
+    return m_pHashMulti->foreach(multiInitFunc, NULL, (void *)pMcParms);
 }
 
 int LsMemcache::setSliceDst(int which, char *pAddr, MemcacheConn *pConn)
@@ -594,7 +600,7 @@ int LsMemcache::setSliceDst(int which, char *pAddr, MemcacheConn *pConn)
     LsMcHashSlice *pSlice = m_pHashMulti->indx2hashSlice(which);
     LsShmHash *pHash = pSlice->m_hashByUser.getHash(pConn->getUser());
     uint8_t *pDstAddr =
-        ((LsMcHdr *)pHash->offset2ptr(pSlice->m_iHdrOff))->x_dstaddr;
+        ((LsMcHdr *)pHash->offset2ptr(pConn->getHdrOff()))->x_dstaddr;
     if (*pDstAddr != 0)
     {
         LS_DBG_M("closing slice[%d] last svr addr [%s].\n", which, pDstAddr);
@@ -2104,7 +2110,7 @@ int LsMemcache::doCmdStats(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
     char *tokPtr;
     size_t tokLen;
     char *pStr = pInput->key.ptr;
-    if (pConn->getSlice()->m_iHdrOff == 0)
+    if (pConn->getHdrOff() == 0)
     {
         pThis->respond("SERVER_ERROR no statistics" "\r\n", pConn);
         return 0;
@@ -2124,15 +2130,16 @@ int LsMemcache::doCmdStats(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         {
             if (strcmp(tokPtr, "reset") == 0)
             {
-                if (pThis->useMulti())
+                if (pThis->statsAggregate(pConn))
                 {
-                    pThis->m_pHashMulti->foreach(multiStatResetFunc, pConn, (void *)NULL);
+                    pThis->m_pHashMulti->foreach(multiStatResetFunc, NULL, 
+                                                 (void *)NULL);
                 }
                 else
                 {
                     pThis->lock(pConn);
                     ::memset(&((LsMcHdr *)pConn->getHash()->
-                                offset2ptr(pConn->getSlice()->m_iHdrOff))->x_stats, 
+                                offset2ptr(pConn->getHdrOff()))->x_stats, 
                              0, sizeof(LsMcStats));
                     pThis->unlock(pConn);
                 }
@@ -2149,7 +2156,7 @@ int LsMemcache::doCmdStats(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
     struct rusage usage;
     getrusage(RUSAGE_SELF, &usage);
     LsMcStats stats;
-    if (pThis->useMulti())
+    if (pThis->statsAggregate(pConn))
     {
         ::memset((void *)&stats, 0, sizeof(stats));
         pThis->m_pHashMulti->foreach(multiStatFunc, pConn, (void *)&stats);
@@ -2159,7 +2166,7 @@ int LsMemcache::doCmdStats(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         pThis->lock(pConn);
         ::memcpy((void *)&stats,
                  (void *)&((LsMcHdr *)pConn->getHash()->offset2ptr(
-                     pConn->getSlice()->m_iHdrOff))->x_stats, 
+                     pConn->getHdrOff()))->x_stats, 
                  sizeof(stats));
         pThis->unlock(pConn);
     }
@@ -2222,19 +2229,25 @@ int LsMemcache::multiStatFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
                               void *pArg)
 {
     LsShmHash *pHash;
+    pConn = pSlice->m_pConnSlaveToMaster;
+    pHash = pConn->getHash();
+    /*
     if (!multiValidate(pSlice, pConn))
-        return 0; // Not initialized but that's all right in a lot of places.
-    if (!pConn)
     {
-        pConn = pSlice->m_pConnSlaveToMaster;
-        pHash = pSlice->m_hashByUser.getHash(NULL); 
+        LS_DBG_M("multiStatFunc multiValidate failed\n");
+        return 0; // Not initialized but that's all right in a lot of places.
     }
-    else
-        pHash = pConn->getHash();
-    LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
+    */
+    LsShmOffset_t iHdrOff = pConn->getHdrOff();
+    
     if (iHdrOff == 0)
+    {
+        LS_DBG_M("multiStatFunc No stats area defined for pConn: %p\n", pConn);
         return LS_FAIL;
+    }
     LsMcStats *pTotal = (LsMcStats *)pArg;
+    LS_DBG_M("multiStatFunc pHash: %p, HdrOff: %d, Total ptr: %p\n",
+             pHash, iHdrOff, pTotal);
     pHash->disableAutoLock();
     pHash->lockChkRehash();
     LsMcStats *pStats = &((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats;
@@ -2267,15 +2280,11 @@ int LsMemcache::multiStatResetFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
                                    void *pArg)
 {
     // protects itself, needs no additional validation
+    LS_DBG_M("multiStatResetFunc\n");
     LsShmHash *pHash;
-    if (pConn)
-        pHash = pConn->getHash();
-    else
-    {
-        pConn = pSlice->m_pConnSlaveToMaster;
-        pHash = pSlice->m_hashByUser.getHash(NULL);
-    }
-    LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
+    pConn = pSlice->m_pConnSlaveToMaster;
+    pHash = pSlice->m_hashByUser.getHash(NULL);
+    LsShmOffset_t iHdrOff = pConn->getHdrOff();
     if (iHdrOff == 0)
         return LS_FAIL;
     pHash->disableAutoLock();
@@ -2316,7 +2325,7 @@ int LsMemcache::doCmdFlush(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         pThis->respond(badCmdLineFmt, pConn);
         return 0;
     }
-    if ((pThis->useMulti()) && (!LsMemcache::getConfigMultiUser()))
+    if (pThis->statsAggregate(pConn))
     {
         if (pThis->m_pHashMulti->foreach(multiFlushFunc, pConn,
                                          (void *)pThis) == LS_FAIL)
@@ -2371,7 +2380,7 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
     if (pHash->isTidMaster())
     {
         LS_DBG_M("multiFlushFunc for TidMaster\n");
-        LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
+        LsShmOffset_t iHdrOff = pConn->getHdrOff();
         pHash->disableAutoLock();
         pHash->lockChkRehash();
         pHash->clear();
@@ -2490,36 +2499,58 @@ int LsMemcache::doCmdClear(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 LsMcHashSlice *LsMemcache::setSlice(const void *pKey, int iLen, 
                                     MemcacheConn *pConn)
 {
+    LsShmHash *pHash;
+    LsShmHash *pHashStats;
+    LsMcHashSlice *pSlice;
+    
+    LS_DBG_M("setSlice entry, iLen: %d, pConn: %p\n", iLen, pConn);
     m_hkey = m_pHashMulti->getHKey(pKey, iLen);
-    pConn->setSlice(m_pHashMulti->key2hashSlice(m_hkey, pConn));
+    pSlice = m_pHashMulti->key2hashSlice(m_hkey, pConn);
+    pConn->setSlice(pSlice);
 #ifdef USE_SASL
     if (m_mcparms.m_usesasl) 
     {
-        if (!pConn->GetSasl()->isAuthenticated())
+        if ((!pConn->GetSasl()->isAuthenticated()) || (!pConn->getUser()))
         {
             LS_DBG_M("SetHash Using anonymous user\n");
             // set hash for anonymous user
-            pConn->setHash(pConn->getSlice()->m_hashByUser.getHash(NULL));
+            pHash = pConn->getSlice()->m_hashByUser.getHash(NULL);
+            pHashStats = pSlice->m_pConnSlaveToMaster->getHash();
+            pConn->setConnStats(pSlice->m_pConnSlaveToMaster);
         }
         else
         {
             LS_DBG_M("SetHash using user: %s\n", pConn->getUser());
-            pConn->setHash(pConn->getSlice()->m_hashByUser.getHash(
-                pConn->getUser()));
+            pHash = pConn->getSlice()->m_hashByUser.getHash(pConn->getUser());
+            pHashStats = pSlice->m_pConnSlaveToMaster->getHash(); 
+            pConn->setConnStats(pConn);
         }
     }
     else
 #endif
     {
         LS_DBG_M("No SASL set hash no user\n");
-        pConn->setHash(pConn->getSlice()->m_hashByUser.getHash(NULL));
+        pHash = pConn->getSlice()->m_hashByUser.getHash(NULL);
+        pHashStats = pSlice->m_pConnSlaveToMaster->getHash();
+        pConn->setConnStats(pSlice->m_pConnSlaveToMaster);
     }
-        
+    LsShmOffset_t off, iHelperOff;
+    LsMcTidInfoHelper *pHelper;
+    pConn->setHash(pHash);
+    pConn->getConnStats()->setHash(pHashStats);
+    iHelperOff = pHashStats->getHTableReservedOffset();
+    pHelper = (LsMcTidInfoHelper *)pHashStats->offset2ptr(iHelperOff);
+    off = pHelper->x_iOff;
+    if (off)
+    {
+        pConn->setHdrOff(off);
+        pConn->getConnStats()->setHdrOff(off);
+    }
     char key[iLen + 1];
     memcpy(key, pKey, iLen);
     key[iLen] = 0;
-    LS_DBG_M("setSlice: key: %s, len: %d, hkey: 0x%x, pConn: %p\n", key, iLen, 
-             m_hkey, pConn);
+    LS_DBG_M("setSlice: key: %s, len: %d, hkey: 0x%x, pConn: %p, HdrOff: %d\n", 
+             key, iLen, m_hkey, pConn, off);
     return pConn->getSlice();
 }
 
@@ -2680,7 +2711,8 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
 #ifdef USE_SASL
         case MC_BINCMD_SASL_LIST:
             LS_DBG_M("SASL_LIST command\n");
-            if (!m_mcparms.m_usesasl)
+            if ((!m_mcparms.m_usesasl)/* || 
+                ((m_mcparms.m_anonymous) && (!pConn->getUser()))*/)
             {
                 binOkRespond(pHdr, pConn);
                 break;
@@ -3185,7 +3217,7 @@ void LsMemcache::doBinFlush(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         binErrRespond(pHdr, MC_BINSTAT_EINVAL, pConn);
         return;
     }
-    if ((useMulti()) && (!LsMemcache::getConfigMultiUser()))
+    if (statsAggregate(pConn))
     {
         if (m_pHashMulti->foreach(multiFlushFunc, pConn, (void *)this) == 
             LS_FAIL)
@@ -3243,23 +3275,26 @@ void LsMemcache::doBinVersion(McBinCmdHdr *pHdr, MemcacheConn *pConn)
 
 void LsMemcache::doBinStats(McBinCmdHdr *pHdr, MemcacheConn *pConn)
 {
-    if (pConn->getSlice()->m_iHdrOff == 0)
+    if (pConn->getHdrOff() == 0)
     {
+        LS_ERROR("Stat header offset not set.  Internal error, pConn: %p\n", pConn);
         binErrRespond(pHdr, MC_BINSTAT_EINVAL, pConn);
         return;
     }
     uint16_t keyLen = (uint16_t)ntohs(pHdr->keylen);
     if ((keyLen == 5) && (memcmp((void *)(pHdr + 1), "reset", 5)  == 0))
     {
-        if (useMulti())
+        if (statsAggregate(pConn))
         {
             m_pHashMulti->foreach(multiStatResetFunc, pConn, (void *)NULL);
         }
         else
         {
+            LS_DBG_M("Stat Reset for specific hash\n");
             lock(pConn);
-            ::memset(&((LsMcHdr *)pConn->getHash()->
-                        offset2ptr(pConn->getSlice()->m_iHdrOff))->x_stats, 0, sizeof(LsMcStats));
+            ::memset(&((LsMcHdr *)pConn->getConnStats()->getHash()->
+                        offset2ptr(pConn->getHdrOff()))->x_stats, 0, 
+                     sizeof(LsMcStats));
             unlock(pConn);
         }
         binOkRespond(pHdr, pConn);
@@ -3291,7 +3326,7 @@ void LsMemcache::doBinStats(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     doBinStat1dot6(pResHdr, "rusage_system",
         (long)usage.ru_stime.tv_sec, (long)usage.ru_stime.tv_usec, pConn);
     LsMcStats stats;
-    if (useMulti())
+    if (statsAggregate(pConn))
     {
         ::memset((void *)&stats, 0, sizeof(stats));
         m_pHashMulti->foreach(multiStatFunc, pConn, (void *)&stats);
@@ -3300,8 +3335,8 @@ void LsMemcache::doBinStats(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     {
         lock(pConn);
         ::memcpy((void *)&stats,
-            (void *)&((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->m_iHdrOff))->
-                x_stats, sizeof(stats));
+                 (void *)&((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->
+                      getHdrOff()))->x_stats, sizeof(stats));
         unlock(pConn);
     }
     uint64_t getcmds = stats.get_hits + stats.get_misses;

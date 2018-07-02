@@ -269,10 +269,12 @@ private:
     static int  multiVerboseFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
                                  void *pArg)
     {
+        if (!pConn)
+            pConn = pSlice->m_pConnSlaveToMaster;
         if (!multiValidate(pSlice, pConn))
             return LS_OK; // Deal with it later
             
-        LsShmOffset_t iHdrOff = pSlice->m_iHdrOff;
+        LsShmOffset_t iHdrOff = pConn->getHdrOff();
         if (iHdrOff != 0)
             ((LsMcHdr *)pConn->getHash()->offset2ptr(iHdrOff))->x_verbose = 
                 (uint8_t)(long)pArg;
@@ -379,10 +381,10 @@ public:
          * yet.  Just be fault tolerant. */
         if ((!pConn) || (!pConn->getSlice()) || (!pConn->getHash()))
             return 0;
-        if (pConn->getSlice()->m_iHdrOff != 0)
+        if (pConn->getHdrOff() != 0)
         {
             uint8_t verbose = ((LsMcHdr *)pConn->getHash()->offset2ptr(
-                        pConn->getSlice()->m_iHdrOff))->x_verbose;
+                        pConn->getHdrOff()))->x_verbose;
             if (verbose)
                 LS_DBG_M("getVerbose: %d\n", verbose);
             return verbose;
@@ -394,9 +396,8 @@ public:
     {
         if (m_pHashMulti != NULL)
             m_pHashMulti->foreach(multiVerboseFunc, pConn, (void *)(long)iLevel);
-        else if (pConn->getSlice()->m_iHdrOff != 0)
-            ((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_verbose = iLevel;
+        else if (pConn->getHdrOff() != 0)
+            ((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getHdrOff()))->x_verbose = iLevel;
 #ifdef USE_SASL
         LsMcSasl::verbose = iLevel;
 #endif
@@ -467,9 +468,8 @@ private:
 
     uint64_t getCas(MemcacheConn *pConn)
     {
-        return ((pConn->getSlice()->m_iHdrOff != 0) ?
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_data->cas : 0);
+        return ((pConn->getHdrOff() != 0) ?
+            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getHdrOff()))->x_data->cas : 0);
     }
 
     void     saveCas(LsMcDataItem *pItem)
@@ -595,123 +595,129 @@ private:
     void     fwdCommand(LsMcHashSlice *pSlice, const char *buf, int len, 
                         MemcacheConn *pConn);
 
+    bool statsAggregate(MemcacheConn *pConn)
+    { 
+        return ((useMulti()) && ((!getConfigMultiUser()) || 
+                                 (!pConn->GetSasl()->isAuthenticated()))); 
+    };
+
     void statSetCmd(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.set_cmds;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.set_cmds;
     }
 
     void statFlushCmd(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.flush_cmds;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.flush_cmds;
     }
 
     void statGetHit(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.get_hits;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.get_hits;
     }
 
     void statGetMiss(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.get_misses;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.get_misses;
     }
 
     void statTouchHit(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.touch_hits;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.touch_hits;
     }
 
     void statTouchMiss(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.touch_misses;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.touch_misses;
     }
 
     void statDeleteHit(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.delete_hits;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.delete_hits;
     }
 
     void statDeleteMiss(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.delete_misses;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.delete_misses;
     }
 
     void statIncrHit(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.incr_hits;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.incr_hits;
     }
 
     void statIncrMiss(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.incr_misses;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.incr_misses;
     }
 
     void statDecrHit(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.decr_hits;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.decr_hits;
     }
 
     void statDecrMiss(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.decr_misses;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.decr_misses;
     }
 
     void statCasHit(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.cas_hits;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.cas_hits;
     }
 
     void statCasMiss(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.cas_misses;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.cas_misses;
     }
 
     void statCasBad(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.cas_badval;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.cas_badval;
     }
 
     void statAuthCmd(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.auth_cmds;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.auth_cmds;
     }
 
     void statAuthErr(MemcacheConn *pConn)
     {
-        if (pConn->getSlice()->m_iHdrOff != 0)
-            ++((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getSlice()->
-                m_iHdrOff))->x_stats.auth_errors;
+        if (pConn->getHdrOff() != 0)
+            ++((LsMcHdr *)pConn->getConnStats()->getHash()->
+                offset2ptr(pConn->getHdrOff()))->x_stats.auth_errors;
     }
     LsShmHash::iteroffset doHashUpdate(ls_strpair_s *m_parms, 
                                        LsMcUpdOpt *updOpt,

@@ -146,7 +146,6 @@ int LsMcHashMulti::init(int iCnt, const char **ppPathName,
         }
         pSlice->m_idx = lstIdx - iCnt;
         LS_DBG_M(" LsMcHashMulti::init m_idx:%d", pSlice->m_idx);
-        pSlice->m_iHdrOff = 0;
         pSlice->m_pConnSlaveToMaster = NULL;
 
         m_pLastSlice = pSlice;

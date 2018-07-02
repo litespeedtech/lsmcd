@@ -39,6 +39,9 @@ MemcacheConn::MemcacheConn()
     , _pLink(NULL)
     , m_pHash(NULL)
     , m_pUser(NULL)
+    , m_pSlice(NULL)
+    , m_iHdrOff(0)
+    , m_pConnStats(this)
 {
 }
 

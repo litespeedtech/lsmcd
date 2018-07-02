@@ -29,7 +29,6 @@ typedef struct
 {
     uint8_t          m_idx;    
     LsMcHashByUser   m_hashByUser;
-    LsShmOffset_t    m_iHdrOff;
     MemcacheConn    *m_pConnSlaveToMaster;
 } LsMcHashSlice;
 

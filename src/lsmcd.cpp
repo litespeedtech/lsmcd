@@ -189,13 +189,21 @@ int LsmcdImpl::PreEventLoop()
         }
     }
     
+    bool uds = !strncasecmp(getReplConf()->getMemCachedAddr(), "UDS:", 4);
+    int mask;
+    if (uds) 
+        mask = umask(0);
     m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
     m_pMemcacheListener.SetListenerAddr ( getReplConf()->getMemCachedAddr() );
     if ( m_pMemcacheListener.Start() != LS_OK )
     {
+        if (uds)
+            umask(mask);
         LS_ERROR("Memcache Listener failed to start");
         return LS_FAIL;
     }
+    if (uds)
+        umask(mask);
 
     if (LsMemcache::getConfigReplication())
     {

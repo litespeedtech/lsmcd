@@ -102,7 +102,7 @@ liblsmemcache_a_AR = $(AR) $(ARFLAGS)
 liblsmemcache_a_LIBADD =
 am_liblsmemcache_a_OBJECTS = lsmchashmulti.$(OBJEXT) \
 	lsmcsasl.$(OBJEXT) lsmemcache.$(OBJEXT) memcacheconn.$(OBJEXT) \
-	memcachelistener.$(OBJEXT)
+	memcachelistener.$(OBJEXT) lsmchashbyuser.$(OBJEXT)
 liblsmemcache_a_OBJECTS = $(am_liblsmemcache_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -303,7 +303,7 @@ noinst_LIBRARIES = liblsmemcache.a
 INCLUDES = -I$(top_srcdir)/include -I$(top_srcdir)/src
 liblsmemcache_a_METASOURCES = AUTO
 liblsmemcache_a_SOURCES = lsmchashmulti.cpp lsmcsasl.cpp lsmemcache.cpp \
-    memcacheconn.cpp memcachelistener.cpp
+    memcacheconn.cpp memcachelistener.cpp lsmchashbyuser.cpp
 
 all: all-am
 
@@ -354,6 +354,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lsmchashbyuser.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lsmchashmulti.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lsmcsasl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lsmemcache.Po@am__quote@

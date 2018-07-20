@@ -3455,16 +3455,16 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         binErrRespond(pHdr, MC_BINSTAT_EINVAL, pConn);
         return;
     }
-    if (pHdr->opcode == MC_BINCMD_SASL_AUTH)
-    {
+    //if (pHdr->opcode == MC_BINCMD_SASL_AUTH)
+    //{
         ret = pConn->GetSasl()->chkAuth(
             (char *)(pHdr + 1), mechLen, valLen, &result, &len);
-    }
-    else /* if (pHdr->opcode == MC_BINCMD_SASL_STEP) */
-    {
-        ret = pConn->GetSasl()->chkAuthStep(
-            ((char *)(pHdr + 1)) + mechLen, valLen, &result, &len);
-    }
+    //}
+    //else /* if (pHdr->opcode == MC_BINCMD_SASL_STEP) */
+    //{
+    //    ret = pConn->GetSasl()->chkAuthStep(
+    //        ((char *)(pHdr + 1)) + mechLen, valLen, &result, &len);
+    //}
     if (ret == 0)
     {
         static const char authok[] = "Authenticated";

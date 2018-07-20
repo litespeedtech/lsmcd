@@ -260,9 +260,19 @@ int LsMcSasl::rebuildAuth(char *pVal, unsigned int mechLen, unsigned int valLen,
         else 
             index += strlen(&pVal[index]) + 1;
     }
-    if (strcmp(user1, user2)) 
+    if (!user1[0])
     {
-        LS_ERROR("SASL User names not matching\n");
+        LS_DBG_M("user1 is NULL, use user2 (%s)\n", user2);
+        user1 = user2;
+    }
+    if (!user2[0])
+    {
+        LS_DBG_M("user2 is NULL, use user1 (%s)\n", user1);
+        user2 = user1;
+    }
+    if ((!user1[0]) || (strcmp(user1, user2))) 
+    {
+        LS_ERROR("SASL User names not matching %s %s (%s)\n", user1, user2, password);
         return -1;
     }
     char *hostname = getHostName();
@@ -313,6 +323,9 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     ::memcpy(mech, pBuf, mechLen);
     mech[mechLen] = '\0';
     char sval[valLen + HOST_NAME_MAX + 1];
+    LS_DBG_M("SASL chkAuth, mech: %s, pVal (user): %s\n", mech, pVal);
+    /* Note this can happen if Python or some other language doesn't build the
+     * authorization string the way it's expected to be */
     if (!strchr(pVal,'@'))
         if (rebuildAuth(pVal, mechLen, valLen, sval, &pVal, &valLen) == -1)
             return -1;

@@ -746,6 +746,8 @@ private:
     
     static bool             m_bConfigMultiUser;
     static bool             m_bConfigReplication;
+    static const char      *m_pchConfigUser;
+    static const char      *m_pchConfigGroup;
 };
 
 #endif // LSSHMMEMCACHE_H

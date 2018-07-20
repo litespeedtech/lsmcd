@@ -163,6 +163,59 @@ int LsmcdImpl::Init( int argc, char *argv[] )
 }
 
 
+int LsmcdImpl::SetUDSAddrFile()
+{
+    uid_t uid = geteuid();
+    gid_t gid = getegid();
+    const char *name;
+    int   gotOne = 0;
+    name = getReplConf()->getUser();
+    if (name)
+    {
+        struct passwd pass;
+        struct passwd *passp = NULL;
+        char   buffer[4096];
+        if ((!getpwnam_r(name, &pass, buffer, sizeof(buffer), &passp)) &&
+            (passp))
+        {
+            uid = pass.pw_uid;
+            gotOne = 1;
+        }
+    }
+    name = getReplConf()->getGroup();
+    if (name)
+    {
+        struct group grp;
+        struct group *grpp = NULL;
+        char   buffer[4096];
+        if ((!getgrnam_r(name, &grp, buffer, sizeof(buffer), &grpp)) &&
+            (grpp))
+        {
+            gid = grp.gr_gid;
+            gotOne = 1;
+        }
+    }
+    if (gotOne)
+    {
+        const char *addr = getReplConf()->getMemCachedAddr() + 4; // UDS:
+        while ((*addr == '/') && (*(addr + 1) == '/'))
+            addr++;
+        if (*addr == '/')
+        {
+            if (lchown(addr, uid, gid) == -1)
+            {
+                LS_WARN("Error setting UDS file %s to UID: %ld GID: %ld: %s\n", 
+                        addr, (long)uid, (long)gid, strerror(errno));
+                return -1; // Not that we look at it.
+            }
+            else 
+                LS_DBG_M("Set UDS file %s to UID: %ld, GID: %ld\n", addr, 
+                         (long)uid, (long)gid);
+        }
+    }
+    return 0;
+}
+
 int LsmcdImpl::PreEventLoop()
 {
     //LcReplConf &replConf = LcReplConf::getInstance();
@@ -191,20 +244,22 @@ int LsmcdImpl::PreEventLoop()
     
     bool uds = !strncasecmp(getReplConf()->getMemCachedAddr(), "UDS:", 4);
     int mask;
-    if (uds) 
+    if ((uds) && (!geteuid()))
         mask = umask(0);
     m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
     m_pMemcacheListener.SetListenerAddr ( getReplConf()->getMemCachedAddr() );
     if ( m_pMemcacheListener.Start() != LS_OK )
     {
-        if (uds)
+        if ((uds) && (!geteuid()))
             umask(mask);
         LS_ERROR("Memcache Listener failed to start");
         return LS_FAIL;
     }
-    if (uds)
+    if ((uds) && (!geteuid()))
+    {
+        SetUDSAddrFile();
         umask(mask);
-
+    }
     if (LsMemcache::getConfigReplication())
     {
         m_usockLstnr.SetMultiplexer(m_pMultiplexer);

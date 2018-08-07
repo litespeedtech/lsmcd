@@ -25,6 +25,7 @@
 #include <sasl/saslplug.h>
 #include <log4cxx/logger.h>
 
+typedef int (*sasl_callback_ft_local)(void);
 
 const char *LsMcSasl::s_pAppName = "memcached";
 char       *LsMcSasl::s_pSaslPwdb = NULL;
@@ -151,10 +152,10 @@ static int getSaslConf(void *context, const char **ppath)
 static sasl_callback_t saslCallbacks[] =
 {
 #ifdef ENABLE_SASL_PWDB
-   { SASL_CB_SERVER_USERDB_CHECKPASS, (sasl_callback_ft)chkSaslPwdb, NULL },
+   { SASL_CB_SERVER_USERDB_CHECKPASS, (sasl_callback_ft_local)chkSaslPwdb, NULL },
 #endif
 #ifdef HAVE_SASL_CB_GETCONF
-   { SASL_CB_GETCONFPATH, (sasl_callback_ft)getSaslConf, NULL },
+   { SASL_CB_GETCONFPATH, (sasl_callback_ft_local)getSaslConf, NULL },
 #endif
    { SASL_CB_LIST_END, NULL, NULL }
 };

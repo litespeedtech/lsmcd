@@ -18,7 +18,15 @@ cp ../dist/bin/lsmcdctrl ${LSMCD_HOME}/bin/.
 cp -r ../dist/conf  ${LSMCD_HOME}/conf
 
 cp ../dist/bin/lsmcd.init /etc/init.d/lsmcd
-chkconfig lsmcd on
+
+if [ -x /sbin/chkconfig ]; then
+    chkconfig lsmcd on
+elif [ -x /bin/systemctl ]; then
+    systemctl enable lsmcd.service
+else
+    echo "Distro not recognized, contact tech support"
+    exit 1
+fi
 
 echo "Now you have to update ${LSMCD_HOME}/conf/node.conf" 
 

@@ -21,6 +21,7 @@ class PidFile
 
     int openPidFile(const char *pPidFile);
     int openTmpPidFile(const char *pPidFile);
+    int createDir(const char *pDir);
 
 public:
 

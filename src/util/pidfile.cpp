@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 PidFile::PidFile()
     : m_fdPid(-1)
@@ -55,11 +56,33 @@ static int writePid(int fd, pid_t pid)
 #endif
 
 
+int PidFile::createDir(const char* pDir)
+{
+    char *pSlash;
+    
+    pSlash = strrchr((char *)pDir, '/');
+    if ((!pSlash) || (pSlash == pDir))
+        return 0;
+    char pDirOnly[strlen(pDir) + 1];
+    strcpy(pDirOnly, pDir);
+    pDirOnly[pSlash - pDir] = 0;
+    if (access(pDirOnly, 0) == 0)
+        return 0;
+    // Go to the top and create the dirs on the way back down.
+    if (createDir(pDirOnly) == -1)
+        return -1;
+    if (mkdir(pDirOnly, 0755) == -1)
+        return -1;
+    return 0;
+}
+
 int PidFile::openPidFile(const char *pPidFile)
 {
     //closePidFile();
     if (m_fdPid == -1)
     {
+        if (createDir(pPidFile) == -1)
+            return -1;
         m_fdPid  = nio_open(pPidFile, O_WRONLY | O_CREAT | O_NOFOLLOW, 0644);
         if (m_fdPid != -1)
             fcntl(m_fdPid, F_SETFD,  FD_CLOEXEC);
@@ -73,6 +96,8 @@ int PidFile::openTmpPidFile(const char *pPidFile)
     int fd;
     int n = snprintf(achTmp, 4095, "%s.XXXXXX", pPidFile);
     if (n > 4095)
+        return -1;
+    if (createDir(achTmp) == -1)
         return -1;
     fd = mkstemp(achTmp);
     if (fd != -1)

@@ -123,11 +123,13 @@ int CrashGuard::guardCrash()
             m_pGuardedApp->onGuardTimer();
     }
     if (s_pid > 0)
+    {
         if (::kill(s_pid, 0) == 0)
         {
             sleep(1);
             ::kill(s_pid, SIGKILL);
         }
+    }
     exit(ret);
 }
 
@@ -169,12 +171,16 @@ int CrashGuard::guardCrash(int workers)
                     ret = m_pGuardedApp->forkTooFreq();
                     if (ret > 0)
                         break;
-                    sleep(60);
+                    int sleep_remain = 60;
+                    while (sleep_remain)
+                        sleep_remain = sleep(sleep_remain);
+                    
                 }
             }
             count = 0;
             while(s_pidChildren[count] != 0 && count < workers)
                 ++count;
+            
             assert(count != workers);
                 
             m_pGuardedApp->preFork(count);
@@ -186,7 +192,6 @@ int CrashGuard::guardCrash(int workers)
             }
             else if (pidChild == 0)
             {
-                
                 return count;
             }
             else

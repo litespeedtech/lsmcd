@@ -17,11 +17,11 @@ cp ../src/lsmcd  ${LSMCD_HOME}/bin/.
 cp ../dist/bin/lsmcdctrl ${LSMCD_HOME}/bin/. 
 cp -r ../dist/conf  ${LSMCD_HOME}/conf
 
-cp ../dist/bin/lsmcd.init /etc/init.d/lsmcd
-
 if [ -x /sbin/chkconfig ]; then
+    cp ../dist/bin/lsmcd.init /etc/init.d/lsmcd
     chkconfig lsmcd on
 elif [ -x /bin/systemctl ]; then
+    cp ../dist/bin/lsmcd.service /etc/systemd/system/lsmcd.service
     systemctl enable lsmcd.service
 else
     echo "Distro not recognized, contact tech support"

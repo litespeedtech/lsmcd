@@ -1,0 +1,20 @@
+[Unit]
+Description = LiteSpeed LSMCD Daemon
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+ExecStart = /usr/local/lsmcd/bin/lsmcdctrl start
+ExecStop = /usr/local/lsmcd/bin/lsmcdctrl stop
+#ExecReload= /usr/local/lsmcd/bin/lsmcdctrl restart
+
+KillMode=none
+PrivateTmp=false
+
+# do not want to be limited in anyway
+CPUAccounting=false
+TasksAccounting=false
+MemoryAccounting=false
+
+[Install]
+WantedBy=default.target

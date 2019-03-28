@@ -50,7 +50,7 @@ int UsocklListener::Start(int procCnt)
     int ret = CoreSocket::listen( m_lstnrAddr, 100, &fd, 0, 0 );
     if ( ret != 0 )
     {
-        LS_ERROR("lsmcd failed to start up usock listener");
+        LS_ERROR("lsmcd failed to start up usock listener on %s", m_lstnrAddr.toString());
         return ret;
     }    
     setfd(fd);    

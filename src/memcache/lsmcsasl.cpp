@@ -42,13 +42,15 @@ static int chkSaslPwdb(sasl_conn_t *conn,
                        struct propctx *propctx)
 {
     size_t userlen = strlen(user);
-    LS_DBG_M("chkSaslPwdb\n");
+    LS_DBG_M("chkSaslPwdb user: %s\n", user);
     
     if ((passlen + userlen) > (PWENT_MAXLEN - 4))
     {
         fprintf(stderr,
                 "WARNING: Failed to authenticate <%s> due to too long password (%d)\n",
                 user, passlen);
+        LS_WARN("WARNING: Failed to authenticate <%s> due to too long password (%d)\n",
+                 user,passlen);
         return SASL_NOAUTHZ;
     }
 
@@ -60,6 +62,7 @@ static int chkSaslPwdb(sasl_conn_t *conn,
             fprintf(stderr, "WARNING: Failed to open sasl database <%s>",
                     LsMcSasl::s_pSaslPwdb);
         }
+        LS_WARN("WARNING: Failed to open sasl database <%s>", LsMcSasl::s_pSaslPwdb);
         return SASL_NOAUTHZ;
     }
 
@@ -83,6 +86,7 @@ static int chkSaslPwdb(sasl_conn_t *conn,
     {
         if (LsMcSasl::verbose)
             fprintf(stderr, "INFO: User <%s> failed to authenticate\n", user);
+        LS_INFO("INFO: User <%s> failed to authenticate\n", user);
         return SASL_NOAUTHZ;
     }
     return SASL_OK;
@@ -149,6 +153,30 @@ static int getSaslConf(void *context, const char **ppath)
 #endif  // HAVE_SASL_CB_GETCONF
 
 
+static int sasl_log_callback(void *context, int level, const char *message)
+{
+    switch (level)
+    {
+        case SASL_LOG_ERR   :
+            LS_ERROR("[SASL] %s\n", message);
+            break;
+        case SASL_LOG_FAIL  :
+        case SASL_LOG_NOTE  :
+            LS_NOTICE("[SASL] %s\n", message);
+            break;
+        case SASL_LOG_WARN  :
+            LS_WARN("[SASL] %s\n", message);
+            break;
+        case SASL_LOG_DEBUG :
+        case SASL_LOG_TRACE :        
+        default :
+            LS_DBG_M("[SASL] %s\n", message);
+            break;
+    }
+    return SASL_OK;
+}
+        
+
 static sasl_callback_t saslCallbacks[] =
 {
 #ifdef ENABLE_SASL_PWDB
@@ -157,6 +185,7 @@ static sasl_callback_t saslCallbacks[] =
 #ifdef HAVE_SASL_CB_GETCONF
    { SASL_CB_GETCONFPATH, (sasl_callback_ft_local)getSaslConf, NULL },
 #endif
+   { SASL_CB_LOG, (sasl_callback_ft_local)sasl_log_callback, NULL },
    { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -174,8 +203,10 @@ int LsMcSasl::initSasl()
                     "INFO: MEMCACHED_SASL_PWDB not specified. "
                     "Internal passwd database disabled\n");
         }
-        saslCallbacks[0].id = SASL_CB_LIST_END;
-        saslCallbacks[0].proc = NULL;
+        saslCallbacks[0].id     = SASL_CB_LOG;
+        saslCallbacks[0].proc   = (sasl_callback_ft_local)sasl_log_callback;
+        saslCallbacks[1].id     = SASL_CB_LIST_END;
+        saslCallbacks[1].proc   = NULL;
     }
 #endif
 
@@ -196,7 +227,6 @@ int LsMcSasl::initSasl()
 
 int LsMcSasl::listMechs(const char **pResult)
 {
-    unsigned int len;
     *pResult = NULL;
     LS_DBG_M("SASL listMechs (only PLAIN for now)\n");
     if (getSaslConn() == NULL)
@@ -226,7 +256,7 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     char sval[valLen + 1];
     memcpy(sval, pVal, valLen);
     sval[valLen] = 0;
-    LS_DBG_M("SASL server_start, mech: %s, pval: %s\n", mech, sval);
+    LS_DBG_M("SASL server_start, mech: %s, pval: %s, len: %d\n", mech, sval, valLen);
     ret = sasl_server_start(m_pSaslConn, mech, pVal, valLen, pResult, pLen);
     if (ret == SASL_OK)
     {

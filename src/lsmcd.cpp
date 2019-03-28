@@ -137,7 +137,7 @@ int LsmcdImpl::testRunningServer()
 
 int LsmcdImpl::Init( int argc, char *argv[] )
 {
-    if(argc > 1 ){
+    if(argc >= 1 ){
         if (ParseOpt(argc, argv) != LS_OK)
         {
             fprintf(stderr, "[ERROR] [Lscached]: failed to parse configuration\n");
@@ -326,6 +326,7 @@ int LsmcdImpl::ParseOpt( int argc, char *argv[] )
 {
     const char * opts = "cdnvlf:";
     int c;
+    bool didConf = false;
     while ( ( c = getopt( argc, argv, opts )) != EOF )
     {
         switch (c) {
@@ -343,6 +344,7 @@ int LsmcdImpl::ParseOpt( int argc, char *argv[] )
             ConfWrapper::getInstance().loadConf(new LcReplConf());
             if (!getReplConf()->parse(optarg))
                 return LS_FAIL;
+            didConf = true;
             break;
         case 'v':
             printf( "lsmcd server %s\n", WAC_VERSION );
@@ -355,6 +357,13 @@ int LsmcdImpl::ParseOpt( int argc, char *argv[] )
             printf ("?? getopt returned character code -%o ??\n", c);
         }
     }
+    if (!didConf)
+    {
+        ConfWrapper::getInstance().loadConf(new LcReplConf());
+        if (!getReplConf()->parse("/usr/local/lsmcd/conf/node.conf"))
+            return LS_FAIL;
+    }
+        
     return LS_OK;
 }
 

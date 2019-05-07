@@ -3122,7 +3122,7 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr)
     const char *result;
     int len;
     uint8_t resBuf[sizeof(McBinCmdHdr)];
-    LS_DBG_M("doBinSaslList (hdr size: %d)\n",sizeof(McBinCmdHdr));
+    LS_DBG_M("doBinSaslList (hdr size: %d)\n",(int)sizeof(McBinCmdHdr));
     if (!m_mcparms.m_usesasl)
     {
         LS_DBG_M("SASL turned off\n");

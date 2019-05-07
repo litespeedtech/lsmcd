@@ -363,7 +363,8 @@ int LsmcdImpl::ParseOpt( int argc, char *argv[] )
         if (!getReplConf()->parse("/usr/local/lsmcd/conf/node.conf"))
             return LS_FAIL;
     }
-        
+    LS_NOTICE("LSMCD/" VERSION_TO_LOG " LiteSpeed Memcached Replacement\n");
+
     return LS_OK;
 }
 

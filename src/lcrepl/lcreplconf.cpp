@@ -88,7 +88,7 @@ bool LcReplConf::parse(const char *szFile)
     if (!m_confParser.loadConfig(szFile, "="))
     {
         initLogger("stderr", "DBG");
-        LS_ERROR("LcReplConf unable to load config %s, error:%s"
+        LS_ERROR("Unable to load config %s, error:%s"
             , szFile, m_confParser.getErrorMessage());
         return false;               
     }
@@ -99,7 +99,7 @@ bool LcReplConf::parse(const char *szFile)
     pAddr = m_confParser.getConfig("CACHED.ADDR");
     if (pAddr == NULL || sockAddr.set(pAddr, 0))
     {
-        LS_ERROR("LcReplConf fails to load Repl MemCached SvrAddr %s", pAddr);
+        LS_ERROR("CACHED.ADDR not set or bad address format");
         return false;
     }
     //sockAddr.toString(pSockAddr, 256);
@@ -108,7 +108,7 @@ bool LcReplConf::parse(const char *szFile)
     pAddr = m_confParser.getConfig("CACHED.PRIADDR");
     if (pAddr == NULL || sockAddr.set(pAddr, 0))
     {
-        LS_ERROR("LcReplConf fails to load Repl MemCached SvrAddr %s", pAddr);
+        LS_ERROR("CACHED.PRIADDR not set or bad address format");
         return false;
     }
     //sockAddr.toString(pSockAddr, 256);
@@ -119,7 +119,7 @@ bool LcReplConf::parse(const char *szFile)
     pAddr = m_confParser.getConfig("CachedSockPath");
     if (pAddr == NULL)
     {
-        LS_ERROR("LcReplConf fails to load cached sock path %s", pAddr);
+        LS_ERROR("CachedSockPath not set");
         return false;
     }
     m_cachedUsPath = pAddr;
@@ -223,7 +223,7 @@ bool LcReplConf::parse(const char *szFile)
         m_lsntnrSvrIp = getIpOfAddr(pAddr, str);
         if ( !isAllowedIP(getLocalLsntnrIp() ))
         {
-            LS_ERROR("Repl ListenSvrIp %s is not in LB Addrs"
+            LS_ERROR("ListenSvrIp %s is not in LB Addrs"
                 , getLocalLsntnrIp());
             return false;
         }
@@ -233,7 +233,7 @@ bool LcReplConf::parse(const char *szFile)
     pAddr = m_confParser.getConfig("REPL.DispatchAddr");
     if ( pAddr == NULL || sockAddr.set(pAddr, 0) )
     {
-        LS_ERROR("LcReplConf fails to load Repl DispatchAddr %s", pAddr);
+        LS_ERROR("REPL.DispatchAddr not set or bad address format");
         return false;        
     }
     sockAddr.toString(pSockAddr, 64);

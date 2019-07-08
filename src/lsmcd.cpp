@@ -73,7 +73,6 @@ static void sig_usr1( int sig )
     sEvents |= HS_USR1 ;
 }
 
-#define WAC_VERSION     "1.1"
 
 LsmcdImpl::LsmcdImpl()
         : m_iNoCrashGuard( 0 )
@@ -347,7 +346,7 @@ int LsmcdImpl::ParseOpt( int argc, char *argv[] )
             didConf = true;
             break;
         case 'v':
-            printf( "lsmcd server %s\n", WAC_VERSION );
+            printf( "lsmcd server %s\n", VERSION_TO_LOG );
             exit( 0 );
             break;
         case '?':

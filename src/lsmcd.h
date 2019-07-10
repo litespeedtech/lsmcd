@@ -34,6 +34,7 @@ public:
     LsmcdImpl();
     virtual ~LsmcdImpl();
     virtual int Init( int argc, char *argv[] );
+    virtual int SetUDSAddrFile();
     virtual int PreEventLoop();
     virtual int  EventLoop();
     

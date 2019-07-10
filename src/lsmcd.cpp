@@ -73,7 +73,6 @@ static void sig_usr1( int sig )
     sEvents |= HS_USR1 ;
 }
 
-
 LsmcdImpl::LsmcdImpl()
         : m_iNoCrashGuard( 0 )
         , m_iNoDaemon( 0 )
@@ -162,6 +161,59 @@ int LsmcdImpl::Init( int argc, char *argv[] )
 }
 
 
+int LsmcdImpl::SetUDSAddrFile()
+{
+    uid_t uid = geteuid();
+    gid_t gid = getegid();
+    const char *name;
+    int   gotOne = 0;
+    name = getReplConf()->getUser();
+    if (name)
+    {
+        struct passwd pass;
+        struct passwd *passp = NULL;
+        char   buffer[4096];
+        if ((!getpwnam_r(name, &pass, buffer, sizeof(buffer), &passp)) &&
+            (passp))
+        {
+            uid = pass.pw_uid;
+            gotOne = 1;
+        }
+    }
+    name = getReplConf()->getGroup();
+    if (name)
+    {
+        struct group grp;
+        struct group *grpp = NULL;
+        char   buffer[4096];
+        if ((!getgrnam_r(name, &grp, buffer, sizeof(buffer), &grpp)) &&
+            (grpp))
+        {
+            gid = grp.gr_gid;
+            gotOne = 1;
+        }
+    }
+    if (gotOne)
+    {
+        const char *addr = getReplConf()->getMemCachedAddr() + 4; // UDS:
+        while ((*addr == '/') && (*(addr + 1) == '/'))
+            addr++;
+        if (*addr == '/')
+        {
+            if (lchown(addr, uid, gid) == -1)
+            {
+                LS_WARN("Error setting UDS file %s to UID: %ld GID: %ld: %s\n", 
+                        addr, (long)uid, (long)gid, strerror(errno));
+                return -1; // Not that we look at it.
+            }
+            else 
+                LS_DBG_M("Set UDS file %s to UID: %ld, GID: %ld\n", addr, 
+                         (long)uid, (long)gid);
+        }
+    }
+    return 0;
+}
+
 int LsmcdImpl::PreEventLoop()
 {
     //LcReplConf &replConf = LcReplConf::getInstance();
@@ -171,39 +223,63 @@ int LsmcdImpl::PreEventLoop()
         delete m_pMultiplexer;
         m_pMultiplexer = new Poller();
     }
+    
+    LsMemcache::getInstance().setMultiplexer(m_pMultiplexer);
+    if (LsMemcache::getInstance().initMcEvents() < 0)
+        return LS_FAIL;
+    
     m_pReplListener.SetMultiplexer( m_pMultiplexer );
-    m_pReplListener.SetListenerAddr(getReplConf()->getLisenSvrAddr());
-    if ( m_pReplListener.Start(-1) != LS_OK )
+    if (LsMemcache::getConfigReplication())
     {
-        LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
-        return LS_FAIL;;
+        m_pReplListener.SetListenerAddr(getReplConf()->getLisenSvrAddr());
+        if ( m_pReplListener.Start(-1) != LS_OK )
+        {
+            LS_ERROR("repl listener failed to start, addr=%s\n", 
+                     getReplConf()->getLisenSvrAddr());
+            return LS_FAIL;;
+        }
     }
-
+    
+    bool uds = !strncasecmp(getReplConf()->getMemCachedAddr(), "UDS:", 4);
+    int mask;
+    if ((uds) && (!geteuid()))
+        mask = umask(0);
     m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
     m_pMemcacheListener.SetListenerAddr ( getReplConf()->getMemCachedAddr() );
     if ( m_pMemcacheListener.Start() != LS_OK )
     {
+        if ((uds) && (!geteuid()))
+            umask(mask);
         LS_ERROR("Memcache Listener failed to start");
         return LS_FAIL;
     }
-    
-    m_usockLstnr.SetMultiplexer(m_pMultiplexer);
-    m_usockLstnr.SetListenerAddr( getReplConf()->getCachedUsPath() );
-    if ( m_usockLstnr.Start( 1 + getReplConf()->getCachedProcCnt()) != LS_OK )
+    if ((uds) && (!geteuid()))
     {
-        LS_ERROR("Memcache usock listener failed to start");
-        return LS_FAIL;
-    }    
-    LS_DBG_M("Memcache usock listener is up");
-    
-    m_fdPassLstnr.SetMultiplexer( m_pMultiplexer );
-    m_fdPassLstnr.SetListenerAddr(getReplConf()->getDispatchAddr());
-    if ( m_fdPassLstnr.Start(-1, &m_usockLstnr) != LS_OK )
+        SetUDSAddrFile();
+        umask(mask);
+    }
+    if (LsMemcache::getConfigReplication())
     {
-        LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
-        return LS_FAIL;;
+        m_usockLstnr.SetMultiplexer(m_pMultiplexer);
+        m_usockLstnr.SetListenerAddr( getReplConf()->getCachedUsPath() );
+        if ( m_usockLstnr.Start( 1 + getReplConf()->getCachedProcCnt()) != LS_OK )
+        {
+            LS_ERROR("Memcache usock listener failed to start");
+            return LS_FAIL;
+        }    
+        LS_DBG_M("Memcache usock listener is up");
     }
     
+    if (LsMemcache::getConfigReplication())
+    {
+        m_fdPassLstnr.SetMultiplexer( m_pMultiplexer );
+        m_fdPassLstnr.SetListenerAddr(getReplConf()->getDispatchAddr());
+        if ( m_fdPassLstnr.Start(-1, &m_usockLstnr) != LS_OK )
+        {
+            LS_ERROR(  "repl listener failed to start, addr=%s\n", getReplConf()->getLisenSvrAddr());
+            return LS_FAIL;;
+        }
+    }
 //    int cnt = getReplConf()->getCachedProcCnt();
     
 //     LsRepl2CacheEvent *pR2cEventPtrs[cnt];
@@ -212,9 +288,6 @@ int LsmcdImpl::PreEventLoop()
 //         return LS_FAIL;
 //     }
 
-    LsMemcache::getInstance().setMultiplexer(m_pMultiplexer);
-    if (LsMemcache::getInstance().initMcEvents() < 0)
-        return LS_FAIL;
 
 #ifdef notdef
     if( m_uRole == R_MASTER )
@@ -224,10 +297,13 @@ int LsmcdImpl::PreEventLoop()
         pLsShmHash->setEventNotifier(&m_lsShmEvent);
     }
 #endif
-    LcReplGroup::getInstance().setMultiplexer(m_pMultiplexer);
-    LcReplGroup::getInstance().initReplConn();
-    LcReplGroup::getInstance().setRef(&m_usockLstnr);
 
+    if (LsMemcache::getConfigReplication())
+    {
+        LcReplGroup::getInstance().setMultiplexer(m_pMultiplexer);
+        LcReplGroup::getInstance().initReplConn();
+        LcReplGroup::getInstance().setRef(&m_usockLstnr);
+    }
     return LS_OK;
 }
 
@@ -413,14 +489,16 @@ int LsmcdImpl::ProcessTimerEvent()
 
 int LsmcdImpl::connUsockSvr()
 {
-    char pBuf[256];
-    m_pUsockClnt = new UsockClnt();
-    m_pUsockClnt->SetMultiplexer( m_pMultiplexer );
-    snprintf(pBuf, sizeof(pBuf), "%s%d", getReplConf()->getCachedUsPath(),
-             Lsmcd::getInstance().getProcId());
-    m_pUsockClnt->setLocalAddr(pBuf);
-    m_pUsockClnt->connectTo(getReplConf()->getRepldUsPath());
-    
+    if (LsMemcache::getConfigReplication())
+    {
+        char pBuf[256];
+        m_pUsockClnt = new UsockClnt();
+        m_pUsockClnt->SetMultiplexer( m_pMultiplexer );
+        snprintf(pBuf, sizeof(pBuf), "%s%d", getReplConf()->getCachedUsPath(),
+                 Lsmcd::getInstance().getProcId());
+        m_pUsockClnt->setLocalAddr(pBuf);
+        m_pUsockClnt->connectTo(getReplConf()->getRepldUsPath());
+    }
     return 0;
 }
 
@@ -618,9 +696,13 @@ void Lsmcd::setMcParms(LsMcParms *pParms)
     //LcReplConf& replConf = LcReplConf::getInstance();
     pParms->m_usecas    = getReplConf()->getUseCas();
     pParms->m_usesasl   = getReplConf()->getUseSasl();
+    pParms->m_anonymous = getReplConf()->getAnonymous();
+    pParms->m_byUser    = getReplConf()->getByUser();
     pParms->m_nomemfail = getReplConf()->getNomemFail();
     pParms->m_iValMaxSz = getReplConf()->getValMaxSz();
     pParms->m_iMemMaxSz = getReplConf()->getMemMaxSz();
+    pParms->m_userSize  = getReplConf()->getUserSize();
+    pParms->m_hashSize  = getReplConf()->getHashSize();
     if (pParms->m_iMemMaxSz < 1024)
         pParms->m_iMemMaxSz *= 1024 * 1024; 
     return;

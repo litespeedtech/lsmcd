@@ -31,3 +31,5 @@ Version 1.4.2: July 3, 2019
 Version 1.4.3: July 8, 2019
 [BUGFIX] Report correct version number when lsmcd is run with -v
 
+Version 1.4.4: July 10, 2019
+[BUGFIX] Updated github to the correct SASL updated version.

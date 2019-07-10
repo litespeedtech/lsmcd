@@ -100,7 +100,8 @@ am__v_AR_0 = @echo "  AR      " $@;
 am__v_AR_1 = 
 liblsr_a_AR = $(AR) $(ARFLAGS)
 liblsr_a_LIBADD =
-am_liblsr_a_OBJECTS = ls_lock.$(OBJEXT) xxhash.$(OBJEXT)
+am_liblsr_a_OBJECTS = ls_lock.$(OBJEXT) xxhash.$(OBJEXT) \
+	ls_hash.$(OBJEXT) ls_pool.$(OBJEXT) ls_xpool.$(OBJEXT)
 liblsr_a_OBJECTS = $(am_liblsr_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -208,6 +209,7 @@ LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIB_SASL = @LIB_SASL@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
@@ -235,6 +237,7 @@ PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 RANLIB = @RANLIB@
 RT_LIB_OPTION = @RT_LIB_OPTION@
+SASLFLAGS = @SASLFLAGS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -298,7 +301,7 @@ top_srcdir = @top_srcdir@
 noinst_LIBRARIES = liblsr.a
 INCLUDES = -I$(top_srcdir)/include -I$(top_srcdir)/src
 liblsr_a_METASOURCES = AUTO
-liblsr_a_SOURCES = ls_lock.c xxhash.c
+liblsr_a_SOURCES = ls_lock.c xxhash.c ls_hash.c ls_pool.c ls_xpool.c
 all: all-am
 
 .SUFFIXES:
@@ -348,7 +351,10 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ls_hash.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ls_lock.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ls_pool.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ls_xpool.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xxhash.Po@am__quote@
 
 .c.o:

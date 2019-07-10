@@ -26,6 +26,7 @@
 #include <log4cxx/appender.h>
 #include <log4cxx/layout.h>
 #include <log4cxx/logger.h>
+#include <memcache/lsmemcache.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -39,6 +40,10 @@
 #define DEF_NOMEMFAIL       false
 #define DEF_VALMAXSZ        0
 #define DEF_MEMMAXSZ        0
+#define DEF_ANONYMOUS       false
+#define DEF_BYUSER          false
+#define DEF_USERSIZE        1000
+#define DEF_HASHSIZE        500000
 
 static log4cxx::Logger* initLogger(const char* logFile, const char* logLevel)
 {
@@ -64,9 +69,12 @@ LcReplConf::LcReplConf()
     , m_cachedProcCnt(1)
     , m_user("nobody")
     , m_group("nobody")
+    , m_anonymous(false)
+    , m_byUser(false)
+    , m_userSize(DEF_USERSIZE)
+    , m_hashSize(DEF_HASHSIZE)
     , m_pPriorities(NULL)
     , m_pShmFiles(NULL)
-   
 {}
 
 LcReplConf::~LcReplConf()
@@ -105,26 +113,6 @@ bool LcReplConf::parse(const char *szFile)
     //sockAddr.toString(pSockAddr, 256);
     m_cachedAddr = pAddr;
     
-    pAddr = m_confParser.getConfig("CACHED.PRIADDR");
-    if (pAddr == NULL || sockAddr.set(pAddr, 0))
-    {
-        LS_ERROR("CACHED.PRIADDR not set or bad address format");
-        return false;
-    }
-    //sockAddr.toString(pSockAddr, 256);
-    m_cachedPriAddr = pAddr;
-
-
-
-    pAddr = m_confParser.getConfig("CachedSockPath");
-    if (pAddr == NULL)
-    {
-        LS_ERROR("CachedSockPath not set");
-        return false;
-    }
-    m_cachedUsPath = pAddr;
-
-    //GzipStream
     const char *ptr;
     //SubFileNum
     ptr = m_confParser.getConfig("CACHED.SLICES");
@@ -148,6 +136,12 @@ bool LcReplConf::parse(const char *szFile)
     ptr = m_confParser.getConfig("CACHED.MEMMAXSZ");
     m_memMaxSz = ptr ? atoi(ptr) : DEF_MEMMAXSZ;
 
+    ptr = m_confParser.getConfig("CACHED.USERSIZE");
+    m_userSize = ptr ? atoi(ptr) : DEF_USERSIZE;
+
+    ptr = m_confParser.getConfig("CACHED.HASHSIZE");
+    m_hashSize = ptr ? atoi(ptr) : DEF_HASHSIZE;
+
 
     if ( (ptr = m_confParser.getConfig("CACHED.USECAS")) != NULL)
     {
@@ -162,6 +156,18 @@ bool LcReplConf::parse(const char *szFile)
             m_useSasl = true;        
     }
     
+    if ((ptr = m_confParser.getConfig("CACHED.ANONYMOUS")) != NULL )
+    {
+        if ( !strcasecmp(ptr, "TRUE"))
+            m_anonymous = true;        
+    }
+    
+    if ((ptr = m_confParser.getConfig("CACHED.DATABYUSER")) != NULL )
+    {
+        if ( !strcasecmp(ptr, "TRUE"))
+            m_byUser = true;        
+    }
+    
     if ((ptr = m_confParser.getConfig("CACHED.NOMEMFAIL")) != NULL )
     {
         if ( !strcasecmp(ptr, "TRUE"))
@@ -174,6 +180,7 @@ bool LcReplConf::parse(const char *szFile)
     if ((ptr = m_confParser.getConfig("Group")) != NULL )
         m_group = ptr;
 
+    
     ptr = m_confParser.getConfig("CachedProcCnt");
     if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
         m_cachedProcCnt = v;
@@ -200,56 +207,81 @@ bool LcReplConf::parse(const char *szFile)
     
     const char *pEntry = m_confParser.getConfig("REPL.LBADDRS");
     setLBAddrs(pEntry);
- 
-    ptr = m_confParser.getConfig("REPL.GZIPSTREAM");
-    if(ptr != NULL && !strcasecmp(ptr, "YES"))
-        m_bGzipStream = true;
-    
-    //timeout
-    ptr = m_confParser.getConfig("REPL.HEARTBEATREQ");
-    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
-        m_hbFreq = v;
-    LS_DBG_M("repld heartbeatreq:%d", getHbFreq());
-    
-    ptr = m_confParser.getConfig("REPL.HEARTBEATRETRY");
-    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
-        m_hbTimeout = v;
-    LS_DBG_M("repld heartbtimeout:%d", getHbTimeout());
-    
-    //LISTENSVRADDR
-    pAddr = m_confParser.getConfig("REPL.LISTENSVRADDR");
-    if (setLisenSvrAddr(pAddr))
+    LsMemcache::setConfigReplication(getLBAddrs().size() >= 2);
+
+    if (LsMemcache::getConfigReplication())
     {
-        m_lsntnrSvrIp = getIpOfAddr(pAddr, str);
-        if ( !isAllowedIP(getLocalLsntnrIp() ))
+        pAddr = m_confParser.getConfig("CACHED.PRIADDR");
+        if (pAddr == NULL || sockAddr.set(pAddr, 0))
         {
-            LS_ERROR("ListenSvrIp %s is not in LB Addrs"
-                , getLocalLsntnrIp());
+            LS_ERROR("CACHED.PRIADDR not set or bad address format");
             return false;
         }
-    }
-    
-    //dispatch addr
-    pAddr = m_confParser.getConfig("REPL.DispatchAddr");
-    if ( pAddr == NULL || sockAddr.set(pAddr, 0) )
-    {
-        LS_ERROR("REPL.DispatchAddr not set or bad address format");
-        return false;        
-    }
-    sockAddr.toString(pSockAddr, 64);
-    m_dispatchAddr = pSockAddr;
-    
-    //usock path
-    pAddr = m_confParser.getConfig("RepldSockPath");
-    if (pAddr != NULL)
-    {
-        m_repldUsPath = pAddr;
-    }
-    
-    ptr = m_confParser.getConfig("REPL.MAXTIDPACKET");
-    m_maxTidPacket = ptr ? atoi(ptr) : DEF_MAXTIDPACKET;
+        //sockAddr.toString(pSockAddr, 256);
+        m_cachedPriAddr = pAddr;
 
+        pAddr = m_confParser.getConfig("CachedSockPath");
+        if (pAddr == NULL)
+        {
+            LS_ERROR("CachedSockPath not set");
+            return false;
+        }
+        m_cachedUsPath = pAddr;
+
+        ptr = m_confParser.getConfig("REPL.GZIPSTREAM");
+        if(ptr != NULL && !strcasecmp(ptr, "YES"))
+            m_bGzipStream = true;
     
+        //timeout
+        ptr = m_confParser.getConfig("REPL.HEARTBEATREQ");
+        if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
+            m_hbFreq = v;
+        LS_DBG_M("repld heartbeatreq:%d", getHbFreq());
+    
+        ptr = m_confParser.getConfig("REPL.HEARTBEATRETRY");
+        if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
+            m_hbTimeout = v;
+        LS_DBG_M("repld heartbtimeout:%d", getHbTimeout());
+    
+        //LISTENSVRADDR
+        pAddr = m_confParser.getConfig("REPL.LISTENSVRADDR");
+        if (setLisenSvrAddr(pAddr))
+        {
+            m_lsntnrSvrIp = getIpOfAddr(pAddr, str);
+            if ( !isAllowedIP(getLocalLsntnrIp() ))
+            {
+                LS_ERROR("Repl ListenSvrIp %s is not in LB Addrs"
+                    , getLocalLsntnrIp());
+                return false;
+            }
+        }
+        else
+        {
+            LS_ERROR("Invalid ListenSvrAddr; must me a member of LbAddrs and "
+                     "include a port");
+            return false;
+        }
+    
+        //dispatch addr
+        pAddr = m_confParser.getConfig("REPL.DispatchAddr");
+        if ( pAddr == NULL || sockAddr.set(pAddr, 0) )
+        {
+            LS_ERROR("LcReplConf fails to load Repl DispatchAddr %s", pAddr);
+            return false;        
+        }
+        sockAddr.toString(pSockAddr, 64);
+        m_dispatchAddr = pSockAddr;
+    
+        //usock path
+        pAddr = m_confParser.getConfig("RepldSockPath");
+        if (pAddr != NULL)
+        {
+            m_repldUsPath = pAddr;
+        }
+    
+        ptr = m_confParser.getConfig("REPL.MAXTIDPACKET");
+        m_maxTidPacket = ptr ? atoi(ptr) : DEF_MAXTIDPACKET;
+    } // Replication
     
     return true;
 }
@@ -366,6 +398,26 @@ const char * LcReplConf::getUser()
 const char * LcReplConf::getGroup()
 {
     return m_group.c_str();
+}
+
+bool LcReplConf::getAnonymous()
+{
+    return m_anonymous;
+}
+
+bool LcReplConf::getByUser()
+{
+    return m_byUser;
+}
+
+uint32_t LcReplConf::getUserSize()
+{
+    return m_userSize;
+}
+
+uint32_t LcReplConf::getHashSize()
+{
+    return m_hashSize;
 }
 
 uint16_t LcReplConf::getCachedProcCnt() const 

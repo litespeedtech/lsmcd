@@ -45,6 +45,7 @@ public:
     LsMcSasl()
         : m_pSaslConn(NULL)
         , m_authenticated(false)
+        , m_pUser(NULL)
     {}
     ~LsMcSasl()
     {   clrSaslConn();   }
@@ -59,9 +60,13 @@ public:
     bool isAuthenticated()
     {   return m_authenticated;  }
 
+    char *getUser()
+    {   return m_pUser;          }
+    
     static const char  *s_pAppName;
     static char        *s_pSaslPwdb;
     static uint8_t      verbose;
+    static char        *s_pHostName;
 
 private:
     LsMcSasl(const LsMcSasl &other);
@@ -78,9 +83,14 @@ private:
         }
     }
 
+    char *getHostName(void);
+    
+    int rebuildAuth(char *pVal, unsigned int mechLen, unsigned int valLen, 
+                    char *sval, char **ppVal, unsigned int *pValLen);
 private:
     sasl_conn_t        *m_pSaslConn;
     bool                m_authenticated;
+    char               *m_pUser;
 #endif  // USE_SASL
 };
 

@@ -4,16 +4,18 @@ cmake_policy(SET CMP0002 OLD)
 
 
 ########### next target ###############
+#SET(shm_STAT_SRCS
+#    lsmchashmulti.cpp
+#    lsmemcache.cpp
+#    lsmcsasl.cpp
+#    memcacheconn.cpp
+#    memcachelistener.cpp
+#    lsmchashbyuser.cpp
+#)
 
-SET(shm_STAT_SRCS
-    lsmchashmulti.cpp
-    lsmemcache.cpp
-    lsmcsasl.cpp
-    memcacheconn.cpp
-    memcachelistener.cpp
-)
+add_library(lsmemcache STATIC lsmchashmulti.cpp lsmemcache.cpp lsmcsasl.cpp memcacheconn.cpp memcachelistener.cpp lsmchashbyuser.cpp )
 
-add_library(lsmemcache STATIC ${shm_STAT_SRCS} )
+#target_sources(lsmemcache lsmchashmulti.cpp lsmemcache.cpp lsmcsasl.cpp memcacheconn.cpp memcachelistener.cpp lsmchashbyuser.cpp)
 
 #add_library(lsmemcache SHARED ${shm_STAT_SRCS} )
 

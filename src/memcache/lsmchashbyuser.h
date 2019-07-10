@@ -15,43 +15,53 @@
 *    You should have received a copy of the GNU General Public License       *
 *    along with this program. If not, see http://www.gnu.org/licenses/.      *
 *****************************************************************************/
+#ifndef LSMCHASHBYUSER_H
+#define LSMCHASHBYUSER_H
 
-#ifndef __REPLSHMHELPER_H__
-#define __REPLSHMHELPER_H__
-
+#include <lsdef.h>
 #include <shm/lsshmhash.h>
-#include <memcache/lsmemcache.h>
-#include <util/autobuf.h>
-#include <repl/repldef.h>
-#include <stdint.h>
-#include <util/tsingleton.h>
-class LcNodeInfo;
-class ReplShmHelper : public TSingleton<ReplShmHelper>
-{
-    friend class TSingleton<ReplShmHelper>;
-public:    
-    LsShmHash * getLsShmHash(int idx) const      
-    {   return LsMemcache::getInstance().getReplHash(idx); }
-    
-    int         tidGetNxtItems(int idx, uint64_t* tid, uint8_t* pBuf, int isize);
-    
-    bool        getShmSliceRole(int idx);
-    bool        readShmDBTid (int idx, LcNodeInfo* pStatus);
-    uint64_t    getLastShmTid(int idx);
-    
-    int         tidSetItems(int idx, uint8_t *pData, int dataLen);
-    
-    int32_t     getMaxPacketSize();
-    bool        incMaxPacketSize(int offBytes);
-    uint64_t    bcastNewTidData (int idx, uint64_t iLstTid, void *pInst, 
-                                 for_each_fn2 func);
-private:
-    ReplShmHelper();
-    ~ReplShmHelper();
-    
-private:
-    uint32_t m_iMaxPacketSize;
-    LsShmHash *m_pLsShmHash;
+#include <lsr/ls_hash.h>
 
+class LsShm;
+class LsShmPool;
+class LsMemcache;
+
+class LsMcHashByUser
+{
+public:
+    LsMcHashByUser(); 
+    ~LsMcHashByUser();
+    bool init(
+        LsShm           *pShm,
+        LsShmPool       *pGPool,
+        const char      *pHashname,
+        LsShmHasher_fn   fnHasher, 
+        LsShmValComp_fn  fnValComp,
+        int              mode,
+        uint32_t         userSize,
+        uint32_t         hashSize);
+    void del();
+        
+    LsShmHash  *getHash(char *user); // user can be NULL if !byUser or anon.
+    
+private:
+    LsMcHashByUser(const LsMcHashByUser &other);
+    LsMcHashByUser &operator=(const LsMcHashByUser &other);
+    
+    int hash_delete_fn(const void *pKey, void *pData);
+    bool insert_user_entry(const char *user, LsShmHash *hash);
+    
+    LsShm           *m_pShm;
+    LsShmPool       *m_pGPool;    
+    const char      *m_pHashname;
+    LsShmHasher_fn   m_fnHasher;
+    LsShmValComp_fn  m_fnValComp;
+    int              m_mode;
+    ls_hash_t       *m_userHashes;
+    LsShmHash       *m_pHashDefault;
+    uint32_t         m_userSize;
+    uint32_t         m_hashSize;
 };
-#endif
+
+#endif // HashbyUser include
+

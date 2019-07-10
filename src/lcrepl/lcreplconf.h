@@ -54,6 +54,10 @@ public:
     const char  *getTmpDir();
     const char  *getUser();
     const char  *getGroup();
+    bool         getAnonymous();
+    bool         getByUser();
+    uint32_t     getUserSize();
+    uint32_t     getHashSize();
     uint16_t     getCachedProcCnt() const;
     const char  *getDispatchAddr() const;
     
@@ -79,11 +83,15 @@ private:
     uint16_t            m_cachedProcCnt;
     AutoStr             m_user;
     AutoStr             m_group;
+    bool                m_anonymous;
+    bool                m_byUser;
+    uint32_t            m_userSize;
+    uint32_t            m_hashSize;
     
-    int            *m_pPriorities;
-    char          **m_pShmFiles;
+    int                *m_pPriorities;
+    char              **m_pShmFiles;
    
-    Config           m_confParser;
+    Config              m_confParser;
 };
 
 LcReplConf * getReplConf();

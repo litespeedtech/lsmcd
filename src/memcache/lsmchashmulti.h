@@ -20,30 +20,34 @@
 
 #include <lsdef.h>
 #include <shm/lsshmhash.h>
-
+#include <lsr/ls_hash.h>
+#include <memcache/lsmchashbyuser.h>
 
 class MemcacheConn;
 class Multiplexer;
 typedef struct
 {
-    uint8_t         m_idx;    
-    LsShmHash      *m_pHash;
-    LsShmOffset_t   m_iHdrOff;
-    MemcacheConn   *m_pConn;
+    uint8_t          m_idx;    
+    LsMcHashByUser   m_hashByUser;
+    MemcacheConn    *m_pConnSlaveToMaster;
 } LsMcHashSlice;
-
 
 class LsMcHashMulti
 {
+private:
+    int  key2hashNum(LsShmHKey hkey, MemcacheConn *pConn);
+    
 public:
     LsMcHashMulti();
     ~LsMcHashMulti();
 
-    int  init(int iCnt, const char **ppPathName, const char *pHashName,
-            LsShmHasher_fn fnHashKey, LsShmValComp_fn fnValComp,
-            int mode);
+    int  init(int iCnt, const char **ppPathName, 
+              const char *pHashName, LsShmHasher_fn fnHashKey, 
+              LsShmValComp_fn fnValComp, int mode, uint32_t userSize, 
+              uint32_t hashSize);
 
-    int  foreach(int (*func)(LsMcHashSlice *pSlice, void *pArg), void *pArg);
+    int  foreach(int (*func)(LsMcHashSlice *pSlice, MemcacheConn *pConn, 
+                             void *pArg), MemcacheConn *pConn, void *pArg);
 
     int  getMultiCnt()
     {   return m_iCnt;  }
@@ -54,14 +58,17 @@ public:
     LsMcHashSlice  *indx2hashSlice(int indx)
     {   return (m_pLastSlice = &m_pSlices[indx]);  }
 
-    LsMcHashSlice  *key2hashSlice(LsShmHKey hkey)
-    {   return (m_pLastSlice = &m_pSlices[key2hashNum(hkey)]);  }
+    LsMcHashSlice  *key2hashSlice(LsShmHKey hkey, MemcacheConn *pConn)
+    {   return (m_pLastSlice = &m_pSlices[key2hashNum(hkey, pConn)]);  }
 
     Multiplexer *getMultiplexer()
     {   return m_pMultiplexer;  }
 
     void setMultiplexer(Multiplexer *pMultiplexer)
     {   m_pMultiplexer = pMultiplexer;  }
+    
+    LsMemcache *getMemcache()
+    {   return m_pMemcache; }
 
 //     LOG4CXX_NS::Logger *getLogger()
 //     {   return m_pLastSlice->m_pHash->getLogger();  }
@@ -71,18 +78,13 @@ private:
     LsMcHashMulti &operator=(const LsMcHashMulti &other);
 
 private:
-    int  key2hashNum(LsShmHKey hkey)
-    {
-        return ((m_iCnt > 1) ?
-            ((m_iLastHashKey = hkey) % m_iCnt) : 0);
-    }
-
     int             m_iCnt;
     LsShmHasher_fn  m_fnHashKey;
     uint32_t        m_iLastHashKey;
-    LsMcHashSlice *m_pSlices;
-    LsMcHashSlice *m_pLastSlice;
+    LsMcHashSlice  *m_pSlices;
+    LsMcHashSlice  *m_pLastSlice;
     Multiplexer    *m_pMultiplexer;
+    LsMemcache     *m_pMemcache;
 };
 
 #endif // LSSHMHASHMULTI_H

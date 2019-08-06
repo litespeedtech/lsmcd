@@ -33,3 +33,7 @@ Version 1.4.3: July 8, 2019
 
 Version 1.4.4: July 10, 2019
 [BUGFIX] Updated github to the correct SASL updated version.
+
+Version 1.4.5:
+[BUGFIX] Fixed default node.conf file (from v1.4.4) which was broken by incomplete merge.
+

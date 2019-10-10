@@ -421,7 +421,7 @@ int Lsmcd::Main ( int argc, char ** argv )
 
         if (ret == 0) //replicator
         {
-            snprintf(argv[0], 80, "lsmcd - replicator", ret);
+            //snprintf(argv[0], 80, "lsmcd - replicator", ret);
             _pImpl->m_pMemcacheListener.Stop();
         }
         else
@@ -429,7 +429,7 @@ int Lsmcd::Main ( int argc, char ** argv )
 // #ifdef USE_REPL_LISTENER
              _pImpl->m_pReplListener.Stop();
 // #endif
-            snprintf(argv[0], 80, "lsmcd - cached #%02d", ret);
+            //snprintf(argv[0], 80, "lsmcd - cached #%02d", ret);
         }
     }
 

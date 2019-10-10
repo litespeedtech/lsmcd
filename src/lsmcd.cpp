@@ -632,8 +632,8 @@ int Lsmcd::Main(int argc, char **argv)
         int ret = cg.guardCrash( 1 + getReplConf()->getCachedProcCnt() );
         if (ret == -1)
             return 8;
-        int zeroLen = strlen(argv[0]);
-        for( int i = 0; i< argc; ++i)
+        //int zeroLen = strlen(argv[0]);
+        for( int i = 1; i< argc; ++i)
         {
             int n = strlen( argv[i]);
             memset(argv[i], 0 , n);
@@ -642,14 +642,14 @@ int Lsmcd::Main(int argc, char **argv)
 
         if (ret == 0) //replicator
         {
-            snprintf(argv[0], zeroLen, "lsmcd - replicator");
+            //snprintf(argv[0], zeroLen, "lsmcd - replicator");
             _pReplSvrImpl->reinitRepldMpxr(ret);
             ::sleep(1);
         }
         else
         {
             LS_DBG_M("Cached pid:%d, procNo:%d", getpid(), ret);
-            snprintf(argv[0], zeroLen, "lsmcd - cached #%02d", ret);
+            //snprintf(argv[0], zeroLen, "lsmcd - cached #%02d", ret);
             _pReplSvrImpl->reinitCachedMpxr(ret);
         }
         _pReplSvrImpl->ChangeUid();

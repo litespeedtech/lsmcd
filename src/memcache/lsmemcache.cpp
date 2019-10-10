@@ -1854,7 +1854,7 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
         offset2ptr(helperOff);
     total -= pHelper->x_iSize;
     LS_DBG_M("Testing total %d maxsize %d\n", total, m_mcparms.m_iMemMaxSz);
-    
+
     if (total > m_mcparms.m_iMemMaxSz)
     {
         LS_DBG_M("Exceeding max size: %d > %d\n", total, m_mcparms.m_iMemMaxSz);

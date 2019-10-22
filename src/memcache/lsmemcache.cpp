@@ -159,7 +159,7 @@ LsMcCmdFunc LsMemcache::s_LsMcCmdFuncs[] =
     { "decr",       sizeof("decr")-1,       MC_BINCMD_DECREMENT,    doCmdArithmetic },
     { "delete",     sizeof("delete")-1,     MC_BINCMD_DELETE,       doCmdDelete },
     { "touch",      sizeof("touch")-1,      MC_BINCMD_TOUCH,        doCmdTouch },
-    { "stats",      sizeof("stats")-1,      0,              doCmdStats },
+    { "stats",      sizeof("stats")-1,      MC_BINCMD_STAT,         doCmdStats },
     { "flush_all",  sizeof("flush_all")-1,  0,              doCmdFlush },
     { "version",    sizeof("version")-1,    MC_BINCMD_VERSION,      doCmdVersion },
     { "quit",       sizeof("quit")-1,       MC_BINCMD_QUIT,         doCmdQuit },
@@ -2512,7 +2512,8 @@ LsMcHashSlice *LsMemcache::setSlice(const void *pKey, int iLen,
     {
         if ((!pConn->GetSasl()->isAuthenticated()) || (!pConn->getUser()))
         {
-            LS_DBG_M("SetHash Using anonymous user\n");
+            LS_DBG_M("SetHash Using anonymous user (auth: %d, user: %s)\n",
+                     pConn->GetSasl()->isAuthenticated(), pConn->getUser());
             // set hash for anonymous user
             pHash = pConn->getSlice()->m_hashByUser.getHash(NULL);
             pHashStats = pSlice->m_pConnSlaveToMaster->getHash();
@@ -2520,10 +2521,10 @@ LsMcHashSlice *LsMemcache::setSlice(const void *pKey, int iLen,
         }
         else
         {
-            LS_DBG_M("SetHash using user: %s\n", pConn->getUser());
             pHash = pConn->getSlice()->m_hashByUser.getHash(pConn->getUser());
-            pHashStats = pSlice->m_pConnSlaveToMaster->getHash(); 
-            pConn->setConnStats(pConn);
+            LS_DBG_M("SetHash using user: %s: %p\n", pConn->getUser(), pHash);
+            pHashStats = pSlice->m_pConnSlaveToMaster->getHash();
+            pConn->setConnStats(pSlice->m_pConnSlaveToMaster/*pConn*/);
         }
     }
     else
@@ -2804,8 +2805,8 @@ uint8_t *LsMemcache::setupBinCmd(
         LS_ERROR("keyLen %d is greater than KEY_MAXLEN %d\n", keyLen, KEY_MAXLEN);
         return NULL;
     }
-    LS_DBG_M("setupBinCmd, cmd: %d, bodyLen: %d, keyLen: %d\n", cmd, bodyLen, 
-             keyLen);
+    LS_DBG_M("setupBinCmd, cmd: %d, bodyLen: %d, keyLen: %d, pConn: %p\n", cmd, bodyLen,
+             keyLen, pConn);
     if (bodyLen == keyLen)
     {
         m_parms.key.ptr = (char *)pBody;
@@ -3468,12 +3469,9 @@ void LsMemcache::doBinSaslAuth(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     if (ret == 0)
     {
         static const char authok[] = "Authenticated";
-        int userLen = valLen;
-        char user[userLen + 1];
-        memcpy(user, (char *)(pHdr + 1) + mechLen, userLen);
-        user[userLen] = 0;
-        LS_DBG_M("SASL worked, user: %s, mechLen: %d, userLen: %d, usesasl: %s,"
-                 " byUser: %s\n", user, mechLen, userLen, 
+        char *user = pConn->GetSasl()->getUser();
+        LS_DBG_M("SASL worked, user: %s, mechLen: %d, usesasl: %s,"
+                 " byUser: %s\n", user, mechLen, 
                  m_mcparms.m_usesasl ? "YES" : "NO", 
                  m_mcparms.m_byUser ? "YES" : "NO");
         if (getConfigMultiUser())

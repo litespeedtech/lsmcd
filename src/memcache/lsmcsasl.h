@@ -76,6 +76,8 @@ private:
 
     void clrSaslConn()
     {
+        if (m_pUser)
+            free(m_pUser);
         if (m_pSaslConn != NULL)
         {
             sasl_dispose(&m_pSaslConn);

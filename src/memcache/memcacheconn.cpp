@@ -82,14 +82,14 @@ char *MemcacheConn::getUser()
 
 void MemcacheConn::setHash(LsShmHash *pHash)
 {   
-    LS_DBG_M("Conn set pHash: %p\n", pHash); 
+    LS_DBG_M("Conn %p set pHash: %p\n", this, pHash);
     m_pHash = pHash;  
 }
 
 
 LsShmHash  *MemcacheConn::getHash()
 {   
-    LS_DBG_M("Conn get pHash: %p\n", m_pHash); 
+    LS_DBG_M("Conn %p get pHash: %p\n", this, m_pHash);
     return m_pHash;   
 }
 

@@ -370,13 +370,28 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     {
         LS_DBG_M("SASL authenticated!\n");
         char *user = NULL;
-        if (sasl_getprop(m_pSaslConn, SASL_USERNAME, (const void **)&user) == SASL_OK)
+        int sasl_err = sasl_getprop(m_pSaslConn, SASL_USERNAME,
+                                    (const void **)&user);
+        if (sasl_err == SASL_OK)
         {
+            if (m_pUser && strcmp(m_pUser, user))
+            {
+                LS_DBG_M("SASL user CHANGED, was: %s\n", m_pUser);
+                free(m_pUser);
+            }
             LS_DBG_M("SASL user: %s\n", user);
-            m_pUser = user;
+            m_pUser = strdup(user);
+            if (!m_pUser)
+            {
+                LS_ERROR("Insufficient memory creating SASL user name\n");
+                return -1;
+            }
         }
         else
-            LS_DBG_M("ERROR getting username!\n");
+        {
+            LS_DBG_M("ERROR getting username #%d\n", ret);
+            return -1;
+        }
         m_authenticated = true;
         ret = 0;
     }
@@ -417,11 +432,28 @@ int LsMcSasl::chkAuthStep(char *pBuf, unsigned int valLen,
     {
         LS_DBG_M("SASL authenticated\n");
         char *user = NULL;
-        if (sasl_getprop(m_pSaslConn, SASL_USERNAME, (const void **)&user) == SASL_OK)
+        int sasl_err = sasl_getprop(m_pSaslConn, SASL_USERNAME,
+                                    (const void **)&user);
+        if (sasl_err == SASL_OK)
+        {
+            if (m_pUser && strcmp(m_pUser, user))
+            {
+                LS_DBG_M("SASL user CHANGED, was: %s\n", m_pUser);
+                free(m_pUser);
+            }
+            m_pUser = strdup(user);
+            if (!m_pUser)
+            {
+                LS_ERROR("Insufficient memory creating SASL user name\n");
+                return -1;
+            }
             LS_DBG_M("SASL user: %s\n", user);
+        }
         else
-            LS_DBG_M("ERROR getting username!\n");
-        m_pUser = user;
+        {
+            LS_ERROR("ERROR getting username %d\n", sasl_err);
+            return -1;
+        }
         m_authenticated = true;
         ret = 0;
     }

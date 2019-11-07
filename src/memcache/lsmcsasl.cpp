@@ -18,10 +18,12 @@
 #include <memcache/lsmcsasl.h>
 
 #ifdef USE_SASL
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <lcrepl/lcreplconf.h>
 #include <sasl/saslplug.h>
 #include <log4cxx/logger.h>
 
@@ -35,8 +37,6 @@ const char *LsMcSasl::s_pAppName = "memcached";
 char       *LsMcSasl::s_pSaslPwdb = NULL;
 uint8_t     LsMcSasl::verbose = 0;
 char       *LsMcSasl::s_pHostName = NULL;
-
-#ifdef ENABLE_SASL_PWDB
 
 #define PWENT_MAXLEN 256
 static int chkSaslPwdb(sasl_conn_t *conn,
@@ -96,7 +96,6 @@ static int chkSaslPwdb(sasl_conn_t *conn,
     }
     return SASL_OK;
 }
-#endif  // ENABLE_SASL_PWDB
 
 
 sasl_conn_t *LsMcSasl::getSaslConn()
@@ -115,7 +114,6 @@ sasl_conn_t *LsMcSasl::getSaslConn()
 }
 
 
-#ifdef HAVE_SASL_CB_GETCONF
 /* The locations we may search for a SASL config file if the user didn't
  * specify one in the environment variable SASL_CONF_PATH
  */
@@ -126,21 +124,49 @@ const char * const locations[] =
     NULL
 };
 
+static int saslGetOpt(void *context __attribute__((unused)),
+                      const char *plugin_name __attribute__((unused)),
+                      const char *option,
+                      const char **result,
+                      unsigned *len)
+{
+    const char *path = getReplConf()->getSaslDB();
+
+    if (path && !strcmp(option, "sasldb_path"))
+    {
+        *result = path;
+        if (len)
+            *len = (unsigned) strlen(path);
+        LS_DBG_M("saslGetOpt using SASLDB: %s\n", path);
+        return SASL_OK;
+    }
+    LS_DBG_M("saslGetOpt ignore option: %s\n", option);
+    return SASL_FAIL;
+}
+
+
 static int getSaslConf(void *context, const char **ppath)
 {
-    char *path = getenv("SASL_CONF_PATH");
-    LS_DBG_M("getSASLConf\n");
-    if (path == NULL)
+    char *path = NULL;
+    path = (char *)getReplConf()->getSaslDB();
+    if (path)
+        LS_DBG_M("getSASLConf specified: %s\n", path);
+    else
     {
-        const char * const *pp = locations;
-        char fname[1024];
-        while ((path = (char *)*pp++) != NULL)
+        path = getenv("SASL_CONF_PATH");
+        LS_DBG_M("getSASLConf search\n");
+        if (path == NULL)
         {
-            snprintf(fname, sizeof(fname), "%s/%s.conf",
-                     path, LsMcSasl::s_pAppName);
-            LS_DBG_M("Trying path: %s\n", fname);
-            if (access(fname, F_OK) == 0)
-                break;
+            const char * const *pp = locations;
+            char fname[1024];
+            while ((path = (char *)*pp++) != NULL)
+            {
+                snprintf(fname, sizeof(fname), "%s/%s.conf",
+                         path, LsMcSasl::s_pAppName);
+                LS_DBG_M("Trying path: %s\n", fname);
+                if (access(fname, F_OK) == 0)
+                    break;
+            }
         }
     }
     if (LsMcSasl::verbose)
@@ -155,7 +181,6 @@ static int getSaslConf(void *context, const char **ppath)
     LS_DBG_M("   SASLConf: %s\n", (*ppath != NULL) ? *ppath : "NULL");
     return (*ppath != NULL) ? SASL_OK : SASL_FAIL;
 }
-#endif  // HAVE_SASL_CB_GETCONF
 
 
 static int sasl_log_callback(void *context, int level, const char *message)
@@ -184,13 +209,10 @@ static int sasl_log_callback(void *context, int level, const char *message)
 
 static sasl_callback_t saslCallbacks[] =
 {
-#ifdef ENABLE_SASL_PWDB
    { SASL_CB_SERVER_USERDB_CHECKPASS, (sasl_callback_ft_local)chkSaslPwdb, NULL },
-#endif
-#ifdef HAVE_SASL_CB_GETCONF
    { SASL_CB_GETCONFPATH, (sasl_callback_ft_local)getSaslConf, NULL },
-#endif
    { SASL_CB_LOG, (sasl_callback_ft_local)sasl_log_callback, NULL },
+   { SASL_CB_LIST_END, NULL, NULL },
    { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -198,9 +220,9 @@ static sasl_callback_t saslCallbacks[] =
 int LsMcSasl::initSasl()
 {
     LS_DBG_M("initSASL\n");
-#ifdef ENABLE_SASL_PWDB
     if ((s_pSaslPwdb = getenv("MEMCACHED_SASL_PWDB")) == NULL)
     {
+        int lastIndex = 1;
         LS_DBG_M("MEMCACHED_SASL_PWDB NOT DEFINED!\n");
         if (verbose)
         {
@@ -210,10 +232,19 @@ int LsMcSasl::initSasl()
         }
         saslCallbacks[0].id     = SASL_CB_LOG;
         saslCallbacks[0].proc   = (sasl_callback_ft_local)sasl_log_callback;
-        saslCallbacks[1].id     = SASL_CB_LIST_END;
-        saslCallbacks[1].proc   = NULL;
+        if (getReplConf()->getSaslDB())
+        {
+            LS_DBG_M("Specified SASLDB: %s\n", getReplConf()->getSaslDB());
+            saslCallbacks[lastIndex].id = SASL_CB_GETCONFPATH;
+            saslCallbacks[lastIndex].proc = (sasl_callback_ft_local)getSaslConf;
+            ++lastIndex;
+            saslCallbacks[lastIndex].id = SASL_CB_GETOPT;
+            saslCallbacks[lastIndex].proc = (sasl_callback_ft_local)saslGetOpt;
+            ++lastIndex;
+        }
+        saslCallbacks[lastIndex].id     = SASL_CB_LIST_END;
+        saslCallbacks[lastIndex].proc   = NULL;
     }
-#endif
 
     int result;
     result = sasl_server_init(saslCallbacks, s_pAppName);
@@ -363,8 +394,8 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
         if (rebuildAuth(pVal, mechLen, valLen, sval, &pVal, &valLen) == -1)
             return -1;
         
-    LS_DBG_M("SASL server_start, mech: %s, pval: %s, valLen: %d\n", 
-             mech, pVal, valLen);
+    LS_DBG_M("SASL server_start, mech: %s, pval: %s, valLen: %d, euid: %d\n",
+             mech, pVal, valLen, geteuid());
     ret = sasl_server_start(m_pSaslConn, mech, pVal, valLen, pResult, pLen);
     if (ret == SASL_OK)
     {

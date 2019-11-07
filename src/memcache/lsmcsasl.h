@@ -21,12 +21,6 @@
 // define to include sasl interface
 #define USE_SASL
 
-// define to verify plaintext password
-#define ENABLE_SASL_PWDB
-
-// define to search for sasl configuration file
-#define HAVE_SASL_CB_GETCONF
-
 #include <stdlib.h>
 #include <stdint.h>
 #ifdef USE_SASL

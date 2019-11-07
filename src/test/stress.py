@@ -4,7 +4,7 @@ print 'Find out when entries start getting purged'
 print 'Uses bmemcached (pip install python-binary-memcached)'
 import bmemcached, argparse, random, sys
 from bmemcached.exceptions import MemcachedException
-parser = argparse.ArgumentParser(description='Stressing memcached (lsmcd)')
+parser = argparse.ArgumentParser(description='Stressing memcached (lsmcd) - all options require an argument (even if its 1 to enable)')
 parser.add_argument("--u", default="user", type=str, help="SASL user name")
 parser.add_argument("--p", default="password", type=str, help="SASL password")
 parser.add_argument("--k", default=100, type=int, help="key size")
@@ -14,7 +14,7 @@ parser.add_argument("--n", default=0, type=int, help="set to 1 to turn off SASL"
 parser.add_argument("--s", default=0, type=int, help="SASL user validation; key is constant, data has the user name in it")
 parser.add_argument("--t", default=0, type=int, help="set to 1 to get stats")
 parser.add_argument("--g", default=0, type=int, help="get ONLY (assume set has been done)")
-parser.add_argument("--o", default=0, type=int, help="just set key=value for this user")
+parser.add_argument("--o", default=1, type=int, help="just set key=value for this user (default is 1)")
 parser.add_argument("--e", default=0, type=int, help="Number of entries to add/get before stopping - default is until an entry is missing")
 args = parser.parse_args()
 user = args.u
@@ -61,12 +61,13 @@ except MemcachedException as meme:
     
 print 'Getting key=' + client.get('key') + ' (should be value)'
 if client.get('key') == 'value':
-    print 'Initial test works.  Now pound it!'
+    print 'Initial test works.'
 else:
     print 'Unexpected value of key: ' + client.get('key')
 if one_only:
     print 'Completed test'
     sys.exit()
+print 'Now pound it!'
 key_size = 0
 data_size = 0
 set_index = 0

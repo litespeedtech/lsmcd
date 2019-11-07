@@ -60,6 +60,7 @@ public:
     uint32_t     getHashSize();
     uint16_t     getCachedProcCnt() const;
     const char  *getDispatchAddr() const;
+    const char  *getSaslDB() const;
     
     const char  *getRepldUsPath() const;
     const char  *getCachedUsPath() const;
@@ -87,7 +88,8 @@ private:
     bool                m_byUser;
     uint32_t            m_userSize;
     uint32_t            m_hashSize;
-    
+    AutoStr             m_saslDB;
+
     int                *m_pPriorities;
     char              **m_pShmFiles;
    

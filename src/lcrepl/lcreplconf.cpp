@@ -174,6 +174,12 @@ bool LcReplConf::parse(const char *szFile)
             m_noMemFail = true;        
     }
     
+    if ((ptr = m_confParser.getConfig("CACHED.SASLDB")) != NULL)
+    {
+        m_saslDB = ptr;
+        LS_DBG_M("SASLDB = %s\n", ptr);
+    }
+
     if ((ptr = m_confParser.getConfig("User")) != NULL )
         m_user = ptr;
     
@@ -444,6 +450,11 @@ const char *LcReplConf::getDispatchAddr() const
 LcReplConf * getReplConf()
 {
     return static_cast<LcReplConf*>(ConfWrapper::getInstance().getConf());
+}
+
+const char *LcReplConf::getSaslDB() const
+{
+    return m_saslDB.c_str();
 }
 
 

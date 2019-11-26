@@ -54,4 +54,8 @@ Version 1.4.9: November 7, 2019
 Version 1.4.10: November 26, 2019
 [IMPROVEMENT] Support ASCII accesses using the anonymous user if the Cached.Anonymous=True
 [IMPROVEMENT] Cleaned up code to compile without warnings with the newer gcc compilers.
- 
+[NOTE] This version is compiled in a newer development environment.  If you have problems recompiling the software, run `autoreconf --install --force` to rebuild the environment. 
+
+Version 1.4.11: November 26, 2019
+[BUGFIX] `make install` leaves your existing installation and does not step on your configuration.
+

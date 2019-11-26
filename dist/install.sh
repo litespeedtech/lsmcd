@@ -3,7 +3,7 @@
 LSMCD_HOME=/usr/local/lsmcd
 TMP_DIR=/tmp/lsmcd
 
-rm -rf $LSMCD_HOME
+#rm -rf $LSMCD_HOME
 
 if [ ! -d ${LSMCD_HOME}/bin ]; then
     mkdir -p ${LSMCD_HOME}/bin
@@ -15,7 +15,12 @@ fi
 
 cp ../src/lsmcd  ${LSMCD_HOME}/bin/.
 cp ../dist/bin/lsmcdctrl ${LSMCD_HOME}/bin/. 
-cp -r ../dist/conf  ${LSMCD_HOME}/conf
+if [ -d $LSMCD_HOME/conf ]; then
+    UPDATE=1
+else
+    cp -rn ../dist/conf  ${LSMCD_HOME}/conf
+    UPDATE=0
+fi
 
 if [ -x /sbin/chkconfig ]; then
     cp ../dist/bin/lsmcd.init /etc/init.d/lsmcd
@@ -28,5 +33,7 @@ else
     exit 1
 fi
 
-echo "Now you have to update ${LSMCD_HOME}/conf/node.conf" 
+if [ $UPDATE -eq 0 ]; then
+    echo "Now you have to update ${LSMCD_HOME}/conf/node.conf" 
+fi
 

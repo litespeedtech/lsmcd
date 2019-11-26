@@ -44,10 +44,15 @@ if args.n == 1:
 else:
     print "Connecting with SASL"
     client = bmemcached.Client(('127.0.0.1:11211',), user, password, compression=None)
-if (not get_only) and (not client.set('key', 'value')):
-    print "Can't even save 1 simple key/value pair - fail"
+    
+try:
+    if (not get_only) and (not client.set('key', 'value')):
+        print "Can't even save 1 simple key/value pair - fail"
+        sys.exit()
+except MemcachedException as meme:
+    print 'Memcached Exception: ' + str(meme) + ' in set'
     sys.exit()
-
+    
 try:    
     if not client.get('key'):
         if get_only:

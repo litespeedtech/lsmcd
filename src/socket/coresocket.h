@@ -31,7 +31,7 @@ protected:
     {}
     CoreSocket(int domain, int type, int protocol = 0)
     {
-        register int fd = ::socket(domain, type, protocol);
+        int fd = ::socket(domain, type, protocol);
         setfd(fd);
     }
     void    setfd(int ifd) { m_ifd = ifd;  }

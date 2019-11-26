@@ -30,7 +30,6 @@ class ReplPacketHeader;
 struct sockaddr;
 class Multiplexer;
 class LsMcSasl;
-struct ReplPacketHeader;
 class LsShmHash;
 
 class MemcacheConn : public EventReactor

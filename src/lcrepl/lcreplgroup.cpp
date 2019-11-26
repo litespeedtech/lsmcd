@@ -422,6 +422,8 @@ uint64_t LcReplGroup::getClientsMaxTid(const StringList &inlist, int idx, uint64
 //the min IP is the one
 bool LcReplGroup::isSelfMinAddr(const StringList &clntlist, const char* pMyAddr)
 {
+    // This function always returns true anyway so comment it out
+    /*
     char pSvrAddr[64];
     StringList::const_iterator itr;
     for ( itr = clntlist.begin(); itr != clntlist.end(); itr++ )
@@ -434,6 +436,7 @@ bool LcReplGroup::isSelfMinAddr(const StringList &clntlist, const char* pMyAddr)
         }
     }
     LS_INFO(  "MySelf[%s] is the min Addr", pMyAddr);
+    */
     return true;
 }
 

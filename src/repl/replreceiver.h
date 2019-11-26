@@ -7,7 +7,7 @@
 
 class ReplContainer;
 class ReplConn;
-struct ReplPacketHeader;
+class ReplPacketHeader;
 
 class ReplReceiver
 {

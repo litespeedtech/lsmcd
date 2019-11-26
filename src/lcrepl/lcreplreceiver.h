@@ -7,7 +7,7 @@ class ReplContainer;
 class Replicable;
 class ReplConn;
 class CountBuf;
-struct ReplPacketHeader;
+class ReplPacketHeader;
 
 class LcReplReceiver : public ReplReceiver
 {

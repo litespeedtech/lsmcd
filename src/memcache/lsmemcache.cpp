@@ -762,11 +762,11 @@ int LsMemcache::processCmd(char *pStr, int iLen, MemcacheConn *pConn)
     LsMcCmdFunc *p;
     ls_strpair_t input;
 
-    if (m_mcparms.m_usesasl)
+    if (m_mcparms.m_usesasl && !m_mcparms.m_anonymous)
     {
         const char *message = "ASCII messages will not be processed with SASL "
                               "enabled\n";
-        LS_ERROR(message);
+        LS_ERROR("%s", message);
         respond(message, pConn);
         return 0; // To exit immediately
     }

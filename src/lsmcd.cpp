@@ -522,8 +522,8 @@ void LsmcdImpl::delUsockFiles()
 #define MLTPLX_TIMEOUT 1000
 int LsmcdImpl::EventLoop()
 {
-    register int ret;
-    register int event;
+    int ret;
+    int event;
     alarm( 1 );
     //ReplConn::s_curTime = time( NULL );
     while( true )

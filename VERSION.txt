@@ -49,4 +49,9 @@ Turned off SASL in the default user configuration file.
 
 Version 1.4.9: November 7, 2019
 [IMPROVEMENT] Added new configuration option: Cached.SaslDB.  You can set it to an independent SASL database which you can control with the regular SASL programs (saslpasswd2 and sasldblistusers2) with the -f option to specify the database name.  You can then set the owner to be the LSMCD user and give this user the sole permission to access the file.  Lets /etc/sasldb2 be available for other program's use.
-[IMPROVEMENT] stress.py with no parameters will set one value and finish rather than fail attempting to perform a full stress test with SASL. 
+[IMPROVEMENT] stress.py with no parameters will set one value and finish rather than fail attempting to perform a full stress test with SASL.
+
+Version 1.4.10: November 26, 2019
+[IMPROVEMENT] Support ASCII accesses using the anonymous user if the Cached.Anonymous=True
+[IMPROVEMENT] Cleaned up code to compile without warnings with the newer gcc compilers.
+ 

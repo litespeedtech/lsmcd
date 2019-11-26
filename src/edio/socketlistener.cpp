@@ -106,11 +106,11 @@ int SocketListener::assign( int fd, struct sockaddr * pAddr )
     char achAddr[128];
     if (( addr.family() == AF_INET )&&( addr.getV4()->sin_addr.s_addr == INADDR_ANY ))
     {
-        snprintf( achAddr, 128, "*:%hu", addr.getPort() );
+        snprintf( achAddr, 128, "*:%u", addr.getPort() );
     }
     else if (( addr.family() == AF_INET6 )&&( IN6_IS_ADDR_UNSPECIFIED ( &addr.getV6()->sin6_addr ) ))
     {
-        snprintf( achAddr, 128, "[::]:%hu", addr.getPort() );
+        snprintf( achAddr, 128, "[::]:%u", addr.getPort() );
     }
     else
         addr.toString( achAddr, 128 );

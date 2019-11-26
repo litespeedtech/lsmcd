@@ -18,14 +18,14 @@ template< typename T> class TPointerList;
 
 inline void skipLeadingSpace(const char **p)
 {
-    register char ch;
+    char ch;
     while (((ch = **p) == ' ') || (ch == '\t'))
         ++(*p);
 }
 
 inline void skipTrailingSpace(const char **p)
 {
-    register char ch;
+    char ch;
     while (((ch = (*p)[-1]) == ' ') || (ch == '\t'))
         --(*p);
 }

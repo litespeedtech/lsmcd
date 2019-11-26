@@ -408,7 +408,7 @@ int Pcregex::isSimple(const char *pInput, int inputSize, int iLowerCase,
         if (*pType == REGEX_STREQ)
             *pType = REGEX_BLANK;
         else
-            *pType = (REGEX_ANYTHING | PCREGEX_MATCHEND);
+            *pType = (char)(unsigned int)(REGEX_ANYTHING | PCREGEX_MATCHEND);
         return 0;
     }
 
@@ -506,7 +506,7 @@ int RegSub::compile(const char *rule)
     if (!rule)
         return -1;
     const char *p = rule;
-    register char c;
+    char c;
     int entries = 0;
     while ((c = *p++) != '\0')
     {

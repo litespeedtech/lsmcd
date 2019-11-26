@@ -635,7 +635,7 @@ const char *StringTool::lookupSubString(const char *p, const char *pEnd,
 const char *StringTool::mempbrk(const char *pInput, int iSize,
                                 const char *accept, int acceptLength)
 {
-    register const char *p, *min = NULL, *pAcceptPtr = accept,
+    const char *p, *min = NULL, *pAcceptPtr = accept,
                              *pAcceptEnd = accept + acceptLength;
     while (iSize > 0)
     {
@@ -662,7 +662,7 @@ const char *StringTool::mempbrk(const char *pInput, int iSize,
 void *StringTool::memmem(const char *haystack, size_t haystacklen,
                          const char *needle, size_t needleLength)
 {
-    register const char *p = haystack + haystacklen;
+    const char *p = haystack + haystacklen;
 
     if (haystacklen < needleLength)
         return NULL;
@@ -754,7 +754,7 @@ size_t StringTool::memspn(const char *pInput, int inputSize,
 size_t StringTool::memcspn(const char *pInput, int iSize,
                            const char *reject, int rejectLen)
 {
-    register const char *pEnd = mempbrk(pInput, iSize, reject, rejectLen);
+    const char *pEnd = mempbrk(pInput, iSize, reject, rejectLen);
     if (pEnd)
         return pEnd - pInput;
     else

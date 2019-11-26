@@ -187,7 +187,7 @@ ls_atomic_inline void ls_atomic_sub(ls_atom_32_t *ptr, int32_t val)
 
 ls_atomic_inline int32_t ls_atomic_fetch_add(ls_atom_32_t *ptr, int32_t val)
 {
-    register int32_t result;
+    int32_t result;
     __asm__ __volatile__ (
         "lock; xadd{l} {%0,%1|%1,%0}"
         : "=r" (result), "=m" (*ptr)

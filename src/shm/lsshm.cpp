@@ -215,6 +215,14 @@ void LsShm::tryRecoverBadOffset(LsShmOffset_t offset)
 }
 
 
+void LsShm::tryRecoverCorruption()
+{
+    deleteFile();
+    if (s_fatalErrorCb)
+        (*s_fatalErrorCb)();
+}
+
+
 int LsShm::isOffsetValid(LsShmOffset_t offset)
 {
     return (offset <= x_pShmMap->x_stat.m_iFileSize);

@@ -59,3 +59,5 @@ Version 1.4.10: November 26, 2019
 Version 1.4.11: November 26, 2019
 [BUGFIX] `make install` leaves your existing installation and does not step on your configuration.
 
+Version 1.4.12: August 25, 2020
+[BUGFIX] Fixed hash table bug.

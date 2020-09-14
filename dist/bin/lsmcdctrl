@@ -1,10 +1,10 @@
 #!/bin/sh
-set -x
+#set -x
 
 PROG="$0"
 EXECUTABLE=lsmcd
 BASE_DIR=`dirname "$PROG"`
-if [ $BASE_DIR == '.' ]; then
+if [ $BASE_DIR = '.' ]; then
    BASE_DIR=`pwd`
 fi
 cd $BASE_DIR
@@ -93,7 +93,7 @@ start()
             ret=255
             return;
         fi
-        usleep 10000
+        sleep 1
         if [ ! -d /proc/$NEW_PID ]; then
             echo "[ERROR] Process terminated after starting"
             ret=255

@@ -61,3 +61,6 @@ Version 1.4.11: November 26, 2019
 
 Version 1.4.12: August 25, 2020
 [BUGFIX] Fixed hash table bug.
+
+Version 1.4.13: September 14, 2020
+[BUGFIX] Cleaned up lsmcdctrl so it does not run the program usleep and works correctly

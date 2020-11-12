@@ -4,6 +4,7 @@
 #include "memcache/lsmemcache.h"
 #include <log4cxx/logger.h>
 #include <util/autobuf.h>
+//#include "traceBuffer.h"
 
 #include <edio/multiplexer.h>
 #include <socket/coresocket.h>
@@ -321,6 +322,7 @@ int MemcacheConn::processIncoming()
     int consumed;
     LS_DBG_M("MemcacheConn processIncoming pid:%d, addr:%p, m_bufIncoming "
              "size:%d", getpid(), this, m_bufIncoming.size());
+    //traceBuffer(m_bufIncoming.begin(), m_bufIncoming.size());
     //clearForNewConn();
     if (_Protocol == MC_UNKNOWN)
     {

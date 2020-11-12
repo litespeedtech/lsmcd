@@ -29,7 +29,7 @@
 #include <util/gpointerlist.h>
 #include <util/objpool.h>
 
-#define VERSION_TO_LOG  "1.4.13"
+#define VERSION_TO_LOG  "1.4.14"
 #define VERSION         "1.0.0"
 
 #define ULL_MAXLEN      24      // maximum buffer size of unsigned long long
@@ -374,7 +374,7 @@ public:
 #endif
 
     inline bool chkItemSize(uint32_t size)
-    {   return (size <= m_mcparms.m_iValMaxSz);   }
+    {   return (!m_mcparms.m_iValMaxSz || size <= m_mcparms.m_iValMaxSz);   }
 
     uint8_t  getVerbose(MemcacheConn *pConn)
     {

@@ -18,6 +18,7 @@
 #include <memcache/lsmcsasl.h>
 
 #ifdef USE_SASL
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +27,7 @@
 #include <lcrepl/lcreplconf.h>
 #include <sasl/saslplug.h>
 #include <log4cxx/logger.h>
+//#include <memcache/traceBuffer.h>
 
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 256
@@ -286,6 +288,12 @@ char *LsMcSasl::getHostName(void)
     LsMcSasl::s_pHostName = strdup(hostname);
     if (!LsMcSasl::s_pHostName)
         LS_ERROR("Insufficient memory saving host name\n");
+    char *pMixed = LsMcSasl::s_pHostName;
+    while (*pMixed)
+    {
+        *pMixed = tolower(*pMixed);
+        pMixed++;
+    }
     
     return s_pHostName;
 }
@@ -346,7 +354,7 @@ int LsMcSasl::rebuildAuth(char *pVal, unsigned int mechLen, unsigned int valLen,
     char full_username[HOST_NAME_MAX + valLen];
     snprintf(full_username, sizeof(full_username), "%s@%s", user1, hostname);
     LS_DBG_M("Converting user: %s to %s\n",
-             pVal, full_username);
+             user1, full_username);
     unsigned int full_username_len = strlen(full_username);
     strcpy(sval, full_username);
     index = full_username_len + 1;
@@ -363,7 +371,7 @@ int LsMcSasl::rebuildAuth(char *pVal, unsigned int mechLen, unsigned int valLen,
     //    LS_DBG_M("   val[%d]: %s\n", index, &sval[index]);
     //    index += strlen(&sval[index]) + 1;
     //}
-    LS_DBG_M("pVal: %s, valLen: %d\n", pVal, valLen);
+    LS_DBG_M("pVal: %s, valLen: %d\n", *ppVal, valLen);
     return 0;
 }
 
@@ -388,6 +396,7 @@ int LsMcSasl::chkAuth(char *pBuf, unsigned int mechLen, unsigned int valLen,
     mech[mechLen] = '\0';
     char sval[valLen + HOST_NAME_MAX + 1];
     LS_DBG_M("SASL chkAuth, mech: %s, pVal (user): %s\n", mech, pVal);
+    //traceBuffer(pVal, valLen);
     /* Note this can happen if Python or some other language doesn't build the
      * authorization string the way it's expected to be */
     if (!strchr(pVal,'@'))

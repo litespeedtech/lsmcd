@@ -501,7 +501,7 @@ int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
     m_mcparms.m_anonymous = pParms->m_anonymous;
     m_mcparms.m_byUser = pParms->m_byUser;
     m_mcparms.m_nomemfail = pParms->m_nomemfail;
-    if (pParms->m_iValMaxSz > 0)
+    if (pParms->m_iValMaxSz >= 0)
         m_mcparms.m_iValMaxSz = pParms->m_iValMaxSz;
     if (pParms->m_iMemMaxSz > 0)
         m_mcparms.m_iMemMaxSz = pParms->m_iMemMaxSz;

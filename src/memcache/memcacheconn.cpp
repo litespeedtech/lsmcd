@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <netinet/tcp.h>
 
-//#include "traceBuffer.h"
+#include "traceBuffer.h"
 
 time_t  MemcacheConn::s_curTime;
 int     MemcacheConn::s_ConnTimeout = 30;
@@ -323,7 +323,8 @@ int MemcacheConn::processIncoming()
     int consumed;
     LS_DBG_M("MemcacheConn processIncoming pid:%d, addr:%p, m_bufIncoming "
              "size:%d", getpid(), this, m_bufIncoming.size());
-    //traceBuffer(m_bufIncoming.begin(), m_bufIncoming.size());
+    if ( log4cxx::Level::isEnabled( log4cxx::Level::DBG_MEDIUM ) )
+        traceBuffer(m_bufIncoming.begin(), m_bufIncoming.size());
     //clearForNewConn();
     if (_Protocol == MC_UNKNOWN || 
         (unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_INTERNAL_REQ ||

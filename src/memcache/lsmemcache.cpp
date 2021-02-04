@@ -250,6 +250,7 @@ void LsMemcache::sendResult(MemcacheConn *pConn, const char *fmt, ...)
         LS_ERROR("SERVER_ERROR Truncated result to client!\n");
     }
     va_end(va);
+    LS_DBG_M("sendResult Respond, %d bytes\n", len);
     if (pConn->appendOutput(buf, len) != len)
     {
         LS_ERROR("SERVER_ERROR Unable to send to client!\n");
@@ -261,6 +262,7 @@ void LsMemcache::binRespond(uint8_t *buf, int cnt, MemcacheConn *pConn)
 {
     if (m_noreply)
     {
+        LS_DBG_M("binRespond, no reply\n");
         if (pConn->GetConnFlags() & CS_INTERNAL)
         {
             ackNoreply(pConn);
@@ -272,8 +274,10 @@ void LsMemcache::binRespond(uint8_t *buf, int cnt, MemcacheConn *pConn)
         if (pConn->GetConnFlags() & CS_INTERNAL)
         {
             uint16_t len = htons(cnt+2);
+            LS_DBG_M("binRespond, internal, add len: %d\n", cnt);
             pConn->appendOutput((char*)&len, 2);
         }
+        LS_DBG_M("binRespond, %d bytes\n", cnt);
         if (pConn->appendOutput((char *)buf, cnt) != cnt)
         {
             LS_ERROR("SERVER_ERROR Unable to send to client!\n");

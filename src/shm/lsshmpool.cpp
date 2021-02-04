@@ -478,15 +478,21 @@ LsShmOffset_t LsShmPool::alloc2(LsShmSize_t size, int &remapped)
         if ((offset >> LARGE_PAGE_BITS) == end_page)
             break;
         firstpart_size = (end_page << LARGE_PAGE_BITS) - offset;
-        LS_WARN("[SHM] [%d-%d:%p] alloc2 cross large page boundary, "
-                 "offset: %X, size: %d, split to %d/%d release\n", 
-                 s_pid, m_pShm->getfd(), this, offset, size, 
-                 firstpart_size, size - firstpart_size);
-
-        release2NoJoin(offset, firstpart_size);
-        offset += firstpart_size;
-        release2NoJoin(offset, size - firstpart_size);
-        getDataMap()->x_stat.m_iPoolInUse -= size;
+        // Whenever this happens, it's FATAL.  Report it as such for now.
+        //LS_WARN("[SHM] [%d-%d:%p] alloc2 cross large page boundary, "
+        //         "offset: %X, size: %d, split to %d/%d release\n", 
+        //         s_pid, m_pShm->getfd(), this, offset, size, 
+        //         firstpart_size, size - firstpart_size);
+        //release2NoJoin(offset, firstpart_size);
+        //offset += firstpart_size;
+        //release2NoJoin(offset, size - firstpart_size);
+        //getDataMap()->x_stat.m_iPoolInUse -= size;
+        LS_ERROR("[SHM] [%d-%d:%p] FATAL ERROR alloc2 cross large page boundary, "
+                 "offset: %X, size: %d.  You must remove all of the files in "
+                 "/dev/shm/lsmcd and restart the lsmcd server\n", 
+                 s_pid, m_pShm->getfd(), this, offset, size);
+        autoUnlock();
+        return -1;
     } while(1);
     autoUnlock();
     return offset;

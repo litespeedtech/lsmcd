@@ -762,6 +762,7 @@ int LsMemcache::processCmd(char *pStr, int iLen, MemcacheConn *pConn)
     LsMcCmdFunc *p;
     ls_strpair_t input;
 
+    LS_DBG_M("Enter processCmd\n");
     if (m_mcparms.m_usesasl && !m_mcparms.m_anonymous)
     {
         const char *message = "ASCII messages will not be processed with SASL "
@@ -787,11 +788,15 @@ int LsMemcache::processCmd(char *pStr, int iLen, MemcacheConn *pConn)
     pStr = advToken(pStr, endp - 1, &pCmd, &len);
     input.key.ptr = pStr;
     if (len == 0)
+    {
+        LS_DBG_M("Exit processCmd - no message\n");
         return consumed;
+    }
     if ((p = getCmdFunction(pCmd, len)) == NULL)
     {
         respond(errorStr, pConn);
         pConn->Flush();
+        LS_DBG_M("Exit processCmd - no function\n");
         return consumed;
     }
     input.key.len = endp - input.key.ptr - 1;
@@ -803,13 +808,16 @@ int LsMemcache::processCmd(char *pStr, int iLen, MemcacheConn *pConn)
 //         (*p->func)(this, pStr, endp + 1, iLen - consumed, p->arg)) >= 0)
     {
         pConn->Flush();
+        LS_DBG_M("Exit processCmd - did function created data\n");
         return consumed + datasz;
     }
     if (datasz == -1)   // need more data
     {
         *endp = '\n';   // restore for next time
+        LS_DBG_M("Exit processCmd - did function but ERROR!\n");
         return -1;
     }
+    LS_DBG_M("Exit processCmd - did function no data\n");
     return 0;   // else close connection
 }
 
@@ -2510,6 +2518,7 @@ LsMcHashSlice *LsMemcache::setSlice(const void *pKey, int iLen,
 #ifdef USE_SASL
     if (m_mcparms.m_usesasl) 
     {
+        LS_DBG_M("setSlice, check SASL pointer: %p\n", pConn->GetSasl());
         if ((!pConn->GetSasl()->isAuthenticated()) || (!pConn->getUser()))
         {
             LS_DBG_M("SetHash Using anonymous user (auth: %d, user: %s)\n",
@@ -2521,6 +2530,8 @@ LsMcHashSlice *LsMemcache::setSlice(const void *pKey, int iLen,
         }
         else
         {
+            LS_DBG_M("setSlice, user. slice: %p\n", pConn->getSlice());
+            LS_DBG_M("setSlice, user. user: %s\n", pConn->getUser());
             pHash = pConn->getSlice()->m_hashByUser.getHash(pConn->getUser());
             LS_DBG_M("SetHash using user: %s: %p\n", pConn->getUser(), pHash);
             pHashStats = pSlice->m_pConnSlaveToMaster->getHash();

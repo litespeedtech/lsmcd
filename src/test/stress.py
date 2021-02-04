@@ -118,7 +118,7 @@ while True:
                     print 'Error in get of key #' + str(get_index) + ' after adding ' + str(key_size) + ' bytes of key and ' + str(data_size) + ' bytes of data'
                     error = True
                     break
-                if not (server_value[0:len(user)] == user):
+                if (not (server_value[0:len(user)] == user)) and sasl_validate:
                     print 'Data leakage.  For key: ' + key + ' user: ' + server_value[0:len(user)] + ' expected: ' + user
                     error = True
                     break

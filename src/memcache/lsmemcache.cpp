@@ -554,6 +554,7 @@ int LsMemcache::multiMultiplexerFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
 {
     // pConn as a parameter is to fill out the parameters - pConn is required 
     // of all foreach functions.
+    LS_DBG_M("multiMultiplexerFunc\n");
     pSlice->m_pConnSlaveToMaster = new MemcacheConn();
     pSlice->m_pConnSlaveToMaster->SetMultiplexer((Multiplexer *)pArg);
     pSlice->m_pConnSlaveToMaster->setSlice(pSlice);

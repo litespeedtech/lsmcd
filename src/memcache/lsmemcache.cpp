@@ -768,7 +768,7 @@ int LsMemcache::processCmd(char *pStr, int iLen, MemcacheConn *pConn)
     {
         const char *message = "ASCII messages will not be processed with SASL "
                               "enabled\n";
-        LS_ERROR("%s", message);
+        LS_DBG_M("%s", message);
         respond(message, pConn);
         return 0; // To exit immediately
     }

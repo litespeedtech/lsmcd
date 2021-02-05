@@ -3070,6 +3070,9 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
             binErrRespond(pHdr, MC_BINSTAT_KEYENOENT, pConn);
         }
     }
+    else
+        LS_DBG_M("doBinGet No response, m_noreply: %d, opcode: %d\n", m_noreply, 
+                 pHdr->opcode);
     return;
 }
 

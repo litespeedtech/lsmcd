@@ -3052,7 +3052,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         statGetMiss(pConn);
     unlock(pConn);
     if ((m_noreply == false)
-        && (pHdr->opcode != MC_BINCMD_GETQ) && (pHdr->opcode != MC_BINCMD_GETKQ))
+        /*&& (pHdr->opcode != MC_BINCMD_GETQ) && (pHdr->opcode != MC_BINCMD_GETKQ)*/)
     {
         if (keyLen != 0)
         {

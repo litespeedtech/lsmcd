@@ -478,6 +478,11 @@ int MemcacheConn::SendEx(const char *msg, int len, int flags)
 {
     int ret;
 
+    if ( log4cxx::Level::isEnabled( log4cxx::Level::DBG_MEDIUM ) )
+    {
+        LS_DBG_M("SendEx pid: %d\n", getpid());
+        traceBuffer(msg, len);
+    }
     while( len > 0 )
     {
         ret = write( getfd(), msg, len );

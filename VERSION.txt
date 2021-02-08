@@ -68,3 +68,8 @@ Version 1.4.13: September 14, 2020
 Version 1.4.14: November 12, 2020
 [BUGFIX] Correctly support 0 to disable Cached.ValMaxSz for maximum data size validation.
 [BUGFIX] Correctly fold machine name to lower case to match SASL machine name storage.
+
+VERSION 1.4.15 February 8, 2021
+[BUGFIX] Missing response for binary GETQ and GETKQ can cause long delays in LSCACHE_WP, fixed.
+[BUGFIX] Correctly switch from binary to text mode and back in persistent connections
+[IMPROVEMENT] Reduced the severity of a number of messages from INFO to DEBUG cleaning up the log as well as adding additional debugging messages to aid in future issues.

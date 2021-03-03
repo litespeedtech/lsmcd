@@ -76,5 +76,5 @@ VERSION 1.4.15 February 8, 2021
 
 VERSION 1.4.16 March 3, 2021
 [IMPROVEMENT] Improve the text on a few error messages.
-[IMPROVEMENT] Support only "plain" in the SASL mech list which avoid SASL loading unexpected plugins.
+[IMPROVEMENT] Remove unnecessary code in the SASL module.
 [IMPROVEMENT] Support python3 in stress.py as bmemcached no longer supports python2.

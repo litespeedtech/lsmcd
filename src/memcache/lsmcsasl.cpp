@@ -149,33 +149,6 @@ static int saslGetOpt(void *context __attribute__((unused)),
 }
 
 
-static int getSaslConf(void *context, const char **ppath)
-{
-    char *path = NULL;
-    const char * const *pp = locations;
-    char fname[1024];
-    while ((path = (char *)*pp++) != NULL)
-    {
-        snprintf(fname, sizeof(fname), "%s/%s.conf",
-                 path, LsMcSasl::s_pAppName);
-        LS_DBG_M("Trying path: %s\n", fname);
-        if (access(fname, F_OK) == 0)
-            break;
-    }
-    if (LsMcSasl::verbose)
-    {
-        if (path != NULL)
-            fprintf(stderr, "Reading configuration from: <%s>\n", path);
-        else
-            fprintf(stderr, "Failed to locate a config path\n");
-    }
-    // sasl.h says path must be allocated on heap, freed by library
-    *ppath = ((path != NULL) ? strdup(path) : NULL);
-    LS_DBG_M("   SASLConf: %s\n", (*ppath != NULL) ? *ppath : "NULL");
-    return (*ppath != NULL) ? SASL_OK : SASL_FAIL;
-}
-
-
 static int sasl_log_callback(void *context, int level, const char *message)
 {
     switch (level)
@@ -203,7 +176,6 @@ static int sasl_log_callback(void *context, int level, const char *message)
 static sasl_callback_t saslCallbacks[] =
 {
    { SASL_CB_SERVER_USERDB_CHECKPASS, (sasl_callback_ft_local)chkSaslPwdb, NULL },
-   { SASL_CB_GETCONFPATH, (sasl_callback_ft_local)getSaslConf, NULL },
    { SASL_CB_LOG, (sasl_callback_ft_local)sasl_log_callback, NULL },
    { SASL_CB_LIST_END, NULL, NULL },
    { SASL_CB_LIST_END, NULL, NULL }
@@ -228,9 +200,6 @@ int LsMcSasl::initSasl()
         if (getReplConf()->getSaslDB())
         {
             LS_DBG_M("Specified SASLDB: %s\n", getReplConf()->getSaslDB());
-            saslCallbacks[lastIndex].id = SASL_CB_GETCONFPATH;
-            saslCallbacks[lastIndex].proc = (sasl_callback_ft_local)getSaslConf;
-            ++lastIndex;
             saslCallbacks[lastIndex].id = SASL_CB_GETOPT;
             saslCallbacks[lastIndex].proc = (sasl_callback_ft_local)saslGetOpt;
             ++lastIndex;

@@ -1709,6 +1709,10 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
     pThis->m_noreply = chkNoreply(tokPtr, tokLen);
     if (badcmdline || (length < 0) || (length > (INT_MAX - 2)))   // watch wrap!
     {
+        if (badcmdline)
+            LS_INFO("User Data has invalid format\n");
+        else
+            LS_INFO("User Data has bad length: %d\n", length);
         pThis->respond(badCmdLineFmt, pConn);
         return 0;
     }
@@ -1719,7 +1723,7 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
             return -1;  // need more data
         if ((pNxt[length] != '\r') || (pNxt[length + 1] != '\n'))
         {
-            LS_ERROR("CLIENT_ERROR bad data chunk\n");
+            LS_INFO("User Data has missing CR/LF\n");
             return 0;
         }
     }

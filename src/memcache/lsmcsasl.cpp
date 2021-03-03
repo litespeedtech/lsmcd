@@ -142,6 +142,13 @@ static int saslGetOpt(void *context __attribute__((unused)),
         LS_DBG_M("saslGetOpt using SASLDB: %s\n", path);
         return SASL_OK;
     }
+    if (!strcmp(option, "mech_list"))
+    {
+        *result = "plain";
+        *len = (unsigned) strlen(*result);
+        LS_DBG_M("saslGetOpt using %s: %s\n", option, *result);
+        return SASL_OK;
+    }
     LS_DBG_M("saslGetOpt ignore option: %s\n", option);
     return SASL_FAIL;
 }

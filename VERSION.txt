@@ -73,3 +73,8 @@ VERSION 1.4.15 February 8, 2021
 [BUGFIX] Missing response for binary GETQ and GETKQ can cause long delays in LSCACHE_WP, fixed.
 [BUGFIX] Correctly switch from binary to text mode and back in persistent connections
 [IMPROVEMENT] Reduced the severity of a number of messages from INFO to DEBUG cleaning up the log as well as adding additional debugging messages to aid in future issues.
+
+VERSION 1.4.16 March 3, 2021
+[IMPROVEMENT] Improve the text on a few error messages.
+[IMPROVEMENT] Support only "plain" in the SASL mech list which avoid SASL loading unexpected plugins.
+[IMPROVEMENT] Support python3 in stress.py as bmemcached no longer supports python2.

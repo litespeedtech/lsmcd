@@ -121,6 +121,8 @@ sasl_conn_t *LsMcSasl::getSaslConn()
  */
 const char * const locations[] =
 {
+    "/usr/local/lsmcd/conf",
+    "/etc/sasl2",
     "/etc/sasl",
     "/tmp",
     NULL
@@ -142,13 +144,6 @@ static int saslGetOpt(void *context __attribute__((unused)),
         LS_DBG_M("saslGetOpt using SASLDB: %s\n", path);
         return SASL_OK;
     }
-    if (!strcmp(option, "mech_list"))
-    {
-        *result = "plain";
-        *len = (unsigned) strlen(*result);
-        LS_DBG_M("saslGetOpt using %s: %s\n", option, *result);
-        return SASL_OK;
-    }
     LS_DBG_M("saslGetOpt ignore option: %s\n", option);
     return SASL_FAIL;
 }
@@ -157,26 +152,15 @@ static int saslGetOpt(void *context __attribute__((unused)),
 static int getSaslConf(void *context, const char **ppath)
 {
     char *path = NULL;
-    path = (char *)getReplConf()->getSaslDB();
-    if (path)
-        LS_DBG_M("getSASLConf specified: %s\n", path);
-    else
+    const char * const *pp = locations;
+    char fname[1024];
+    while ((path = (char *)*pp++) != NULL)
     {
-        path = getenv("SASL_CONF_PATH");
-        LS_DBG_M("getSASLConf search\n");
-        if (path == NULL)
-        {
-            const char * const *pp = locations;
-            char fname[1024];
-            while ((path = (char *)*pp++) != NULL)
-            {
-                snprintf(fname, sizeof(fname), "%s/%s.conf",
-                         path, LsMcSasl::s_pAppName);
-                LS_DBG_M("Trying path: %s\n", fname);
-                if (access(fname, F_OK) == 0)
-                    break;
-            }
-        }
+        snprintf(fname, sizeof(fname), "%s/%s.conf",
+                 path, LsMcSasl::s_pAppName);
+        LS_DBG_M("Trying path: %s\n", fname);
+        if (access(fname, F_OK) == 0)
+            break;
     }
     if (LsMcSasl::verbose)
     {
@@ -232,7 +216,7 @@ int LsMcSasl::initSasl()
     if ((s_pSaslPwdb = getenv("MEMCACHED_SASL_PWDB")) == NULL)
     {
         int lastIndex = 1;
-        LS_DBG_M("MEMCACHED_SASL_PWDB NOT DEFINED!\n");
+        //LS_DBG_M("MEMCACHED_SASL_PWDB NOT DEFINED!\n");
         if (verbose)
         {
             fprintf(stderr,

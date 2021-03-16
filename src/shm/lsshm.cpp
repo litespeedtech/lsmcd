@@ -128,6 +128,37 @@ static inline HashStringMap< LsShm * > *getBase()
 }
 
 
+const char *LsShm::strLsShmStatus(LsShmStatus_t status)
+{
+    switch (status)
+    {
+        case LSSHM_SYSERROR:
+            return "LSSHM_SYSERROR";
+        case LSSHM_ERROR:
+            return "LSSHM_ERROR";
+        case LSSHM_BADNOSPACE:
+            return "LSSHM_BADNOSPACE";
+        case LSSHM_BADMAXSPACE:
+            return "LSSHM_BADMAXSPACE";
+        case LSSHM_NAMEINUSED:
+            return "LSSHM_NAMEINUSED";
+        case LSSHM_BADNAMELEN:
+            return "LSSHM_BADNAMELEN";
+        case LSSHM_BADMAPFILE:
+            return "LSSHM_BADMAPFILE";
+        case LSSHM_BADVERSION:
+            return "LSSHM_BADVERSION";
+        case LSSHM_BADPARAM:
+            return "LSSHM_BADPARAM";
+        case LSSHM_NOTREADY:
+            return "LSSHM_NOTREADY or LSSHM_OK";
+        case LSSHM_READY:
+            return "LSSHM_READY";
+        default:
+            return "LSSHM undefined status";
+    }
+};
+
 //
 //  @brief setErrMsg - set the global static error message
 //
@@ -143,6 +174,10 @@ LsShmStatus_t LsShm::setErrMsg(LsShmStatus_t stat, const char *fmt, ...)
     va_end(va);
     if (ret >= LSSHM_MAXERRMSG)
         strcpy(&s_aErrMsg[LSSHM_MAXERRMSG - 4], "...");
+    char full_message[8192];
+    snprintf(full_message, sizeof(full_message), "%s Message type: %s\n",
+             s_aErrMsg, strLsShmStatus(stat));
+    logError(full_message);
     return LSSHM_OK;
 }
 
@@ -452,8 +487,11 @@ void LsShm::cleanup()
 LsShmStatus_t LsShm::expandFile(LsShmOffset_t from, LsShmXSize_t incrSize)
 {
     if (m_iMaxShmSize && ((from + incrSize) > m_iMaxShmSize))
+    {
+        LsShm::setErrMsg(LSSHM_BADPARAM, "expandFile bad m_iMaxShmSize (%d) or request (%d) exceeds it",
+                         m_iMaxShmSize, from + incrSize);
         return LSSHM_BADMAXSPACE;
-
+    }
     if ((from + incrSize) < from)   // wrapped
     {
         setErrMsg(LSSHM_BADMAXSPACE,

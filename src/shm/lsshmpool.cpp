@@ -459,24 +459,29 @@ LsShmOffset_t LsShmPool::alloc2Ex(LsShmSize_t size, int &remapped)
 }
 
 
-LsShmOffset_t LsShmPool::alloc2(LsShmSize_t size, int &remapped)
+LsShmOffset_t LsShmPool::alloc2(LsShmSize_t *size, int &remapped)
 {
     LsShmOffset_t offset;
-    if ((size == 0) || (size&0x80000000) || (size>LSSHM_MAXSIZE)) 
+    if ((*size == 0) || (*size&0x80000000) || (*size>LSSHM_MAXSIZE)) 
+    {
+        LsShm::setErrMsg(LSSHM_BADPARAM, "alloc2 invalid size parameter: %u",
+                         *size);
         return 0;
-
+    }
     remapped = 0;
-    size = roundDataSize(size);
+    *size = roundDataSize(*size);
     autoLock();
     do
     {
-        offset = alloc2Ex(size, remapped);
-        if (size > LARGE_PAGE_SIZE)
+        offset = alloc2Ex(*size, remapped);
+        if (*size >= LARGE_PAGE_SIZE)
             break;
-        unsigned int end_page = (offset + size - 1) >> LARGE_PAGE_BITS;
+        unsigned int end_page = (offset + *size - 1) >> LARGE_PAGE_BITS;
         int firstpart_size;
         if ((offset >> LARGE_PAGE_BITS) == end_page)
             break;
+        *size = LARGE_PAGE_SIZE;
+        continue;
         firstpart_size = (end_page << LARGE_PAGE_BITS) - offset;
         // Whenever this happens, it's FATAL.  Report it as such for now.
         //LS_WARN("[SHM] [%d-%d:%p] alloc2 cross large page boundary, "
@@ -1245,7 +1250,11 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
     LsShmOffset_t offset;
 
     if ((pagesize&0x80000000) || (pagesize>LSSHM_MAXSIZE))
+    {
+         LsShm::setErrMsg(LSSHM_BADPARAM, "Invalid page size parameter: %u\n",
+                          pagesize);
         return 0;
+    }
     pagesize = roundPageSize(pagesize);
     remap = 0;
 

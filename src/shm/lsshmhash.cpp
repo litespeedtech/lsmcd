@@ -318,7 +318,7 @@ void *LsShmHash::getObsData(LsShmHElem *pElem) const
 
 LsShmOffset_t LsShmHash::alloc2(LsShmSize_t size, int &remapped)
 {
-    LsShmOffset_t ret = m_pPool->alloc2(size, remapped);
+    LsShmOffset_t ret = m_pPool->alloc2(&size, remapped);
     if (ret != 0)
         getHTable()->x_stat.m_iHashInUse += LsShmPool::size2roundSize(size);
     return ret;
@@ -458,7 +458,8 @@ LsShmOffset_t LsShmHash::allocHTable(LsShmPool * pPool, int init_size,
 {
     int remapped;
     // NOTE: system is not up yet... ignore remap here
-    LsShmOffset_t offset = pPool->alloc2(sizeof(LsShmHTable), remapped);
+    LsShmSize_t htable_size = sizeof(LsShmHTable);
+    LsShmOffset_t offset = pPool->alloc2(&htable_size, remapped);
     if (offset == 0)
     {
         return 0;
@@ -467,11 +468,12 @@ LsShmOffset_t LsShmHash::allocHTable(LsShmPool * pPool, int init_size,
     init_size = roundUp(init_size);
     int szTable = sz2TableSz(init_size);
     int szBitMap = sz2BitMapSz(init_size);
-    LsShmOffset_t iBase = pPool->alloc2(szTable + szBitMap, remapped);
+    LsShmOffset_t total = szTable + szBitMap;
+    LsShmOffset_t iBase = pPool->alloc2(&total, remapped);
 
     if (iBase == 0)
     {
-        pPool->release2(offset, sizeof(LsShmHTable));
+        pPool->release2(offset, htable_size);
         return 0;
     }
     LsShmHTable *pTable = (LsShmHTable *)pPool->offset2ptr(offset);

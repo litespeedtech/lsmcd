@@ -118,6 +118,7 @@ public:
     static int getBaseDirCount()        {   return s_iNumBaseDir;   }
     static int deleteFile(const char *pName, const char *pBaseDir);
     
+    static const char *strLsShmStatus(LsShmStatus_t status);
     static LsShmStatus_t setErrMsg(LsShmStatus_t stat, const char *fmt, ...);
     static LsShmStatus_t getErrStat()   {   return s_errStat;   }
     static int getErrNo()               {   return s_iErrNo;    }

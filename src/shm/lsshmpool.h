@@ -126,7 +126,7 @@ public:
         return ((size + (LSSHM_SHM_UNITSIZE - 1)) / LSSHM_SHM_UNITSIZE);
     };
 
-    LsShmOffset_t  alloc2(LsShmSize_t size, int &remapped);
+    LsShmOffset_t  alloc2(LsShmSize_t *size, int &remapped);
     void  release2(LsShmOffset_t offset, LsShmSize_t size);
     void  mvFreeList();
     void  mvFreeBucket();

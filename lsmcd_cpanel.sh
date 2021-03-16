@@ -105,6 +105,8 @@ if ! cd lsmcd_cpanel_plugin/res/lsmcd_usermgr ; then
   exit 1
 fi
 
+yum -y install python3 python3-pip
+
 ./install.sh
 
 rm -rf /home/lsmcd_tmp

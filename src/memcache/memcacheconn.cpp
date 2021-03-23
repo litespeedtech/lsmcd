@@ -317,14 +317,20 @@ int MemcacheConn::sendACKPacket(int ptype, ReplPacketHeader *pHeader)
 }
 
 
+void MemcacheConn::traceBuf(const char *buf, int len)
+{
+    if ( log4cxx::Level::isEnabled( log4cxx::Level::DBG_MEDIUM ) )
+        traceBuffer(buf, len);
+}
+
+
 int MemcacheConn::processIncoming()
 {
     ReplPacketHeader header;
     int consumed;
     LS_DBG_M("MemcacheConn processIncoming pid:%d, addr:%p, m_bufIncoming "
              "size:%d", getpid(), this, m_bufIncoming.size());
-    if ( log4cxx::Level::isEnabled( log4cxx::Level::DBG_MEDIUM ) )
-        traceBuffer(m_bufIncoming.begin(), m_bufIncoming.size());
+    traceBuf(m_bufIncoming.begin(), m_bufIncoming.size());
     //clearForNewConn();
     if (_Protocol == MC_UNKNOWN || 
         (unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_INTERNAL_REQ ||
@@ -370,7 +376,7 @@ int MemcacheConn::processIncoming()
             break;
             
         }
-        LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p,5", getpid(), this);
+        LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 5", getpid(), this);
         if (_ConnFlags & CS_INTERNAL)  // client command can change
         {
            LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 5.1 CS_INTERNAL", getpid(), this); 
@@ -381,17 +387,17 @@ int MemcacheConn::processIncoming()
         switch (_Protocol)
         {
             case MC_ASCII:
-                LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p,6", getpid(), this);
+                LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 6", getpid(), this);
                 consumed = LsMemcache::getInstance().processCmd(
                     m_bufIncoming.begin(), m_bufIncoming.size(), this);
                 break;
             case MC_BINARY:
-                LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p,7", getpid(), this);
+                LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 7", getpid(), this);
                 consumed = LsMemcache::getInstance().processBinCmd(
                     (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size(), this);
                 break;
             case MC_INTERNAL:
-                LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p,8", getpid(), this);
+                LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 8", getpid(), this);
                 consumed = LsMemcache::getInstance().processInternal(
                     (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size(), this);
                 break;
@@ -481,7 +487,7 @@ int MemcacheConn::SendEx(const char *msg, int len, int flags)
     if ( log4cxx::Level::isEnabled( log4cxx::Level::DBG_MEDIUM ) )
     {
         LS_DBG_M("SendEx pid: %d\n", getpid());
-        traceBuffer(msg, len);
+        traceBuf(msg, len);
     }
     while( len > 0 )
     {

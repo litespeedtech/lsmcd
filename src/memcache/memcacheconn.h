@@ -126,6 +126,8 @@ public:
 
     void           clearForNewConn();
     
+    void           traceBuf(const char *buf, int len);
+    
 private:    
     int onRead();
     int onWrite();
@@ -163,7 +165,6 @@ private:
     LsMcHashSlice  *m_pSlice;
     LsShmOffset_t   m_iHdrOff; // Used for stats!
     MemcacheConn   *m_pConnStats;
-    
 };
 
 #endif

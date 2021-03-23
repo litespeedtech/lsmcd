@@ -29,7 +29,7 @@
 #include <util/gpointerlist.h>
 #include <util/objpool.h>
 
-#define VERSION_TO_LOG  "1.4.17"
+#define VERSION_TO_LOG  "1.4.18"
 #define VERSION         "1.0.0"
 
 #define ULL_MAXLEN      24      // maximum buffer size of unsigned long long
@@ -310,6 +310,7 @@ public:
     int  processCmd(char *pStr, int iLen, MemcacheConn *pConn);
     int  doDataUpdate(uint8_t *pBuf, MemcacheConn *pConn);
     McBinStat  chkMemSz(MemcacheConn *pConn, int arg);
+    int  processBinCmdMultiple(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn);
     int  processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn);
     int  processInternal(uint8_t *pBuf, int iLen, MemcacheConn *pConn);
     void putWaitQ(MemcacheConn *pConn);

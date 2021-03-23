@@ -82,3 +82,6 @@ VERSION 1.4.16 March 3, 2021
 VERSION 1.4.17 March 16, 2021
 [BUGFIX] Get rid of 'FATAL ERROR alloc2 cross large page boundary' messages.
 [IMPROVEMENT] Log messages closer to the time they occur.
+
+VERSION 1.4.18 March 23, 2021
+[BUGFIX] Sporatic timeout turned out to be related to multiple packets in a single receive.  Fixed.

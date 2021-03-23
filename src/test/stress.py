@@ -88,14 +88,14 @@ data_size = 0
 set_index = 0
 error = False
 key_format = '{0:0' + str(ks) + 'd}'
-value_format = '{0:0' + str(vs) + 'd}'
+value_format = '{0:0>' + str(vs) + 'd}'
 while True:
     set_index = set_index + 1
     key = key_format.format(set_index)
     if (sasl_validate):
-        value = user + value_format.format(random.randrange(0, vs))
+        value = user + str(random.randrange(0, vs)).rjust(vs, '0')
     else:
-        value = value_format.format(random.randrange(0, vs))
+        value = str(random.randrange(0, vs)).rjust(vs, '0')
     if not get_only and not client.set(key, value):
         print('Error in set of key #' + str(set_index) + ' after adding ' + str(key_size) + ' bytes of key and ' + str(data_size) + ' bytes of data')
         break
@@ -133,6 +133,10 @@ while True:
                     print('Data leakage.  For key: ' + key + ' user: ' + server_value[0:len(user)] + ' expected: ' + user)
                     error = True
                     break
+                if (not (len(server_value) == len(user) + vs)) and sasl_validate:
+                    print('Bad length of server value: ' + str(len(server_value)) + ', expected: ' + str(len(user) + vs))
+                    error = True
+                    break;
         if set_index == end_count:
             break
     if error:

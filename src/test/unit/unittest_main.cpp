@@ -172,7 +172,64 @@ int do_get(bool should_fail)
 }
 
 
-int do_multi()
+int do_multi1()
+{
+/* My multiple requests example (2 list_mechs): 
+0000: 80200000 00000000 00000000 00010000 
+0010: 00000000 00000000 80200000 00000000 
+0020: 00000000 00010000 00000000 00000000  
+*/
+    memset(buffer, 0, 48);
+    buffer[0] = 0x80;
+    buffer[1] = 0x20;
+    buffer[24] = 0x80;
+    buffer[25] = 0x20; 
+    if (send(sock_fd, buffer, 48, 0) != 48)
+    {
+        printf("Error in send of multi data1: %s\n", strerror(errno));
+        return -1;
+    }
+/* My LIST_MECHS response 
+0000: 81200000 00000000 00000005 00680000 . ...........h..
+0010: 00000000 00000000 504c4149 4e       ........PLAIN
+*/
+    ssize_t recvd = recv(sock_fd, buffer, BUFFER_LEN, 0);
+    if (recvd != 58)
+    {
+        printf("Error in list_mechs response1: %s (recvd: %ld)\n", strerror(errno), recvd);
+        return -1;
+    }
+    if (buffer[0] != 0x81 ||
+        buffer[1] != 0x20 ||
+        buffer[6] != 0x00 ||
+        buffer[7] != 0x00 ||
+        buffer[11] != 0x05 ||
+        memcmp((char *)&buffer[24], "PLAIN", 5))
+    {
+        printf("Error in list_mechs response data1 (turn on the trace)\n");
+        return -1;
+    }
+
+/* My LIST_MECHS response 
+0000: 81200000 00000000 00000005 00680000 . ...........h..
+0010: 00000000 00000000 504c4149 4e       ........PLAIN
+*/
+    if (buffer[29+0] != 0x81 ||
+        buffer[29+1] != 0x20 ||
+        buffer[29+6] != 0x00 ||
+        buffer[29+7] != 0x00 ||
+        buffer[29+11] != 0x05 ||
+        memcmp((char *)&buffer[24], "PLAIN", 5))
+    {
+        printf("Error in list_mechs response data2 (turn on the trace)\n");
+        return -1;
+    }
+    
+    return 0;
+}
+
+
+int do_multi2()
 {
 /* My multiple requests example: 
 0000: 80200000 00000000 00000000 00010000 . ..............
@@ -182,8 +239,8 @@ int do_multi()
     memset(buffer, 0, 48);
     buffer[0] = 0x80;
     buffer[1] = 0x20;
-    buffer[25] = 0x80;
-    buffer[26] = 0x07; // QUIT - NO RESPONSE
+    buffer[24] = 0x80;
+    buffer[25] = 0x07; // QUIT - NO RESPONSE
     if (send(sock_fd, buffer, 48, 0) != 48)
     {
         printf("Error in send of multi data: %s\n", strerror(errno));
@@ -221,7 +278,7 @@ int main()
         return 1;
     if (!do_login())
     {
-        if (!do_set() && !do_get(false) && !do_multi() && do_get(true))
+        if (!do_set() && !do_get(false) && !do_multi1() && !do_multi2() && do_get(true))
         {
             printf("All tests passed\n");
             ret = 0;

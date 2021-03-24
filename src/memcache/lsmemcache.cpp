@@ -2594,7 +2594,7 @@ int LsMemcache::processBinCmdMultiple(uint8_t *pBinBuf, int iLen, MemcacheConn *
         pBinBuf += consumed;
         total_consumed += consumed;
     }
-    return consumed;
+    return total_consumed;
 }
 
 

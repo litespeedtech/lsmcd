@@ -3365,6 +3365,7 @@ void LsMemcache::doBinStats(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     {
         LS_DBG_M("Stats lock pid: %d\n", getpid());
         lock(pConn);
+        LS_DBG_M("Stats locked pid: %d\n", getpid());
         ::memcpy((void *)&stats,
                  (void *)&((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->
                       getHdrOff()))->x_stats, sizeof(stats));

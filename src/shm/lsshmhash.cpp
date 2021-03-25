@@ -694,6 +694,7 @@ int LsShmHash::rehash()
     int szTable;
     int szBitMap;
     uint count = 0;
+    LS_DBG_M("Doing rehash, pid: %d\n", getpid());
 #ifdef DEBUG_RUN
     SHM_NOTICE("LsShmHash::rehash %6d %X size %d cap %d NEW %d",
                getpid(), m_pPool->getShmMap(),
@@ -764,7 +765,7 @@ int LsShmHash::rehash()
 
         if (++count > oldSize + oldSize / 2)
         {
-            LS_DBG_M("LsShmHash::rehash() (pid: %d) is in a infinity loop, "
+            LS_ERROR("LsShmHash::rehash() (pid: %d) is in a infinity loop, "
                      "likely due to SHM corruption. remove corrupted file.",
                      getpid());
             fprintf(stderr, "LsShmHash::rehash() is in a infinity loop, likely due to SHM corruption. remove corrupted file.");
@@ -779,6 +780,7 @@ int LsShmHash::rehash()
     release2(pTable->x_iHIdx - szBitMap, szTable + szBitMap);
     pTable->x_iCapacity = newSize;
     pTable->x_iHIdx = newIdxOff;
+    LS_DBG_M("Done rehash, pid: %d\n", getpid());
     return 0;
 }
 

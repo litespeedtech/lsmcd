@@ -362,6 +362,9 @@ int MemcacheConn::processIncoming()
         LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 3", getpid(), this );
         if ( m_bufIncoming.blockSize() != m_bufIncoming.size() )
         {
+            LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 3 - "
+                     "updating existing buffer.  Adding %d bytes to %d", 
+                     getpid(), this, m_bufIncoming.size(), m_bufIncoming.blockSize() );
             int size = m_bufIncoming.size();
             AutoBuf buf( size );
             m_bufIncoming.moveTo( buf.end(), size );
@@ -395,6 +398,10 @@ int MemcacheConn::processIncoming()
                 LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 7", getpid(), this);
                 consumed = LsMemcache::getInstance().processBinCmd(
                     (uint8_t *)m_bufIncoming.begin(), m_bufIncoming.size(), this);
+                if (!m_bufOutgoing.empty())
+                {
+                    Flush();
+                }
                 break;
             case MC_INTERNAL:
                 LS_DBG_L("MemcacheConn processIncoming pid:%d, addr:%p, 8", getpid(), this);

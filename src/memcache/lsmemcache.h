@@ -310,7 +310,6 @@ public:
     int  processCmd(char *pStr, int iLen, MemcacheConn *pConn);
     int  doDataUpdate(uint8_t *pBuf, MemcacheConn *pConn);
     McBinStat  chkMemSz(MemcacheConn *pConn, int arg);
-    int  processBinCmdMultiple(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn);
     int  processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn);
     int  processInternal(uint8_t *pBuf, int iLen, MemcacheConn *pConn);
     void putWaitQ(MemcacheConn *pConn);

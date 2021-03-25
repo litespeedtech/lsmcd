@@ -194,7 +194,7 @@ int do_multi1()
 0010: 00000000 00000000 504c4149 4e       ........PLAIN
 */
     ssize_t recvd = recv(sock_fd, buffer, BUFFER_LEN, 0);
-    if (recvd != 58)
+    if (recvd != 29)
     {
         printf("Error in list_mechs response1: %s (recvd: %ld)\n", strerror(errno), recvd);
         return -1;
@@ -214,11 +214,11 @@ int do_multi1()
 0000: 81200000 00000000 00000005 00680000 . ...........h..
 0010: 00000000 00000000 504c4149 4e       ........PLAIN
 */
-    if (buffer[29+0] != 0x81 ||
-        buffer[29+1] != 0x20 ||
-        buffer[29+6] != 0x00 ||
-        buffer[29+7] != 0x00 ||
-        buffer[29+11] != 0x05 ||
+    if (buffer[0] != 0x81 ||
+        buffer[1] != 0x20 ||
+        buffer[6] != 0x00 ||
+        buffer[7] != 0x00 ||
+        buffer[11] != 0x05 ||
         memcmp((char *)&buffer[24], "PLAIN", 5))
     {
         printf("Error in list_mechs response data2 (turn on the trace)\n");

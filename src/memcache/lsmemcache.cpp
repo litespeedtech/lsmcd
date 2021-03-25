@@ -2575,29 +2575,6 @@ LsMcHashSlice *LsMemcache::setSlice(const void *pKey, int iLen,
     return pConn->getSlice();
 }
 
-int LsMemcache::processBinCmdMultiple(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
-{
-    int consumed, total_consumed = 0;;
-
-    while (iLen)
-    {
-        pConn->Flush(); // From a prior loop
-        McBinCmdHdr *pHdr = (McBinCmdHdr *)pBinBuf;
-        int packet_len = sizeof(*pHdr) + ntohl(pHdr->totbody);
-        LS_DBG_M("Process received partial packet pid: %d %d bytes\n", getpid(),
-                 packet_len);
-        pConn->traceBuf((char *)pBinBuf, packet_len);
-        consumed = processBinCmd(pBinBuf, packet_len, pConn);
-        if (consumed <= 0)
-            return consumed;
-        iLen -= consumed;
-        pBinBuf += consumed;
-        total_consumed += consumed;
-    }
-    return total_consumed;
-}
-
-
 int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
 {
     McBinCmdHdr *pHdr;
@@ -2617,11 +2594,6 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
     {
         LS_DBG_M("Incomplete receive %d of %d\n", iLen, consumed);
         return -1;
-    }
-    else if (consumed < iLen)
-    {
-        LS_DBG_M("Multiple packets received: %d bytes of %d\n", consumed, iLen);
-        return processBinCmdMultiple(pBinBuf, iLen, pConn);
     }
     if (getVerbose(pConn) > 1)
     {

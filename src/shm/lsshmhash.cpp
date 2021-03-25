@@ -17,6 +17,7 @@
 *****************************************************************************/
 #include <shm/lsshmhash.h>
 
+#include <log4cxx/logger.h>
 #include <lsr/xxhash.h>
 #include <shm/lsshmpool.h>
 #include <shm/lsshmtidmgr.h>
@@ -763,6 +764,9 @@ int LsShmHash::rehash()
 
         if (++count > oldSize + oldSize / 2)
         {
+            LS_DBG_M("LsShmHash::rehash() (pid: %d) is in a infinity loop, "
+                     "likely due to SHM corruption. remove corrupted file.",
+                     getpid());
             fprintf(stderr, "LsShmHash::rehash() is in a infinity loop, likely due to SHM corruption. remove corrupted file.");
             getPool()->getShm()->tryRecoverCorruption();
             abort();

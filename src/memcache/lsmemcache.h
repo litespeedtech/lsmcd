@@ -29,7 +29,7 @@
 #include <util/gpointerlist.h>
 #include <util/objpool.h>
 
-#define VERSION_TO_LOG  "1.4.18"
+#define VERSION_TO_LOG  "1.4.19"
 #define VERSION         "1.0.0"
 
 #define ULL_MAXLEN      24      // maximum buffer size of unsigned long long

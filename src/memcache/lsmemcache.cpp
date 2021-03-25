@@ -3363,11 +3363,13 @@ void LsMemcache::doBinStats(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     }
     else
     {
+        LS_DBG_M("Stats lock pid: %d\n", getpid());
         lock(pConn);
         ::memcpy((void *)&stats,
                  (void *)&((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->
                       getHdrOff()))->x_stats, sizeof(stats));
         unlock(pConn);
+        LS_DBG_M("Stats unlock pid: %d\n", getpid());
     }
     uint64_t getcmds = stats.get_hits + stats.get_misses;
     uint64_t touchcmds = stats.touch_hits + stats.touch_misses;

@@ -85,3 +85,7 @@ VERSION 1.4.17 March 16, 2021
 
 VERSION 1.4.18 March 23, 2021
 [BUGFIX] Sporatic timeout turned out to be related to multiple packets in a single receive.  Fixed.
+
+VERSION 1.4.19 March 26, 2021
+[BUGFIX] Reverted incorrect bug fix in single receive.
+[IMPROVEMENT] Core dumps will not write to the /tmp/lsmcd directory

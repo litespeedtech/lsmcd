@@ -34,9 +34,11 @@ public:
     LsmcdImpl();
     virtual ~LsmcdImpl();
     virtual int Init( int argc, char *argv[] );
+    virtual void getUid(uid_t *uid, gid_t *gid);
     virtual int SetUDSAddrFile();
     virtual int PreEventLoop();
     virtual int  EventLoop();
+    virtual void enableCoreDump();
     
     void RecycleNodeConn( ReplConn * pConn );
     ReplConn * GetNodeConn();
@@ -85,6 +87,9 @@ protected:
     MemcacheListener    m_pMemcacheListener;
     UsocklListener      m_usockLstnr;
     UsockClnt           *m_pUsockClnt;
+    uid_t               m_uid;
+    gid_t               m_gid;
+    bool                m_gotUid;
     
 };
 

@@ -30,6 +30,8 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/prctl.h>
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <error.h>
@@ -78,6 +80,9 @@ LsmcdImpl::LsmcdImpl()
         , m_iNoDaemon( 0 )
         , m_pMultiplexer(NULL)
         , m_pUsockClnt(NULL)
+        , m_uid(0)
+        , m_gid(0)
+        , m_gotUid(false)
 {}
 
 
@@ -133,6 +138,47 @@ int LsmcdImpl::testRunningServer()
     return ret;
 }
 
+void LsmcdImpl::enableCoreDump()
+{
+    if (!getuid())
+    {
+        uid_t uid;
+        gid_t gid;
+        getUid(&uid, &gid);
+        if (lchown(getReplConf()->getTmpDir(), uid, gid))
+            LS_DBG_M("Error setting owner for core dump directory: %s\n", strerror(errno));
+        else
+            LS_DBG_M("Set owner for core dump directory to %d:%d\n", uid, gid);
+    }
+    struct  rlimit rl;
+    if (getrlimit(RLIMIT_CORE, &rl) == -1)
+        LS_WARN("getrlimit( RLIMIT_CORE, ...) failed!");
+    else
+    {
+        //LS_DBG_L( "rl.rlim_cur=%d, rl.rlim_max=%d", rl.rlim_cur, rl.rlim_max );
+        if ((getuid() == 0) && (rl.rlim_max < 10240000))
+            rl.rlim_max = 10240000;
+        rl.rlim_cur = rl.rlim_max;
+        if (::setrlimit(RLIMIT_CORE, &rl))
+            LS_WARN("Error enabling coredump: %s\n", strerror(errno));
+    }
+
+    LS_DBG_M("UID: %d PID: %d Enabling coredump at %s\n", getuid(), getpid(), getReplConf()->getTmpDir());
+    if (::chdir(getReplConf()->getTmpDir()))
+        LS_DBG_M("Error changing to coredump directory: %s\n", strerror(errno));
+
+    if (prctl(PR_SET_DUMPABLE, 1) == -1)
+        LS_WARN("prctl: Failed to set dumpable %s, core dump may not be available\n", strerror(errno));
+
+    {
+        int dumpable = prctl(PR_GET_DUMPABLE);
+
+        if (dumpable == -1)
+            LS_WARN("prctl: get dumpable failed ");
+    }
+}
+
+
 int LsmcdImpl::Init( int argc, char *argv[] )
 {
     if(argc >= 1 ){
@@ -153,7 +199,9 @@ int LsmcdImpl::Init( int argc, char *argv[] )
     m_pid = getpid();
     if ( m_pidFile.writePid( m_pid ) )
         return -2;
-        
+
+    enableCoreDump();
+    
     setReplGroup(new LcReplGroup());
     delUsockFiles();
     
@@ -161,39 +209,49 @@ int LsmcdImpl::Init( int argc, char *argv[] )
 }
 
 
+void LsmcdImpl::getUid(uid_t *uid, gid_t *gid)
+{
+    if (!m_gotUid)
+    {
+        m_gotUid = true;
+        m_uid = geteuid();
+        m_gid = getegid();
+        const char *name;
+        struct group  *gr = NULL;
+        struct passwd *pw = NULL;
+
+        name = getReplConf()->getUser();
+        if (name)
+            pw = getpwnam(name);
+        if ( pw == NULL )
+        {
+            pw = getpwnam( "nobody" );
+        }
+        if (pw)
+            m_uid = pw->pw_uid;
+        
+        name = getReplConf()->getGroup();
+        if (name)
+            gr = getgrnam(name);
+        if ( gr == NULL )
+        {
+            gr = getgrnam( "nobody" );
+        }
+        if ( gr == NULL )
+            gr = getgrnam( "nogroup" );
+        if (gr)
+            m_gid = gr->gr_gid;
+    }
+    *uid = m_uid;
+    *gid = m_gid;
+}
+
+
 int LsmcdImpl::SetUDSAddrFile()
 {
-    uid_t uid = geteuid();
-    gid_t gid = getegid();
-    const char *name;
-    int   gotOne = 0;
-    name = getReplConf()->getUser();
-    if (name)
-    {
-        struct passwd pass;
-        struct passwd *passp = NULL;
-        char   buffer[4096];
-        if ((!getpwnam_r(name, &pass, buffer, sizeof(buffer), &passp)) &&
-            (passp))
-        {
-            uid = pass.pw_uid;
-            gotOne = 1;
-        }
-    }
-    name = getReplConf()->getGroup();
-    if (name)
-    {
-        struct group grp;
-        struct group *grpp = NULL;
-        char   buffer[4096];
-        if ((!getgrnam_r(name, &grp, buffer, sizeof(buffer), &grpp)) &&
-            (grpp))
-        {
-            gid = grp.gr_gid;
-            gotOne = 1;
-        }
-    }
-    if (gotOne)
+    uid_t uid;
+    gid_t gid;
+    getUid(&uid, &gid);
     {
         const char *addr = getReplConf()->getMemCachedAddr() + 4; // UDS:
         while ((*addr == '/') && (*(addr + 1) == '/'))
@@ -445,31 +503,15 @@ int LsmcdImpl::ParseOpt( int argc, char *argv[] )
 
 int LsmcdImpl::ChangeUid()
 {
-    struct group * gr;
-    struct passwd *pw;
-
-    pw = getpwnam( getReplConf()->getUser() );
-    if ( pw == NULL )
-    {
-        pw = getpwnam( "nobody" );
-    }
-    gr = getgrnam( getReplConf()->getGroup() );
-    if ( gr == NULL )
-    {
-        gr = getgrnam( "nobody" );
-    }
-    if ( gr == NULL )
-        gr = getgrnam( "nogroup" );
-
-    if ((!pw) || (!gr))
-        return -1;
-    
-    if ( setgid( gr->gr_gid ) < 0 )
+    uid_t uid;
+    gid_t gid;
+    getUid(&uid, &gid);
+    if ( setgid(gid) < 0 )
     {
         return -1;
     }
 
-    if ( setuid( pw->pw_uid ) < 0 )
+    if ( setuid(uid) < 0 )
     {
         return -1;
     }
@@ -653,6 +695,7 @@ int Lsmcd::Main(int argc, char **argv)
             _pReplSvrImpl->reinitCachedMpxr(ret);
         }
         _pReplSvrImpl->ChangeUid();
+        _pReplSvrImpl->enableCoreDump();
     }
     
     init_signals();

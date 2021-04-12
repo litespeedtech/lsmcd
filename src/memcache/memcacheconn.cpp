@@ -320,7 +320,7 @@ int MemcacheConn::sendACKPacket(int ptype, ReplPacketHeader *pHeader)
 void MemcacheConn::traceBuf(const char *buf, int len)
 {
     if ( log4cxx::Level::isEnabled( log4cxx::Level::DBG_MEDIUM ) )
-        traceBuffer(buf, len);
+        traceBuffer(buf, len > 256 ? 256 : len);
 }
 
 
@@ -330,7 +330,7 @@ int MemcacheConn::processIncoming()
     int consumed;
     LS_DBG_M("MemcacheConn processIncoming pid:%d, addr:%p, m_bufIncoming "
              "size:%d", getpid(), this, m_bufIncoming.size());
-    traceBuf(m_bufIncoming.begin(), m_bufIncoming.size() > 256 ? 256 : m_bufIncoming.size());
+    traceBuf(m_bufIncoming.begin(), m_bufIncoming.size());
     //clearForNewConn();
     if (_Protocol == MC_UNKNOWN || 
         (unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_INTERNAL_REQ ||

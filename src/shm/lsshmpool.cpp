@@ -1109,10 +1109,12 @@ void LsShmPool::reduceFreeFromBot(
     //
     LShmFreeBot *bp =
         (LShmFreeBot *)offset2ptr(offset + newsize - sizeof(LShmFreeBot));
-
-    bp->x_iFreeOffset = offset;
-    bp->x_iBMarker = LSSHM_FREE_BMARKER;
-    ap->x_iFreeSize = newsize;
+    if (bp)
+    {
+        bp->x_iFreeOffset = offset;
+        bp->x_iBMarker = LSSHM_FREE_BMARKER;
+        ap->x_iFreeSize = newsize;
+    }
 }
 
 

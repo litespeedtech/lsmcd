@@ -330,7 +330,7 @@ int MemcacheConn::processIncoming()
     int consumed;
     LS_DBG_M("MemcacheConn processIncoming pid:%d, addr:%p, m_bufIncoming "
              "size:%d", getpid(), this, m_bufIncoming.size());
-    traceBuf(m_bufIncoming.begin(), m_bufIncoming.blockSize());
+    traceBuf(m_bufIncoming.begin(), m_bufIncoming.size() > 256 ? 256 : m_bufIncoming.size());
     //clearForNewConn();
     if (_Protocol == MC_UNKNOWN || 
         (unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_INTERNAL_REQ ||

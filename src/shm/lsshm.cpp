@@ -258,6 +258,12 @@ void LsShm::tryRecoverCorruption()
 }
 
 
+LsShmOffset_t LsShm::getFileSize()
+{   
+    return x_pShmMap->x_stat.m_iFileSize;  
+}
+
+
 int LsShm::isOffsetValid(LsShmOffset_t offset)
 {
     return (offset <= x_pShmMap->x_stat.m_iFileSize);

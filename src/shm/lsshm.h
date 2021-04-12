@@ -175,6 +175,7 @@ public:
         return (void *)m_addrMap.offset2ptr(offset);
     }  // map size
 
+    LsShmOffset_t  getFileSize();
     int isOffsetValid(LsShmOffset_t offset);
 
     LsShmOffset_t ptr2offset(const void *ptr) const

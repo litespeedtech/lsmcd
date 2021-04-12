@@ -922,6 +922,7 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
                   this, num, offset, xoffset);
     if (--num != 0)
     {
+        LsShmSize_t max = m_pShm->getFileSize();
         assert(m_pShm->isOffsetValid(xoffset));
         getDataMap()->x_aFreeBucket[bucketNum] = xoffset;
     }

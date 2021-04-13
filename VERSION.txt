@@ -98,3 +98,4 @@ VERSION 1.4.20 April 13, 2021
 [BUGFIX] Handle NULL pointer in an iterator allocation.
 [BUGFIX] Avoid additional NULL compares during hash check.
 [BUGFIX] Address NULL pointer in TidMgr.
+[BUGFIX] Change a number of assertions to tests.

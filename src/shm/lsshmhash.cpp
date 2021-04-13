@@ -991,6 +991,11 @@ LsShmHash::iteroffset LsShmHash::find2(LsShmHKey key,
     while (offset.m_iOffset != 0)
     {
         pElem = (LsShmHElem *)m_pPool->offset2ptr(offset.m_iOffset);
+        if (!pElem)
+        {
+            offset.m_iOffset = 0;
+            break;
+        }
         if ((pElem->x_hkey == key)
             && (pElem->getKeyLen() == (int)ls_str_len(&pParms->key))
             && ((*m_vc)(ls_str_buf(&pParms->key), pElem->getKey(),

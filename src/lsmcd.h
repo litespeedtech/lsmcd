@@ -73,6 +73,8 @@ protected:
     int  testRunningServer();
     int  connUsockSvr();
     void delUsockFiles();
+    void needDeleteCoredumps();
+    void doDeleteCoredumps();
     
 protected:
     int                 m_iNoCrashGuard;
@@ -90,6 +92,8 @@ protected:
     uid_t               m_uid;
     gid_t               m_gid;
     bool                m_gotUid;
+    bool                m_deleteCoredumps;
+    bool                m_setDeleteCoredumps;
     
 };
 

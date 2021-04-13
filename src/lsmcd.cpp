@@ -23,7 +23,10 @@
 #include <util/signalutil.h>
 #include <socket/gsockaddr.h>
 #include <util/mysleep.h>
+
+#include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <grp.h>
 #include <limits.h>
 #include <pwd.h>
@@ -32,6 +35,7 @@
 #include <unistd.h>
 #include <sys/prctl.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <error.h>
@@ -83,6 +87,8 @@ LsmcdImpl::LsmcdImpl()
         , m_uid(0)
         , m_gid(0)
         , m_gotUid(false)
+        , m_deleteCoredumps(false)
+        , m_setDeleteCoredumps(false)
 {}
 
 
@@ -138,6 +144,82 @@ int LsmcdImpl::testRunningServer()
     return ret;
 }
 
+
+void LsmcdImpl::needDeleteCoredumps()
+{
+    char need_str[80];
+    m_setDeleteCoredumps = true;
+    int fd = open("/proc/sys/kernel/core_uses_pid", O_RDONLY);
+    if (fd == -1)
+    {
+        LS_NOTICE("Unable to determine if excess coredumps need to be deleted: "
+                  "Can't open /proc/sys/kernel/core_uses_pid: %s\n", 
+                  strerror(errno));
+        return;
+    }
+    ssize_t did_read = read(fd, need_str, sizeof(need_str) - 1);
+    if (did_read > 0 && need_str[0] == '1')
+    {
+        LS_NOTICE("Only the oldest coredump will be preserved\n");
+        m_deleteCoredumps = true;
+    }
+    else
+        LS_DBG_M("Excess coredumps will not be deleted\n");
+    close(fd);
+}
+
+
+void LsmcdImpl::doDeleteCoredumps()
+{
+    LS_DBG_M("In doDeleteCoredumps: did set: %d, need delete: %d\n",
+             m_setDeleteCoredumps, m_deleteCoredumps);
+    if (!m_setDeleteCoredumps)
+        needDeleteCoredumps();
+    if (!m_deleteCoredumps)
+        return;
+    DIR *d = opendir(".");
+    if (!d)
+    {
+        LS_DBG_M("Attempt to open default directory failed: %s\n", strerror(errno));
+        return;
+    }
+    struct dirent *ent;
+    time_t oldest_time = 0;
+    char oldest[256] = { 0 };
+    while ((ent = readdir(d)))
+    {
+        LS_DBG_M("Readdir: %s\n", ent->d_name);
+        if (strcmp(ent->d_name, ".") && strcmp(ent->d_name, ".."))
+        {
+            struct stat st;
+            if (!stat(ent->d_name, &st))
+            {
+                if (S_ISREG(st.st_mode) && !strncmp("core.", ent->d_name, 5))
+                {
+                    bool new_oldest = oldest_time && st.st_mtime < oldest_time;
+                    if (oldest_time)
+                    {
+                        char *newer = new_oldest ? oldest : ent->d_name;
+                        LS_DBG_M("Delete coredump: %s\n", newer);
+                        if (remove(newer))
+                            LS_NOTICE("Error deleting coredump %s: %s\n", 
+                                      oldest, strerror(errno));
+                    }
+                    if (!oldest_time || new_oldest)
+                    {
+                        oldest_time = st.st_mtime;
+                        strncpy(oldest, ent->d_name, sizeof(oldest));
+                    }
+                }
+                else
+                    LS_DBG_M("Not a coredump or regular file: %s\n", ent->d_name);
+            }
+        }
+    }
+    closedir(d);
+}
+
+
 void LsmcdImpl::enableCoreDump()
 {
     if (!getuid())
@@ -150,6 +232,7 @@ void LsmcdImpl::enableCoreDump()
         else
             LS_DBG_M("Set owner for core dump directory to %d:%d\n", uid, gid);
     }
+    doDeleteCoredumps();
     struct  rlimit rl;
     if (getrlimit(RLIMIT_CORE, &rl) == -1)
         LS_WARN("getrlimit( RLIMIT_CORE, ...) failed!");

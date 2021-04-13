@@ -172,6 +172,8 @@ public:
         {
             tryRecoverBadOffset(offset);
         }
+        if (!isOffsetValid(offset))
+            return NULL;
         return (void *)m_addrMap.offset2ptr(offset);
     }  // map size
 

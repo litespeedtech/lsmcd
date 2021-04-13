@@ -726,7 +726,8 @@ void LsShmPool::releaseData(LsShmOffset_t offset, LsShmSize_t size)
 
         pData = (LsShmOffset_t *)offset2ptr(offset);
         pBucket = &pDataMap->x_aFreeBucket[bucketNum];
-        assert(m_pShm->isOffsetValid(offset));
+        if (!m_pShm->isOffsetValid(offset))
+            return;
         if (s_debug_free_bucket == bucketNum)
             LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] release to freebucket, "
                       "offset: %d, size: %d, next: %d\n",
@@ -923,7 +924,8 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
     if (--num != 0)
     {
         LsShmSize_t max = m_pShm->getFileSize();
-        assert(m_pShm->isOffsetValid(xoffset));
+        if (!m_pShm->isOffsetValid(xoffset))
+            return offset;
         getDataMap()->x_aFreeBucket[bucketNum] = xoffset;
     }
     uint8_t *xp;

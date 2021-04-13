@@ -88,4 +88,10 @@ VERSION 1.4.18 March 23, 2021
 
 VERSION 1.4.19 March 26, 2021
 [BUGFIX] Reverted incorrect bug fix in single receive.
-[IMPROVEMENT] Core dumps will not write to the /tmp/lsmcd directory
+[IMPROVEMENT] Core dumps will write to the /tmp/lsmcd directory
+
+VERSION 1.4.20 April 13, 2021
+[BUGFIX] Only the oldest core dump will be preserved if you have cores written by pid enabled
+[BUGFIX] NULL ptr in find should no longer crash.
+[BUGFIX] Exceeding the buffer size should not cause a crash in tracing
+[BUGFIX] Avoid using NULL freelist bot size.

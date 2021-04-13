@@ -74,7 +74,7 @@ except MemcachedException as meme:
     print('Memcached Exception: ' + str(meme) + ' in get')
     sys.exit()
     
-#print('Getting key=' + client.get('key') + ' (should be value)')
+print('Getting key=' + client.get('key') + ' (should be value)')
 if client.get('key') == value:
     print('Initial test works.')
 else:

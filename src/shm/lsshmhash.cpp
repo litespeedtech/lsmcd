@@ -1021,11 +1021,14 @@ LsShmHash::iteroffset LsShmHash::allocIter(int keyLen, int realValLen)
         return offset;
     LsShmHElem *pNew = (LsShmHElem *)m_pPool->offset2ptr(offset.m_iOffset);
 
-    pNew->x_iLen = elementSize;
-    pNew->x_iValOff = valueOff;
-    // pNew->x_iNext.m_iOffset = 0;
-    pNew->setKeyLen(keyLen);
-    pNew->setValLen(valLen);
+    if (pNew)
+    {
+        pNew->x_iLen = elementSize;
+        pNew->x_iValOff = valueOff;
+        // pNew->x_iNext.m_iOffset = 0;
+        pNew->setKeyLen(keyLen);
+        pNew->setValLen(valLen);
+    }
     return offset;
 }
 

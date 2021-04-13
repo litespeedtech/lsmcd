@@ -91,8 +91,11 @@ void LsShmTidMgr::linkTid(LsShmHIterOff offElem, uint64_t *pTid)
     }
     setTidTblIter(offElem, pTid);    // careful, may remap
     pLinkElem = m_pHash->offset2iterator(offElem);
-    pLink = (LsShmTidLink *)pLinkElem->getExtraPtr(m_iIterOffset);
-    pLink->x_tid = *pTid;
+    if (pLinkElem)
+    {
+        pLink = (LsShmTidLink *)pLinkElem->getExtraPtr(m_iIterOffset);
+        pLink->x_tid = *pTid;
+    }
 }
 
 

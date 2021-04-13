@@ -402,7 +402,7 @@ int LsShmHash::chkHashTable(LsShm *pShm, LsShmReg *pReg, int *pMode, int *pFlags
     if (pReg->x_iValue == 0)
         return -1;
     LsShmHTable *pTable = (LsShmHTable *)pShm->offset2ptr(pReg->x_iValue);
-    if (pTable->x_iMagic != LSSHM_HASH_MAGIC)
+    if (!pTable || pTable->x_iMagic != LSSHM_HASH_MAGIC)
         return -1;
     *pMode = pTable->x_iMode;
     *pFlags = pTable->x_iFlags;
@@ -478,7 +478,9 @@ LsShmOffset_t LsShmHash::allocHTable(LsShmPool * pPool, int init_size,
         return 0;
     }
     LsShmHTable *pTable = (LsShmHTable *)pPool->offset2ptr(offset);
-
+    if (!pTable)
+        return 0;
+    
     ::memset(pTable, 0, sizeof(*pTable));
     ::memset(pPool->offset2ptr(iBase), 0, szTable + szBitMap);
 
@@ -509,7 +511,9 @@ int LsShmHash::init(LsShmOffset_t offset)
     m_iOffset = offset;
     x_pTable = (LsShmHTable *)m_pPool->offset2ptr(m_iOffset);
     LsShmHTable *pTable = getHTable();
-
+    if (!pTable)
+        return LS_FAIL;
+    
     // check the magic and mode
     if ((m_iMagic != pTable->x_iMagic)
         || (m_iMode != pTable->x_iMode)
@@ -1065,6 +1069,11 @@ LsShmHash::iteroffset LsShmHash::insertCopy2(LsShmHKey key,
         return offset;
     LsShmHElem *pNew = (LsShmHElem *)m_pPool->offset2ptr(offset.m_iOffset);
 
+    if (!pNew)
+    {
+        offset.m_iOffset = 0;
+        return offset;
+    }
     // pNew->x_iNext.m_iOffset = 0;
     pNew->x_hkey = key;
 
@@ -1110,7 +1119,11 @@ LsShmHash::iteroffset LsShmHash::iterGrowValue(iteroffset iterOff,
     if (offset.m_iOffset == 0)
         return offset;
     LsShmHElem *pNew = offset2iterator(offset);
-
+    if (!pNew)
+    {
+        offset.m_iOffset = 0;
+        return offset;
+    }
     pNew->x_iLen = newTotalSize;
     pNew->x_iValOff = valOff;
     // pNew->x_iNext.m_iOffset = 0;
@@ -1119,6 +1132,11 @@ LsShmHash::iteroffset LsShmHash::iterGrowValue(iteroffset iterOff,
 
     pOld = (LsShmHElem *)m_pPool->offset2ptr(iterOff.m_iOffset);
         // pNew->x_iNext.m_iOffset = 0;
+    if (!pOld)
+    {
+        offset.m_iOffset = 0;
+        return offset;
+    }        
     pNew->x_hkey = pOld->x_hkey;
 
     setIterKey(pNew, pOld->getKey());

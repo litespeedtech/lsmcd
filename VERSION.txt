@@ -95,3 +95,4 @@ VERSION 1.4.20 April 13, 2021
 [BUGFIX] NULL ptr in find should no longer crash.
 [BUGFIX] Exceeding the buffer size should not cause a crash in tracing
 [BUGFIX] Avoid using NULL freelist bot size.
+[BUGFIX] Handle NULL pointer in an iterator allocation.

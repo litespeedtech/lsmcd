@@ -35,5 +35,7 @@ fi
 
 if [ $UPDATE -eq 0 ]; then
     echo "Now you have to update ${LSMCD_HOME}/conf/node.conf" 
+else
+    echo "Update completed"
 fi
 

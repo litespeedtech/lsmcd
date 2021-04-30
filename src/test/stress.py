@@ -12,7 +12,7 @@ parser.add_argument("--v", default=10000, type=int, help="value size")
 parser.add_argument("--c", default=100, type=int, help="how often to check to see that ALL of the key/values are there")
 parser.add_argument("--n", default=0, type=int, help="set to 1 to turn off SASL")
 parser.add_argument("--s", default=0, type=int, help="SASL user validation; key is constant, data has the user name in it")
-parser.add_argument("--t", default=0, type=int, help="set to 1 to get stats")
+parser.add_argument("--t", default=0, type=int, help="set to 1 to get stats, 2 to get stats only")
 parser.add_argument("--g", default=0, type=int, help="get ONLY (assume set has been done)")
 parser.add_argument("--o", default=1, type=int, help="just set key=value for this user (default is 1)")
 parser.add_argument("--e", default=0, type=int, help="Number of entries to add/get before stopping - default is until an entry is missing")
@@ -64,6 +64,12 @@ except MemcachedException as meme:
     sys.exit()
     
 try:    
+    if get_stats == 2:
+        stats = client.stats()
+        statsValue = stats.get(server)
+        for k, v in statsValue.items():
+            print('   Stats[' + str(k) + '] = ' + v.decode())
+        sys.exit()
     if not client.get('key'):
         if get_only:
             print("Unable to get single key - may not have been saved for this user")

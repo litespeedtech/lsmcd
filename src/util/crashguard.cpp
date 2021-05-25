@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include <util/signalutil.h>
+#include <log4cxx/logger.h>
 
 static int s_iRunning = 0;
 static int s_iSigChild = 0;
@@ -107,6 +108,8 @@ int CrashGuard::guardCrash()
                     int sig_num = WTERMSIG(stat);
                     if (sig_num == SIGKILL)
                         break;
+                    if (WCOREDUMP(stat))
+                        LS_NOTICE("Program crashed and may have produced a core file.  Automatically restarted.\n");
                     ret = m_pGuardedApp->childSignaled(1, rpid, sig_num,
 #ifdef WCOREDUMP
                                                        WCOREDUMP(stat)
@@ -229,6 +232,8 @@ int CrashGuard::guardCrash(int workers)
                     int sig_num = WTERMSIG(stat);
                     if (sig_num == SIGKILL)
                         break;
+                    if (WCOREDUMP(stat))
+                        LS_NOTICE("Program crashed and may have produced a core file.  Automatically restarted\n");
                     ret = m_pGuardedApp->childSignaled(count, rpid, sig_num,
 #ifdef WCOREDUMP
                                                        WCOREDUMP(stat)

@@ -99,3 +99,6 @@ VERSION 1.4.20 April 13, 2021
 [BUGFIX] Avoid additional NULL compares during hash check.
 [BUGFIX] Address NULL pointer in TidMgr.
 [BUGFIX] Change a number of assertions to tests.
+
+VERSION 1.4.21 May 25, 2021
+[IMPROVEMENT] Add a log entry when the program crashes.

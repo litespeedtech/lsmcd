@@ -99,7 +99,9 @@ LsShmOffset_t LsShmPool::getPoolMapStatOffset() const
 
 inline  void LsShmPool::incrCheck(LsShmXSize_t *ptr, LsShmSize_t size)
 {
-    assert(ptr != NULL);
+    //assert(ptr != NULL);
+    if (!ptr)
+        return;
     LsShmSize_t prev = *ptr;
     *ptr += size;
     if (*ptr < prev)    // cnt wrapped
@@ -209,7 +211,7 @@ int LsShmPool::init(LsShm *shm, const char *name, LsShmPool *gpool)
             int remapped;
             int rndPoolMemSz = roundDataSize(sizeof(LsShmPoolMem));
             offset = allocPage(LSSHM_SHM_UNITSIZE, remapped);
-            if (offset == 0)
+            if (offset == 0 || !offset2ptr(offset))
             {
                 m_status = LSSHM_BADMAPFILE;
                 return LS_FAIL;
@@ -223,7 +225,8 @@ int LsShmPool::init(LsShm *shm, const char *name, LsShmPool *gpool)
         }
     }
     x_pPool = (LsShmPoolMem *)offset2ptr(m_iOffset);
-
+    if (!x_pPool)
+        return LS_FAIL;
     if (getPool()->x_iSize != 0)
     {
         if ((m_status = checkStaticData(name)) != LSSHM_OK)
@@ -328,6 +331,8 @@ LsShmHash *LsShmPool::getNamedHash(const char *name,
         if (offset != 0)
         {
             pReg = (LsShmReg *)offset2ptr(offReg);
+            if (!pReg)
+                return NULL;
             pReg->x_iValue = offset;
         }
     }
@@ -605,12 +610,16 @@ void LsShmPool::addFreeList(LsShmPoolMap *pSrcMap)
         if ((freeOffset = getDataMap()->x_iFreeList) != 0)
         {
             pFreeList = (LsShmFreeList *)offset2ptr(freeOffset);
+            if (!pFreeList)
+                return;
             LsShmOffset_t next = listOffset;
             LsShmOffset_t last;
             do
             {
                 last = next;
                 pFree = (LsShmFreeList *)offset2ptr(last);
+                if (!pFree)
+                    return;
                 next = pFree->x_iNext;
             }
             while (next != 0);
@@ -662,6 +671,8 @@ void LsShmPool::addFreeBucket(LsShmPoolMap *pSrcMap)
                 do
                 {
                     pFree = (LsShmOffset_t *)offset2ptr(next);
+                    if (!pFree)
+                        return;
                 }
                 while ((next = *pFree) != 0);
                 *pFree = freeOffset;
@@ -699,11 +710,15 @@ void LsShmPool::releaseData(LsShmOffset_t offset, LsShmSize_t size)
 
         // setup FreeList block
         pFree = (LsShmFreeList *)offset2ptr(offset);
+        if (!pFree)
+            return;
         pFree->x_iSize = size;
 
         if ((freeOffset = pDataMap->x_iFreeList) != 0)
         {
             pFreeList = (LsShmFreeList *)offset2ptr(freeOffset);
+            if (!pFreeList)
+                return;
             pFree->x_iNext = freeOffset;
             pFree->x_iPrev = 0;
             pFreeList->x_iPrev = offset;
@@ -725,6 +740,8 @@ void LsShmPool::releaseData(LsShmOffset_t offset, LsShmSize_t size)
         LsShmOffset_t *pData;
 
         pData = (LsShmOffset_t *)offset2ptr(offset);
+        if (!pData)
+            return;
         pBucket = &pDataMap->x_aFreeBucket[bucketNum];
         if (!m_pShm->isOffsetValid(offset))
             return;
@@ -786,6 +803,8 @@ LsShmOffset_t LsShmPool::allocFromDataFreeList(LsShmSize_t size)
     while (offset != 0)
     {
         pFree = (LsShmFreeList *)offset2ptr(offset);
+        if (!pFree)
+            break;
         if ((left = (int)(pFree->x_iSize - size)) >= 0)
         {
             pFree->x_iSize = (LsShmSize_t)left;
@@ -861,8 +880,9 @@ LsShmOffset_t LsShmPool::allocFromGlobalBucket(
     next = first = *np;
     while (next != 0)
     {
-        assert(m_pShm->isOffsetValid(next));
         np = (LsShmOffset_t *)offset2ptr(next);
+        if (!np)
+            return 0;
         next = *np;
         if (++cnt >= num)
             break;
@@ -898,8 +918,9 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
     {
         if (num > 1)
         {
-            xoffset = *((LsShmOffset_t *)m_pShm->offset2ptr(offset));
-            assert(m_pShm->isOffsetValid(xoffset));
+            LsShmOffset_t *op = (LsShmOffset_t *)m_pShm->offset2ptr(offset);
+            if (!op)
+                return 0;
             getDataMap()->x_aFreeBucket[bucketNum] = xoffset;
             if (s_debug_free_bucket == bucketNum)
                 LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] allocFromGlobalBucket(), %d objects, "
@@ -934,7 +955,8 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
     {
         xp += size;
         xoffset += size;
-        assert(m_pShm->isOffsetValid(xoffset));
+        if (!m_pShm->isOffsetValid(xoffset))
+            return 0;
         *((LsShmOffset_t *)xp) = num ? xoffset : 0;
         if (s_debug_free_bucket == bucketNum)
             LS_LOGRAW("[DEBUG] [SHM] [%d-%d:%p] allocFromDataChunk(), append #%d offset: %d, \n",
@@ -1040,7 +1062,7 @@ void LsShmPool::mvDataFreeListToBucket(LsShmFreeList *pFree,
         np = (LsShmOffset_t *)pFree; // cast to offset
         *np = getDataMap()->x_aFreeBucket[bucketNum];
         
-        assert(m_pShm->isOffsetValid(offset));
+        //assert(m_pShm->isOffsetValid(offset));
         getDataMap()->x_aFreeBucket[bucketNum] = offset;
         incrCheck(&getDataMap()->x_stat.m_bckt[bucketNum].m_iBkReleased, 1);
     }
@@ -1055,11 +1077,15 @@ void LsShmPool::rmFromDataFreeList(LsShmFreeList *pFree)
     else
     {
         xp = (LsShmFreeList *) offset2ptr(pFree->x_iPrev);
+        if (!xp)
+            return;
         xp->x_iNext = pFree->x_iNext;
     }
     if (pFree->x_iNext != 0)
     {
         xp = (LsShmFreeList *)offset2ptr(pFree->x_iNext);
+        if (!xp)
+            return;
         xp->x_iPrev = pFree->x_iPrev;
     }
     --getDataMap()->x_stat.m_iFlCnt;
@@ -1075,6 +1101,8 @@ LsShmOffset_t LsShmPool::getFromFreeList(LsShmSize_t size)
     while (offset != 0)
     {
         ap = (LShmFreeTop *)offset2ptr(offset);
+        if (!ap)
+            return 0;
         if (ap->x_iFreeSize >= size)
         {
             LsShmSize_t left = ap->x_iFreeSize - size;
@@ -1102,8 +1130,10 @@ void LsShmPool::reduceFreeFromBot(
     {
         // remove myself from freelist
         markTopUsed(ap);
-        disconnectFromFree(ap,
-            (LShmFreeBot *)offset2ptr(ap->x_iFreeSize - sizeof(LShmFreeBot)));
+        LShmFreeBot *bp = (LShmFreeBot *)offset2ptr(ap->x_iFreeSize - sizeof(LShmFreeBot));
+        if (!bp)
+            return;
+        disconnectFromFree(ap, bp);
         return;
     }
 
@@ -1129,17 +1159,21 @@ void LsShmPool::disconnectFromFree(LShmFreeTop *ap, LShmFreeBot *bp)
     LShmFreeTop *xp;
 
     LsShmPoolMap *pDataMap = getDataMap();
+    if (!pDataMap)
+        return;
     if (myPrev != 0)
     {
         xp = (LShmFreeTop *)offset2ptr(myPrev);
-        xp->x_iFreeNext = myNext;
+        if (xp)
+            xp->x_iFreeNext = myNext;
     }
     else
         pDataMap->x_iFreePageList = myNext;
     if (myNext != 0)
     {
         xp = (LShmFreeTop *)offset2ptr(myNext);
-        xp->x_iFreePrev = myPrev;
+        if (xp)
+            xp->x_iFreePrev = myPrev;
     }
     --pDataMap->x_stat.m_iGpFreeListCnt;
 }
@@ -1157,11 +1191,15 @@ bool LsShmPool::isFreeBlockAbove(
         return false;
 
     LShmFreeBot *bp = (LShmFreeBot *)offset2ptr(aboveOffset);
+    if (!bp)
+        return false;
     if ((bp->x_iBMarker == LSSHM_FREE_BMARKER)
         && (bp->x_iFreeOffset >= LSSHM_SHM_UNITSIZE)
         && (bp->x_iFreeOffset < aboveOffset))
     {
         LShmFreeTop *ap = (LShmFreeTop *)offset2ptr(bp->x_iFreeOffset);
+        if (!ap)
+            return false;
         if ((ap->x_iAMarker == LSSHM_FREE_AMARKER)
             && ((ap->x_iFreeSize + bp->x_iFreeOffset) == offset))
         {
@@ -1172,10 +1210,16 @@ bool LsShmPool::isFreeBlockAbove(
 
                 LShmFreeBot *xp =
                     (LShmFreeBot *)offset2ptr(offset + size - sizeof(LShmFreeBot));
+                if (!xp)
+                    return false;
                 xp->x_iBMarker = LSSHM_FREE_BMARKER;
                 xp->x_iFreeOffset = bp->x_iFreeOffset;
 
-                markTopUsed((LShmFreeTop *)offset2ptr(offset));
+                LShmFreeTop *ft = (LShmFreeTop *)offset2ptr(offset);
+                if (ft)
+                    markTopUsed(ft);
+                else
+                    return false;
             }
             return true;
         }
@@ -1195,6 +1239,8 @@ bool LsShmPool::isFreeBlockBelow(
         return false;
 
     LShmFreeTop *ap = (LShmFreeTop *)offset2ptr(belowOffset);
+    if (!ap)
+        return false;
     if (ap->x_iAMarker == LSSHM_FREE_AMARKER)
     {
         // the bottom free offset
@@ -1204,6 +1250,8 @@ bool LsShmPool::isFreeBlockBelow(
 
         e_offset -= sizeof(LShmFreeBot);
         LShmFreeBot *bp = (LShmFreeBot *)offset2ptr(e_offset);
+        if (!bp)
+            return false;
         if ((bp->x_iBMarker == LSSHM_FREE_BMARKER)
             && (bp->x_iFreeOffset == belowOffset))
         {
@@ -1215,6 +1263,8 @@ bool LsShmPool::isFreeBlockBelow(
                     disconnectFromFree(ap, bp);
                     // merge to top
                     LShmFreeTop *xp = (LShmFreeTop *)offset2ptr(offset);
+                    if (!xp)
+                        return false;
                     xp->x_iFreeSize += ap->x_iFreeSize;
                     bp->x_iFreeOffset = offset;
                     return true;
@@ -1222,6 +1272,8 @@ bool LsShmPool::isFreeBlockBelow(
 
                 // setup myself as free block
                 LShmFreeTop *np = (LShmFreeTop *)offset2ptr(offset);
+                if (!np)
+                    return false;
                 np->x_iAMarker = LSSHM_FREE_AMARKER;
                 np->x_iFreeSize = size + ap->x_iFreeSize;
                 np->x_iFreeNext = ap->x_iFreeNext;
@@ -1233,12 +1285,14 @@ bool LsShmPool::isFreeBlockBelow(
                 if (np->x_iFreeNext != 0)
                 {
                     xp = (LShmFreeTop *)offset2ptr(np->x_iFreeNext);
-                    xp->x_iFreePrev = offset;
+                    if (xp)
+                        xp->x_iFreePrev = offset;
                 }
                 if (np->x_iFreePrev != 0)
                 {
                     xp = (LShmFreeTop *)offset2ptr(np->x_iFreePrev);
-                    xp->x_iFreeNext = offset;
+                    if (xp)
+                        xp->x_iFreeNext = offset;
                 }
                 else
                     getDataMap()->x_iFreePageList = offset;
@@ -1272,7 +1326,10 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
         {
             goto out;
         }
-        markTopUsed((LShmFreeTop *)offset2ptr(offset));
+        LShmFreeTop *top = (LShmFreeTop *)offset2ptr(offset);
+        if (!top)
+            goto out;
+        markTopUsed(top);
     }
     incrCheck(&pPagePool->getDataMap()->x_stat.m_iGpAllocated,
         (pagesize / LSSHM_SHM_UNITSIZE));
@@ -1293,9 +1350,13 @@ void LsShmPool::releasePageLocked(LsShmOffset_t offset, LsShmSize_t pagesize)
     if (isFreeBlockAbove(offset, pagesize, 1))
     {
         LShmFreeTop *ap;
-        offset = ((LShmFreeBot *)offset2ptr(
-                      offset + pagesize - sizeof(LShmFreeBot)))->x_iFreeOffset;
+        LShmFreeBot *f = (LShmFreeBot *)offset2ptr(offset + pagesize - sizeof(LShmFreeBot));
+        if (!f)
+            return;
+        offset = f->x_iFreeOffset;
         ap = (LShmFreeTop *)offset2ptr(offset);
+        if (!ap)
+            return;
         isFreeBlockBelow(offset, ap->x_iFreeSize, 2);
         return;
     }
@@ -1320,6 +1381,8 @@ void LsShmPool::joinFreeList(LsShmOffset_t offset, LsShmSize_t size)
     LsShmPoolMap *pDataMap = getDataMap();
     // setup myself as free block
     LShmFreeTop *np = (LShmFreeTop *)offset2ptr(offset);
+    if (!np)
+        return;
     np->x_iAMarker = LSSHM_FREE_AMARKER;
     np->x_iFreeSize = size;
     np->x_iFreeNext = pDataMap->x_iFreePageList;
@@ -1331,11 +1394,14 @@ void LsShmPool::joinFreeList(LsShmOffset_t offset, LsShmSize_t size)
     if (np->x_iFreeNext != 0)
     {
         LShmFreeTop *xp = (LShmFreeTop *)offset2ptr(np->x_iFreeNext);
-        xp->x_iFreePrev = offset;
+        if (xp)
+            xp->x_iFreePrev = offset;
     }
 
     LShmFreeBot *bp =
         (LShmFreeBot *)offset2ptr(offset + size - sizeof(LShmFreeBot));
+    if (!bp)
+        return;
     bp->x_iFreeOffset = offset;
     bp->x_iBMarker = LSSHM_FREE_BMARKER;
     ++pDataMap->x_stat.m_iGpFreeListCnt;

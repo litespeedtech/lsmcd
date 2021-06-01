@@ -89,7 +89,8 @@ void LsShmTidMgr::linkTid(LsShmHIterOff offElem, uint64_t *pTid)
         tid = 0;
         pTid = &tid;
     }
-    setTidTblIter(offElem, pTid);    // careful, may remap
+    if (setTidTblIter(offElem, pTid) == -1)    // careful, may remap
+        return;
     pLinkElem = m_pHash->offset2iterator(offElem);
     if (pLinkElem)
     {
@@ -212,6 +213,8 @@ LsShmOffset_t LsShmTidMgr::allocBlkIdx(LsShmOffset_t oldIdx, LsShmSize_t oldCnt,
         return off;
     pOld = (LsShmOffset_t *)m_pHash->offset2ptr(oldIdx);
     pNew = (LsShmOffset_t *)m_pHash->offset2ptr(off);
+    if (!pNew)
+        return 0;
     memmove(pNew, pOld, LSSHMTID_BLKIDX_SIZE(oldCnt));
     m_pHash->release2(oldIdx, LSSHMTID_BLKIDX_SIZE(oldCnt));
     return off;

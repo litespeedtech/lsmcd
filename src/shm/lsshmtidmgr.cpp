@@ -58,7 +58,10 @@ void LsShmTidMgr::clrTidTbl()
     while (off != 0)
     {
         LsShmOffset_t prev;
-        prev = ((LsShmTidTblBlk *)m_pHash->offset2ptr(off))->x_iPrev;
+        LsShmTidTblBlk *t = (LsShmTidTblBlk *)m_pHash->offset2ptr(off);
+        if (!t)
+            return;
+        prev = t->x_iPrev;
         m_pHash->release2(off, (LsShmSize_t)sizeof(LsShmTidTblBlk));
         off = prev;
     }
@@ -212,6 +215,8 @@ LsShmOffset_t LsShmTidMgr::allocBlkIdx(LsShmOffset_t oldIdx, LsShmSize_t oldCnt,
     if (oldIdx == 0)
         return off;
     pOld = (LsShmOffset_t *)m_pHash->offset2ptr(oldIdx);
+    if (!pOld)
+        return 0;
     pNew = (LsShmOffset_t *)m_pHash->offset2ptr(off);
     if (!pNew)
         return 0;
@@ -255,8 +260,12 @@ LsShmOffset_t LsShmTidMgr::growTidTbl(uint64_t base, int &remapped)
     else
         pBlk->x_iNext = blkOff;
     pBlkIdx = (LsShmOffset_t *)m_pHash->offset2ptr(pTidInfo->x_iBlkIdxOff);
+    if (!pBlkIdx)
+        return 0;
     pBlkIdx[pTidInfo->x_iBlkCnt++] = blkOff;
     pBlk = (LsShmTidTblBlk *)m_pHash->offset2ptr(blkOff);
+    if (!pBlk)
+        return 0;
     pBlk->x_tidBase = base;
     pBlk->x_iIterCnt = 0;
     pBlk->x_iDelCnt = 0;
@@ -302,6 +311,8 @@ int LsShmTidMgr::setTidTblEnt(uint64_t tidVal, uint64_t *pTid)
         if (blkOff == 0)
             return -1;
         pBlk = (LsShmTidTblBlk *)m_pHash->offset2ptr(blkOff);
+        if (!pBlk)
+            return -1;
     }
     if (isTidValIterOff(tidVal))
         ++pBlk->x_iIterCnt;
@@ -336,6 +347,8 @@ LsShmTidTblBlk *LsShmTidMgr::tid2tblBlk(uint64_t tid)
     if ((pTidInfo->x_iBlkIdxOff == 0) || (iBlkIdx >= pTidInfo->x_iBlkCnt))
         return NULL;
     pBlkOff = (LsShmOffset_t *)m_pHash->offset2ptr(pTidInfo->x_iBlkIdxOff);
+    if (!pBlkOff)
+        return NULL;
     return (LsShmTidTblBlk *)m_pHash->offset2ptr(pBlkOff[iBlkIdx]);
 }
 
@@ -362,6 +375,8 @@ uint64_t *LsShmTidMgr::nxtTidTblVal(uint64_t *pTid, void **ppBlk)
         if ((off = pBlk->x_iNext) == 0)
             return NULL;
         pBlk = (LsShmTidTblBlk *)m_pHash->offset2ptr(off);
+        if (!pBlk)
+            return NULL;
     }
     *pTid = pBlk->x_tidBase + indx;
     *ppBlk = (void *)pBlk;

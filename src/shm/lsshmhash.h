@@ -99,9 +99,11 @@ typedef struct lsShm_hElem_s
     { ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_size = len; }
 
     LsShmHElemLink  *getLruLinkPtr() const
-    { return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); }
+    { 
+        return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); }
     LsShmHIterOff    getLruLinkNext() const
-    { return getLruLinkPtr()->x_iLinkNext; }
+    { 
+        return getLruLinkPtr()->x_iLinkNext; }
     LsShmHIterOff    getLruLinkPrev() const
     { return getLruLinkPtr()->x_iLinkPrev; }
     time_t           getLruLasttime() const
@@ -217,19 +219,40 @@ public:
     {   return m_pPool;     }
 
     ls_attr_inline LsShmOffset_t ptr2offset(const void *ptr) const
-    {   return m_pPool->ptr2offset(ptr); }
+    {   
+        if (m_pPool)
+            return m_pPool->ptr2offset(ptr); 
+        return 0;
+    }
 
     ls_attr_inline void *offset2ptr(LsShmOffset_t offset) const
-    {   return m_pPool->offset2ptr(offset); }
+    {   
+        if (m_pPool)
+            return m_pPool->offset2ptr(offset); 
+        return NULL;
+    }
 
     ls_attr_inline iterator offset2iterator(iteroffset offset) const
-    {   return (iterator)m_pPool->offset2ptr(offset.m_iOffset); }
+    {   
+        if (m_pPool)
+            return (iterator)m_pPool->offset2ptr(offset.m_iOffset); 
+        return NULL;
+    }
 
     ls_attr_inline void *offset2iteratorData(iteroffset offset) const
-    {   return ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getVal(); }
+    {   
+        if (m_pPool && (iterator)m_pPool->offset2ptr(offset.m_iOffset))
+            return ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getVal(); 
+        return NULL;
+    }
 
     ls_attr_inline LsShmOffset_t iter2DataOffset(iteroffset offset) const
-    {   return offset.m_iOffset + ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getValStartOff(); }
+    {   
+        if (m_pPool && (iterator)m_pPool->offset2ptr(offset.m_iOffset))
+            return offset.m_iOffset + 
+                   ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getValStartOff(); 
+        return 0;
+    }
     
     // For now, assume only one observer.
 //     void *getObsData(LsShmHElem *pElem, LsShmObserver *pObserver) const;
@@ -245,8 +268,9 @@ public:
 
     LsShmXSize_t getHashDataSize() const
     {
-        return ((LsShmHTableStat *)offset2ptr(
-                getHTableStatOffset()))->m_iHashInUse;
+        if ((LsShmHTableStat *)offset2ptr(getHTableStatOffset()))
+            return ((LsShmHTableStat *)offset2ptr(getHTableStatOffset()))->m_iHashInUse;
+        return 0;
     }
 
     void *getIterDataPtr(iterator iter) const
@@ -310,6 +334,11 @@ public:
             return 0;
         }
         iterator iter = offset2iterator(iterOff);
+        if (!iter)
+        {
+            *valLen = 0;
+            return 0;
+        }
         *valLen = iter->getValLen();
         return ptr2offset(iter->getVal());
     }
@@ -327,6 +356,11 @@ public:
             return 0;
         }
         iterator iter = offset2iterator(iterOff);
+        if (!iter)
+        {
+            *valLen = 0;
+            return 0;
+        }
         *valLen = iter->getValLen();
         return ptr2offset(iter->getVal());
     }
@@ -337,8 +371,10 @@ public:
         ls_strpair_t parms;
         iteroffset iterOff = insertIterator(
                                  setParms(&parms, pKey, keyLen, pValue, valueLen));
-        return (iterOff.m_iOffset == 0) ?
-               0 : ptr2offset(offset2iteratorData(iterOff));
+        if (!iterOff.m_iOffset || offset2iteratorData(iterOff))
+            return (iterOff.m_iOffset == 0) ?
+                    0 : ptr2offset(offset2iteratorData(iterOff));
+        return 0;
     }
     
     LsShmOffset_t set(
@@ -347,8 +383,10 @@ public:
         ls_strpair_t parms;
         iteroffset iterOff = setIterator(
                                  setParms(&parms, pKey, keyLen, pValue, valueLen));
-        return (iterOff.m_iOffset == 0) ?
-               0 : ptr2offset(offset2iteratorData(iterOff));
+        if (!iterOff.m_iOffset || offset2iteratorData(iterOff))
+            return (iterOff.m_iOffset == 0) ?
+                    0 : ptr2offset(offset2iteratorData(iterOff));
+        return 0;
     }
 
     LsShmOffset_t update(
@@ -357,8 +395,10 @@ public:
         ls_strpair_t parms;
         iteroffset iterOff = updateIterator(
                                  setParms(&parms, pKey, keyLen, pValue, valueLen));
-        return (iterOff.m_iOffset == 0) ?
-               0 : ptr2offset(offset2iteratorData(iterOff));
+        if (!iterOff.m_iOffset || offset2iteratorData(iterOff))
+            return (iterOff.m_iOffset == 0) ?
+                    0 : ptr2offset(offset2iteratorData(iterOff));
+        return 0;
     }
 
     int touchLru(iteroffset iterOff);
@@ -487,8 +527,11 @@ public:
             iterOff.m_iOffset = 0;
             return iterOff;
         }
-        return ((iterOff.m_iOffset == 0) ?
-            getLruBottom() : (offset2iterator(iterOff))->getLruLinkNext());
+        if (!iterOff.m_iOffset || offset2iterator(iterOff))
+            return ((iterOff.m_iOffset == 0) ?
+                getLruBottom() : (offset2iterator(iterOff))->getLruLinkNext());
+        iterOff.m_iOffset = 0;
+        return iterOff;
     }
 
     iteroffset prevLruIterOff(iteroffset iterOff)
@@ -498,8 +541,11 @@ public:
             iterOff.m_iOffset = 0;
             return iterOff;
         }
-        return ((iterOff.m_iOffset == 0) ?
-            getLruTop() : (offset2iterator(iterOff))->getLruLinkPrev());
+        if (!iterOff.m_iOffset || offset2iterator(iterOff))
+            return ((iterOff.m_iOffset == 0) ?
+                getLruTop() : (offset2iterator(iterOff))->getLruLinkPrev());
+        iterOff.m_iOffset = 0;
+        return iterOff;
     }
 
     iteroffset nextTmLruIterOff(time_t tmCutoff);
@@ -602,8 +648,12 @@ protected:
     {   return k % n ; }
 
     ls_attr_inline LsShmHTable *getHTable() const
-    {   assert( x_pTable == (LsShmHTable *)m_pPool->offset2ptr(m_iOffset)); 
-        return x_pTable;   }
+    {   
+        if (m_pPool && m_pPool->offset2ptr(m_iOffset))
+            if ( x_pTable == (LsShmHTable *)m_pPool->offset2ptr(m_iOffset))
+                return x_pTable;   
+        return NULL;
+    }
 
     LsShmSize_t fullFactor() const;
     LsShmSize_t growFactor() const;
@@ -683,12 +733,14 @@ protected:
     // auxiliary double linked list of hash elements
     void set_linkNext(iteroffset offThis, iteroffset offNext)
     {
-        (offset2iterator(offThis))->setLruLinkNext(offNext);
+        if (offset2iterator(offThis))
+            (offset2iterator(offThis))->setLruLinkNext(offNext);
     }
 
     void set_linkPrev(iteroffset offThis, iteroffset offPrev)
     {
-        (offset2iterator(offThis))->setLruLinkPrev(offPrev);
+        if (offset2iterator(offThis))
+            (offset2iterator(offThis))->setLruLinkPrev(offPrev);
     }
 
     void linkHElem(LsShmHElem *pElem, iteroffset offElem);

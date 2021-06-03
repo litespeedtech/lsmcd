@@ -105,6 +105,7 @@ VERSION 1.4.21 May 25, 2021
 
 VERSION 1.4.22 June 1, 2021
 [BUGFIX] Binary 0 terminate SASL mechanism which addresses an issue with PHP unable to authenticate.
+[BUGFIX] Work around a bug in the newer versions of Cyrus Sasl by reporting the mechanism twice.
 [BUGFIX] Fix a crash if there's a memory shortage in the hash map.
 [BUGFIX] Reduce the opportunity for a crash in LsShmPool.
 [BUGFIX] Reduce the opportunity for crashes in LsShmTidMgr.

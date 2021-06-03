@@ -3457,11 +3457,10 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     else
     {
         setupBinResHdr(pHdr,
-            (uint8_t)0, (uint16_t)0, (uint32_t)(len * 2 + 2), MC_BINSTAT_SUCCESS, resBuf, pConn);
+            (uint8_t)0, (uint16_t)0, (uint32_t)(len + 2), MC_BINSTAT_SUCCESS, resBuf, pConn);
         binRespond(resBuf, sizeof(McBinCmdHdr), pConn);
         binRespond((uint8_t *)result, len, pConn);
-        binRespond((uint8_t *)" ", 1, pConn);
-        binRespond((uint8_t *)result, len + 1, pConn);
+        binRespond((uint8_t *)" ", 2, pConn);
         LS_DBG_M("SASL enabled and on\n");
     }
     return;

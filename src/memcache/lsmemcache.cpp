@@ -714,6 +714,7 @@ bool LsMemcache::fwdBinToRemote(LsMcHashSlice *pSlice, McBinCmdHdr *pHdr,
 
 void LsMemcache::putWaitQ(MemcacheConn *pConn)
 {
+    LS_DBG_M("putWaitQ\n");
     if (pConn->GetConnFlags() & CS_CMDWAIT) // already on queue
         return;
     pConn->SetCmdWait();
@@ -2586,7 +2587,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
 
     if (iLen < (int)sizeof(*pHdr))
     {
-        LS_ERROR("Received length: %d < header minimum\n", iLen);
+        LS_DBG_M("Received length: %d < header minimum\n", iLen);
         return -1;  // need more data
     }
     pHdr = (McBinCmdHdr *)pBinBuf;

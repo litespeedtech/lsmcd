@@ -1,6 +1,8 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -194,7 +196,7 @@ int do_multi1()
 0010: 00000000 00000000 504c4149 4e       ........PLAIN
 */
     ssize_t recvd = recv(sock_fd, buffer, BUFFER_LEN, 0);
-    if (recvd != 58)
+    if (recvd < 58)
     {
         printf("Error in list_mechs response1: %s (recvd: %ld)\n", strerror(errno), recvd);
         return -1;
@@ -203,7 +205,7 @@ int do_multi1()
         buffer[1] != 0x20 ||
         buffer[6] != 0x00 ||
         buffer[7] != 0x00 ||
-        buffer[11] != 0x05 ||
+        buffer[11] < 0x05 ||
         memcmp((char *)&buffer[24], "PLAIN", 5))
     {
         printf("Error in list_mechs response data1 (turn on the trace)\n");
@@ -214,17 +216,73 @@ int do_multi1()
 0000: 81200000 00000000 00000005 00680000 . ...........h..
 0010: 00000000 00000000 504c4149 4e       ........PLAIN
 */
-    if (buffer[29+0] != 0x81 ||
-        buffer[29+1] != 0x20 ||
-        buffer[29+6] != 0x00 ||
-        buffer[29+7] != 0x00 ||
-        buffer[29+11] != 0x05 ||
+    if (buffer[29+buffer[11]-5+0] != 0x81 ||
+        buffer[29+buffer[11]-5+1] != 0x20 ||
+        buffer[29+buffer[11]-5+6] != 0x00 ||
+        buffer[29+buffer[11]-5+7] != 0x00 ||
+        buffer[29+buffer[11]-5+11] < 0x05 ||
         memcmp((char *)&buffer[24], "PLAIN", 5))
     {
         printf("Error in list_mechs response data2 (turn on the trace)\n");
         return -1;
     }
     
+    return 0;
+}
+
+
+int do_partial()
+{
+/* My partial requests example (turn off Nagle)
+ *   - send the first 3 bytes
+ *   - send the next 5 bytes
+ *   - send the next 15 bytes
+ *   - send the final byte
+0000: 80200000 00000000 00000000 00010000 
+0010: 00000000 00000000 
+*/
+    int one = 1;
+    int parts[] = { 3, 5, 15, 1 };
+    int total = 0, index = 0;
+    if (setsockopt(sock_fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)))
+    {
+        printf("Error in turning off Nagle: %s\n", strerror(errno));
+        return -1;
+    }
+    memset(buffer, 0, 24);
+    buffer[0] = 0x80;
+    buffer[1] = 0x20;
+    while (total < 24)
+    {
+        if (send(sock_fd, &buffer[total], parts[index], 0) != parts[index])
+        {
+            printf("Error in send of partial data #%d: %s\n", index, strerror(errno));
+            return -1;
+        }
+        total = total + parts[index];
+        ++index;
+    }
+/* My LIST_MECHS response 
+0000: 81200000 00000000 00000005 00680000 . ...........h..
+0010: 00000000 00000000 504c4149 4e       ........PLAIN
+*/
+    ssize_t recvd = recv(sock_fd, buffer, BUFFER_LEN, 0);
+    if (recvd < 29)
+    {
+        printf("Error in list_mechs response1 (partial): %s (recvd: %ld)\n", strerror(errno), recvd);
+        return -1;
+    }
+    if (buffer[0] != 0x81 ||
+        buffer[1] != 0x20 ||
+        buffer[6] != 0x00 ||
+        buffer[7] != 0x00 ||
+        buffer[11] < 0x05 ||
+        memcmp((char *)&buffer[24], "PLAIN", 5))
+    {
+        printf("Error in list_mechs response data partial (turn on the trace)\n");
+        return -1;
+    }
+    printf("Partial send ok\n");
     return 0;
 }
 
@@ -251,21 +309,21 @@ int do_multi2()
 0010: 00000000 00000000 504c4149 4e       ........PLAIN
 */
     ssize_t recvd = recv(sock_fd, buffer, BUFFER_LEN, 0);
-    if (recvd != 53)
+    if (recvd < 53)
     {
-        printf("Error in list_mechs response: %s, size: %ld\n", strerror(errno), recvd);
+        printf("Error in list_mechs multi response: %s, size: %ld\n", strerror(errno), recvd);
         return -1;
     }
     if (buffer[0] != 0x81 ||
         buffer[1] != 0x20 ||
         buffer[6] != 0x00 ||
         buffer[7] != 0x00 ||
-        buffer[11] != 0x05 ||
+        buffer[11] < 0x05 ||
         memcmp((char *)&buffer[24], "PLAIN", 5),
-        buffer[29] != 0x81 ||
-        buffer[30] != 0x07)
+        buffer[29 + buffer[11] - 5] != 0x81 ||
+        buffer[30 + buffer[11] - 5] != 0x07)
     {
-        printf("Error in list_mechs response data (turn on the trace)\n");
+        printf("Error in list_mechs multi response data (turn on the trace)\n");
         return -1;
     }
     return 0;
@@ -275,11 +333,14 @@ int do_multi2()
 int main()
 {
     int ret = 1;
+    signal(SIGPIPE, SIG_IGN);    
     if (do_connect())
         return 1;
     if (!do_login())
     {
-        if (!do_set() && !do_get(false) && !do_multi1() && !do_multi2() && do_get(true))
+        if (!do_set() && !do_get(false) && !do_multi1() && 
+            !do_get(true) && !do_partial() &&
+            !do_multi2())   // multi2 must be last as it closes the connection
         {
             printf("All tests passed\n");
             ret = 0;

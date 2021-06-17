@@ -109,3 +109,6 @@ VERSION 1.4.22 June 1, 2021
 [BUGFIX] Reduce the opportunity for a crash in LsShmPool.
 [BUGFIX] Reduce the opportunity for crashes in LsShmTidMgr.
 [BUGFIX] Reduce the opportunity for crashes in LsShmHash.
+
+VERSION 1.4.23 June 17, 2021
+[BUGFIX] No longer report incorrect messages "Received length < header minimum"

@@ -500,7 +500,7 @@ LsShmOffset_t LsShmPool::alloc2(LsShmSize_t *size, int &remapped)
         LS_ERROR("[SHM] [%d-%d:%p] FATAL ERROR alloc2 cross large page boundary, "
                  "offset: %X, size: %d.  You must remove all of the files in "
                  "/dev/shm/lsmcd and restart the lsmcd server\n", 
-                 s_pid, m_pShm->getfd(), this, offset, size);
+                 s_pid, m_pShm->getfd(), this, offset, *size);
         autoUnlock();
         return -1;
     } while(1);
@@ -912,7 +912,7 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
     if (num > LSSHM_MAX_BUCKET_SLOT)
         num = LSSHM_MAX_BUCKET_SLOT;
 
-    LsShmOffset_t xoffset, offset;
+    LsShmOffset_t xoffset = 0, offset = 0;
     if ((m_pParent != NULL)
         && ((offset = m_pParent->allocFromGlobalBucket(bucketNum, num)) != 0))
     {
@@ -944,7 +944,7 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
                   this, num, offset, xoffset);
     if (--num != 0)
     {
-        LsShmSize_t max = m_pShm->getFileSize();
+        //LsShmSize_t max = m_pShm->getFileSize();
         if (!m_pShm->isOffsetValid(xoffset))
             return offset;
         getDataMap()->x_aFreeBucket[bucketNum] = xoffset;

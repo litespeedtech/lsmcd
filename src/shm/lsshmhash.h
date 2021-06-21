@@ -99,19 +99,32 @@ typedef struct lsShm_hElem_s
     { ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_size = len; }
 
     LsShmHElemLink  *getLruLinkPtr() const
-    { 
-        return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); }
+    {   return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); }
     LsShmHIterOff    getLruLinkNext() const
     { 
-        return getLruLinkPtr()->x_iLinkNext; }
+        LsShmHElemLink *link = getLruLinkPtr();
+        return link->x_iLinkNext; 
+    }
     LsShmHIterOff    getLruLinkPrev() const
-    { return getLruLinkPtr()->x_iLinkPrev; }
+    { 
+        LsShmHElemLink *link = getLruLinkPtr();
+        return link->x_iLinkPrev; 
+    }
     time_t           getLruLasttime() const
-    { return getLruLinkPtr()->x_lasttime; }
+    { 
+        LsShmHElemLink *link = getLruLinkPtr();
+        return link->x_lasttime; 
+    }
     void             setLruLinkNext(LsShmHIterOff off)
-    { getLruLinkPtr()->x_iLinkNext = off; }
+    { 
+        LsShmHElemLink *link = getLruLinkPtr();
+        link->x_iLinkNext = off; 
+    }
     void             setLruLinkPrev(LsShmHIterOff off)
-    { getLruLinkPtr()->x_iLinkPrev = off; }
+    { 
+        LsShmHElemLink *link = getLruLinkPtr();
+        link->x_iLinkPrev = off; 
+    }
 
     void            *getExtraPtr(LsShmOffset_t off)
     { return ((uint8_t *)x_aData + x_iValOff - off); }

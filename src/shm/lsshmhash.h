@@ -582,8 +582,7 @@ public:
 
 
     iteroffset begin();
-    iteroffset end()
-    {   iteroffset tmp = {0}; return tmp;   }
+    iteroffset end()                   {   return m_end;   }
     iteroffset next(iteroffset iterOff);
     int for_each(iteroffset beg, iteroffset end, for_each_fn fun);
     int for_each2(iteroffset beg, iteroffset end, for_each_fn2 fun,
@@ -778,7 +777,7 @@ protected:
     LsShmStatus_t       m_status;
     LsShmHashLruAddon  *m_pLruAddon;
     LsShmObsIter_t     *m_pObservers;
-
+    LsShmHIterOff       m_end;
     // house keeping
     int m_iRef;
 

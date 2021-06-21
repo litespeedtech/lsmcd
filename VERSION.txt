@@ -112,3 +112,6 @@ VERSION 1.4.22 June 1, 2021
 
 VERSION 1.4.23 June 17, 2021
 [BUGFIX] No longer report incorrect messages "Received length < header minimum"
+
+VERSION 1.4.24 June 21, 2021
+[BUGFIX] Do not return stack variable as value pointed to.

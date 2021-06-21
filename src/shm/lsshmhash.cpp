@@ -436,6 +436,7 @@ LsShmHash::LsShmHash(LsShmPool *pool, const char *name,
     m_status = LSSHM_NOTREADY;
     m_pShmLock = NULL;
     m_iAutoLock = 1;      // enableLock()
+    m_end.m_iOffset = 0;
 
     if (m_hf != NULL)
     {

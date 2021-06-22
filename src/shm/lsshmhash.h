@@ -782,14 +782,26 @@ protected:
     // auxiliary double linked list of hash elements
     void set_linkNext(iteroffset offThis, iteroffset offNext)
     {
-        if (offNext.m_iOffset && offset2iterator(offThis) && offset2iterator(offNext))
-            (offset2iterator(offThis))->setLruLinkNext(offNext);
+        if (offNext.m_iOffset)
+        {
+            iterator iterThis = offset2iterator(offThis);
+            iteroffset off;
+            off.m_iOffset = iterThis->x_iValOff;
+            if (offset2iterator(off))
+                (offset2iterator(offThis))->setLruLinkNext(offNext);
+        }
     }
 
     void set_linkPrev(iteroffset offThis, iteroffset offPrev)
     {
-        if (offPrev.m_iOffset && offset2iterator(offThis) && offset2iterator(offPrev))
-            (offset2iterator(offThis))->setLruLinkPrev(offPrev);
+        if (offPrev.m_iOffset && offset2iterator(offThis))
+        {
+            iterator iterThis = offset2iterator(offThis);
+            iteroffset off;
+            off.m_iOffset = iterThis->x_iValOff;
+            if (offset2iterator(off))
+                (offset2iterator(offThis))->setLruLinkPrev(offPrev);
+        }
     }
 
     void linkHElem(LsShmHElem *pElem, iteroffset offElem);

@@ -287,9 +287,15 @@ public:
         if (m_pPool)
         {
             iterator iterThis = (iterator)m_pPool->offset2ptr(offset.m_iOffset);
-            if (m_pPool->offset2ptr(iterThis->x_iValOff))
+            if (iterThis && (iterThis->x_iValOff < 32 || 
+                             m_pPool->offset2ptr(iterThis->x_iValOff)))
                 return iterThis;
+            //if (!iterThis)
+            //    assert(0);
+            //uint32_t off = iterThis->x_iValOff;
+            //assert(0);
         }
+        //assert(0);
         return NULL;
     }
 

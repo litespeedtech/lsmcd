@@ -125,19 +125,34 @@ typedef struct lsShm_hElem_s
     time_t           getLruLasttime() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
+        LsShmHElemLen_t      len = x_iLen;          // element size
+        LsShmHElemOffs_t     valOff = x_iValOff;
+        LsShmHIterOff        next = x_iNext;         // offset to next in element list
+        LsShmHKey            hkey = x_hkey;          // the key itself
+        int32_t              keylen = getKeyLen();
+        int32_t              valStartOff = getValStartOff();
         return link->x_lasttime; 
     }
     void             setLruLinkNext(LsShmHIterOff off)
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
+        LsShmHElemLen_t      len = x_iLen;          // element size
+        LsShmHElemOffs_t     valOff = x_iValOff;
+        LsShmHIterOff        next = x_iNext;         // offset to next in element list
+        LsShmHKey            hkey = x_hkey;          // the key itself
+        int32_t              keylen = getKeyLen();
+        int32_t              valStartOff = getValStartOff();
         link->x_iLinkNext = off; 
     }
     void             setLruLinkPrev(LsShmHIterOff off)
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
+        LsShmHElemLen_t      len = x_iLen;          // element size
+        LsShmHElemOffs_t     valOff = x_iValOff;
+        LsShmHIterOff        next = x_iNext;         // offset to next in element list
+        LsShmHKey            hkey = x_hkey;          // the key itself
+        int32_t              keylen = getKeyLen();
+        int32_t              valStartOff = getValStartOff();
         link->x_iLinkPrev = off; 
     }
 

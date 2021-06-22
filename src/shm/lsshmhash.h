@@ -102,25 +102,11 @@ typedef struct lsShm_hElem_s
     {   return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); }
     LsShmHIterOff    getLruLinkNext() const
     { 
-        LsShmHElemLen_t     len =     x_iLen;          // element size
-        LsShmHElemOffs_t    offset =  x_iValOff;
-        LsShmHIterOff       next =  x_iNext;         // offset to next in element list
-        LsShmHKey           hkey = x_hkey;          // the key itself
-        uint32_t             aData[1] = { 0 };
-        if (x_iLen)
-            aData[0] = x_aData[0];
         LsShmHElemLink *link = getLruLinkPtr();
         return link->x_iLinkNext; 
     }
     LsShmHIterOff    getLruLinkPrev() const
     { 
-        LsShmHElemLen_t     len =     x_iLen;          // element size
-        LsShmHElemOffs_t    offset =  x_iValOff;
-        LsShmHIterOff       next =  x_iNext;         // offset to next in element list
-        LsShmHKey           hkey = x_hkey;          // the key itself
-        uint32_t             aData[1] = { 0 };
-        if (x_iLen)
-            aData[0] = x_aData[0];
         LsShmHElemLink *link = getLruLinkPtr();
         return link->x_iLinkPrev; 
     }
@@ -131,25 +117,11 @@ typedef struct lsShm_hElem_s
     }
     void             setLruLinkNext(LsShmHIterOff off)
     { 
-        LsShmHElemLen_t     len =     x_iLen;          // element size
-        LsShmHElemOffs_t    offset =  x_iValOff;
-        LsShmHIterOff       next =  x_iNext;         // offset to next in element list
-        LsShmHKey           hkey = x_hkey;          // the key itself
-        uint32_t             aData[1] = { 0 };
-        if (x_iLen)
-            aData[0] = x_aData[0];
         LsShmHElemLink *link = getLruLinkPtr();
         link->x_iLinkNext = off; 
     }
     void             setLruLinkPrev(LsShmHIterOff off)
     { 
-        LsShmHElemLen_t     len =     x_iLen;          // element size
-        LsShmHElemOffs_t    offset =  x_iValOff;
-        LsShmHIterOff       next =  x_iNext;         // offset to next in element list
-        LsShmHKey           hkey = x_hkey;          // the key itself
-        uint32_t             aData[1] = { 0 };
-        if (x_iLen)
-            aData[0] = x_aData[0];
         LsShmHElemLink *link = getLruLinkPtr();
         link->x_iLinkPrev = off; 
     }

@@ -26,7 +26,6 @@ class debugBase;
 #include <lsr/ls_str.h>
 #include <shm/lsshm.h>
 #include <shm/lsshmpool.h>
-#include <log4cxx/logger.h>
 
 #define LSSHM_FLAG_NONE         0
 #define LSSHM_FLAG_LRU          (1<<0)
@@ -110,8 +109,6 @@ typedef struct lsShm_hElem_s
         uint32_t             aData[1] = { 0 };
         if (x_iLen)
             aData[0] = x_aData[0];
-        LS_DBG_M("len=%u, offset:%u, next:%u, hkey: %u, aData: %u\n", len, 
-                 offset, next.m_iOffset, hkey, aData[0]);
         LsShmHElemLink *link = getLruLinkPtr();
         return link->x_iLinkNext; 
     }
@@ -124,8 +121,6 @@ typedef struct lsShm_hElem_s
         uint32_t             aData[1] = { 0 };
         if (x_iLen)
             aData[0] = x_aData[0];
-        LS_DBG_M("len=%u, offset:%u, next:%u, hkey: %u, aData: %u\n", len, 
-                 offset, next.m_iOffset, hkey, aData[0]);
         LsShmHElemLink *link = getLruLinkPtr();
         return link->x_iLinkPrev; 
     }
@@ -143,8 +138,6 @@ typedef struct lsShm_hElem_s
         uint32_t             aData[1] = { 0 };
         if (x_iLen)
             aData[0] = x_aData[0];
-        LS_DBG_M("len=%u, offset:%u, next:%u, hkey: %u, aData: %u\n", len, 
-                 offset, next.m_iOffset, hkey, aData[0]);
         LsShmHElemLink *link = getLruLinkPtr();
         link->x_iLinkNext = off; 
     }
@@ -157,8 +150,6 @@ typedef struct lsShm_hElem_s
         uint32_t             aData[1] = { 0 };
         if (x_iLen)
             aData[0] = x_aData[0];
-        LS_DBG_M("len=%u, offset:%u, next:%u, hkey: %u, aData: %u\n", len, 
-                 offset, next.m_iOffset, hkey, aData[0]);
         LsShmHElemLink *link = getLruLinkPtr();
         link->x_iLinkPrev = off; 
     }

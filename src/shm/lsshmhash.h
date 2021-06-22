@@ -285,7 +285,11 @@ public:
     ls_attr_inline iterator offset2iterator(iteroffset offset) const
     {   
         if (m_pPool)
-            return (iterator)m_pPool->offset2ptr(offset.m_iOffset); 
+        {
+            iterator iterThis = (iterator)m_pPool->offset2ptr(offset.m_iOffset);
+            if (m_pPool->offset2ptr(iterThis->x_iValOff))
+                return iterThis;
+        }
         return NULL;
     }
 
@@ -785,22 +789,18 @@ protected:
         if (offNext.m_iOffset)
         {
             iterator iterThis = offset2iterator(offThis);
-            iteroffset off;
-            off.m_iOffset = iterThis->x_iValOff;
-            if (offset2iterator(off))
-                (offset2iterator(offThis))->setLruLinkNext(offNext);
+            if (iterThis)
+                iterThis->setLruLinkNext(offNext);
         }
     }
 
     void set_linkPrev(iteroffset offThis, iteroffset offPrev)
     {
-        if (offPrev.m_iOffset && offset2iterator(offThis))
+        if (offPrev.m_iOffset)
         {
             iterator iterThis = offset2iterator(offThis);
-            iteroffset off;
-            off.m_iOffset = iterThis->x_iValOff;
-            if (offset2iterator(off))
-                (offset2iterator(offThis))->setLruLinkPrev(offPrev);
+            if (iterThis)
+                iterThis->setLruLinkPrev(offPrev);
         }
     }
 

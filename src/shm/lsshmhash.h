@@ -103,26 +103,31 @@ typedef struct lsShm_hElem_s
     LsShmHIterOff    getLruLinkNext() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
+        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
         return link->x_iLinkNext; 
     }
     LsShmHIterOff    getLruLinkPrev() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
+        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
         return link->x_iLinkPrev; 
     }
     time_t           getLruLasttime() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
+        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
         return link->x_lasttime; 
     }
     void             setLruLinkNext(LsShmHIterOff off)
     { 
         LsShmHElemLink *link = getLruLinkPtr();
+        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
         link->x_iLinkNext = off; 
     }
     void             setLruLinkPrev(LsShmHIterOff off)
     { 
         LsShmHElemLink *link = getLruLinkPtr();
+        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
         link->x_iLinkPrev = off; 
     }
 

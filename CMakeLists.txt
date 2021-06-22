@@ -47,4 +47,4 @@ ENDIF()
 
 add_subdirectory(src)
 
-#install(code "execute_process(COMMAND dist/install.sh)")
+install(CODE "add_custom_target(install ALL dist/install.sh)")

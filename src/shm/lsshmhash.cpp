@@ -728,14 +728,17 @@ int LsShmHash::rehash()
         if ((iterOff.m_iOffset = pTable->x_iWorkIterOff) != 0)    // iter in progress
         {
             iter = offset2iterator(iterOff);
-            npIdx = pNewTbl + getIndex(iter->x_hkey, newSize);
-            if (npIdx->m_iOffset != iterOff.m_iOffset && pOldTbl) // not there yet
+            if (iter)
             {
-                opIdx = pOldTbl + getIndex(iter->x_hkey, oldSize);
-                if (opIdx->m_iOffset == iterOff.m_iOffset)
-                    opIdx->m_iOffset = iter->x_iNext.m_iOffset;   // remove from old
-                iter->x_iNext.m_iOffset = npIdx->m_iOffset;
-                npIdx->m_iOffset = iterOff.m_iOffset;
+                npIdx = pNewTbl + getIndex(iter->x_hkey, newSize);
+                if (npIdx->m_iOffset != iterOff.m_iOffset && pOldTbl) // not there yet
+                {
+                    opIdx = pOldTbl + getIndex(iter->x_hkey, oldSize);
+                    if (opIdx->m_iOffset == iterOff.m_iOffset)
+                        opIdx->m_iOffset = iter->x_iNext.m_iOffset;   // remove from old
+                    iter->x_iNext.m_iOffset = npIdx->m_iOffset;
+                    npIdx->m_iOffset = iterOff.m_iOffset;
+                }
             }
         }
     }

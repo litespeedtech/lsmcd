@@ -47,4 +47,4 @@ ENDIF()
 
 add_subdirectory(src)
 
-#install(DIRECTORY "
+#install(code "execute_process(COMMAND dist/install.sh)")

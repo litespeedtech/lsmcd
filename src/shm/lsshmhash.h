@@ -103,13 +103,23 @@ typedef struct lsShm_hElem_s
     LsShmHIterOff    getLruLinkNext() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
+        LsShmHElemLen_t      len = x_iLen;          // element size
+        LsShmHElemOffs_t     valOff = x_iValOff;
+        LsShmHIterOff        next = x_iNext;         // offset to next in element list
+        LsShmHKey            hkey = x_hkey;          // the key itself
+        int32_t              keylen = getKeyLen();
+        int32_t              valStartOff = getValStartOff();
         return link->x_iLinkNext; 
     }
     LsShmHIterOff    getLruLinkPrev() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemOffs_t     valOff = x_iValOff; // For debugging;
+        LsShmHElemLen_t      len = x_iLen;          // element size
+        LsShmHElemOffs_t     valOff = x_iValOff;
+        LsShmHIterOff        next = x_iNext;         // offset to next in element list
+        LsShmHKey            hkey = x_hkey;          // the key itself
+        int32_t              keylen = getKeyLen();
+        int32_t              valStartOff = getValStartOff();
         return link->x_iLinkPrev; 
     }
     time_t           getLruLasttime() const

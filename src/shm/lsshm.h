@@ -242,6 +242,9 @@ public:
     friend class debugBase;
 #endif
 
+    size_t getAvailAddrSpace( size_t offset, size_t required_size)
+    {   return m_addrMap.getAvailAddrSpace(offset, required_size);  }
+
 private:
     LsShm(const LsShm &other);
     LsShm &operator=(const LsShm &other);

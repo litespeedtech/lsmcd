@@ -46,3 +46,5 @@ ELSE()
 ENDIF()
 
 add_subdirectory(src)
+
+#install(DIRECTORY "

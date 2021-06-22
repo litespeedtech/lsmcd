@@ -764,7 +764,10 @@ protected:
         {
             iterator iterThis = offset2iterator(offThis);
             if (iterThis)
+            {
+                size_t sz = m_pPool->getShm()->getAvailAddrSpace(offThis.m_iOffset, sizeof(LsShmHElemLink));
                 iterThis->setLruLinkNext(offNext);
+            }
         }
     }
 
@@ -774,7 +777,10 @@ protected:
         {
             iterator iterThis = offset2iterator(offThis);
             if (iterThis)
+            {
+                size_t sz = m_pPool->getShm()->getAvailAddrSpace(offThis.m_iOffset, sizeof(LsShmHElemLink));
                 iterThis->setLruLinkPrev(offPrev);
+            }
         }
     }
 

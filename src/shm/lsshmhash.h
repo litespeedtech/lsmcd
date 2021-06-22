@@ -745,13 +745,13 @@ protected:
     // auxiliary double linked list of hash elements
     void set_linkNext(iteroffset offThis, iteroffset offNext)
     {
-        if (offset2iterator(offThis))
+        if (offNext.m_iOffset && offset2iterator(offThis))
             (offset2iterator(offThis))->setLruLinkNext(offNext);
     }
 
     void set_linkPrev(iteroffset offThis, iteroffset offPrev)
     {
-        if (offset2iterator(offThis))
+        if (offPrev.m_iOffset && offset2iterator(offThis))
             (offset2iterator(offThis))->setLruLinkPrev(offPrev);
     }
 

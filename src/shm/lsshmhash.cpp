@@ -1560,8 +1560,15 @@ int LsShmHash::trimsize(int need, LsShmHash::TrimCb func, void *arg)
     while ((offElem.m_iOffset != 0) && (need > 0))
     {
         int ret = 1;
-        if ((m_pTidMgr != NULL) && (m_pTidMgr->checkTidTbl() != 0))
+        int newLru = 0;
+        int checkRet = 0;
+        if ((m_pTidMgr != NULL) && ((checkRet = m_pTidMgr->checkTidTbl()) != 0))
+        {
+            if (checkRet < 0)
+                break;
             pLru = getLru();
+            newLru = 1;
+        }
         pElem = offset2iterator(offElem);
         if (!pElem)
             break;

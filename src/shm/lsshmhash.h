@@ -100,12 +100,27 @@ typedef struct lsShm_hElem_s
     void             setValLen(int32_t len)
     { ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_size = len; }
 
+    static int round4(int x)
+    {   return (x + 0x3) & ~0x3; }
+    
     LsShmHElemLink  *getLruLinkPtr() const
     {   
-        if (x_iValOff > (uint32_t)x_iLen)
+        /* The original calculation for x_iValOff (valOff) and x_iLen, missing 
+         * the actual lengths of the key and value as they're not available 
+         * until we're sure the buffer is intact.  This calculation makes a try
+         * at determining if the buffer is correct (to avoid constant crashes). */
+        LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+        LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
+        LsShmHElemOffs_t valOff = sizeof(ls_vardata_t) //+ round4(keyLen)
+                                  + sizeof(LsShmHElemLink);
+        int valLen = /*realValLen +*/ sizeof(LsShmHElemLink);
+        LsShmHElemLen_t len = sizeof(struct lsShm_hElem_s) /*+ valueOff*/
+                                      + sizeof(ls_vardata_t) + round4(valLen);
+        
+        if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len)
         {
-            LS_DBG_M("x_iValOff: %d, x_iLen: %d, this should not happen.\n", 
-                     x_iValOff, x_iLen);
+            LS_NOTICE("x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
+                      x_iValOff, valOff, x_iLen, len);
             return NULL;
         }
         return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); 
@@ -114,7 +129,11 @@ typedef struct lsShm_hElem_s
     { 
         LsShmHElemLink *link = getLruLinkPtr();
         if (link)
+        {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
             return link->x_iLinkNext; 
+        }
         LsShmHIterOff offZero = { 0 };
         return offZero;
     }
@@ -122,7 +141,11 @@ typedef struct lsShm_hElem_s
     { 
         LsShmHElemLink *link = getLruLinkPtr();
         if (link)
+        {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
             return link->x_iLinkPrev; 
+        }
         LsShmHIterOff offZero = { 0 };
         return offZero;
     }
@@ -130,7 +153,11 @@ typedef struct lsShm_hElem_s
     { 
         LsShmHElemLink *link = getLruLinkPtr();
         if (link)
+        {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
             return link->x_lasttime; 
+        }
         return 0;
     }
     int              setLruLinkNext(LsShmHIterOff off)
@@ -138,6 +165,8 @@ typedef struct lsShm_hElem_s
         LsShmHElemLink *link = getLruLinkPtr();
         if (link)
         {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
             link->x_iLinkNext = off; 
             return 0;
         }
@@ -148,6 +177,8 @@ typedef struct lsShm_hElem_s
         LsShmHElemLink *link = getLruLinkPtr();
         if (link)
         {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
             link->x_iLinkPrev = off; 
             return 0;
         }

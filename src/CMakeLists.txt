@@ -30,3 +30,4 @@ target_link_libraries(lsmcd lcrepl lsmemcache repl lsshm lsr log4cxx edio socket
 #target_link_libraries(lsmcd lcrepl lsmemcache repl lsshm lsr log4cxx edio socket util pthread dl db /home/user/proj/cyrus-sasl/lib/.libs/libsasl2.a rt z crypt ssl crypto   )
 #target_link_libraries(ls_shmhashstat lsmemcache lsshm replicate lsr log4cxx edio socket util pthread sasl2 rt)
 
+install(TARGETS lsmcd DESTINATION lsmcd/bin)

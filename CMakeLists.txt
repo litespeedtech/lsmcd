@@ -23,7 +23,6 @@ IF (CMAKE_BUILD_TYPE STREQUAL "Debug")
     endif()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  ${MY_CMAKE_WARNING_FLAG}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  ${MY_CMAKE_WARNING_FLAG}")
-    MESSAGE(STATUS "CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 
     if (SANITIZE)
         set (CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address -g")
@@ -47,4 +46,3 @@ ENDIF()
 
 add_subdirectory(src)
 
-install(CODE "add_custom_target(install ALL dist/install.sh)")

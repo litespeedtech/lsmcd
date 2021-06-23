@@ -852,7 +852,12 @@ LsShmOffset_t LsShmPool::allocFromDataBucket(LsShmSize_t size)
     if ((offset = *pBucket) != 0)
     {
         np = (LsShmOffset_t *)offset2ptr(offset);
-        if (!m_pShm->isOffsetValid(*np))
+        if (!np)
+        {
+            LS_ERROR("[SHM] Unable to access data at offset: %d\n", offset);
+            *pBucket = (LsShmOffset_t)0;
+        }
+        else if (!m_pShm->isOffsetValid(*np))
         {
             LS_ERROR("[SHM] [%d-%d:%p] pool free bucket [%d] corruption, at "
                      "offset: %d, invalid value: %d, usage: alloc %d, free %d\n",

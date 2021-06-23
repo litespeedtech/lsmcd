@@ -1655,9 +1655,12 @@ void LsShmHash::linkHElem(LsShmHElem *pElem, iteroffset offElem)
     assert(m_pPool->getShm()->isLocked(m_pShmLock));
     LsHashLruInfo *pLru = getLru();
     LsShmHElemLink *pLink = pElem->getLruLinkPtr();
+    if (!pLink)
+        return;
     if (pLru->linkFirst.m_iOffset)
     {
-        set_linkNext(pLru->linkFirst, offElem);
+        if (set_linkNext(pLru->linkFirst, offElem))
+            return;
         pLink->x_iLinkPrev = pLru->linkFirst;
     }
     else
@@ -1677,12 +1680,20 @@ void LsShmHash::unlinkHElem(LsShmHElem *pElem)
     assert(m_pPool->getShm()->isLocked(m_pShmLock));
     LsHashLruInfo *pLru = getLru();
     LsShmHElemLink *pLink = pElem->getLruLinkPtr();
+    if (!pLink)
+        return;
     if (pLink->x_iLinkNext.m_iOffset)
-        set_linkPrev(pLink->x_iLinkNext, pLink->x_iLinkPrev);
+    {
+        if (set_linkPrev(pLink->x_iLinkNext, pLink->x_iLinkPrev))
+            return;
+    }
     else
         pLru->linkFirst = pLink->x_iLinkPrev;
     if (pLink->x_iLinkPrev.m_iOffset)
-        set_linkNext(pLink->x_iLinkPrev, pLink->x_iLinkNext);
+    {
+        if (set_linkNext(pLink->x_iLinkPrev, pLink->x_iLinkNext))
+            return;
+    }
     else
         pLru->linkLast = pLink->x_iLinkNext;
     --pLru->nvalset;
@@ -1692,6 +1703,8 @@ void LsShmHash::linkSetTop(LsShmHElem *pElem, iteroffset offElem)
 {
     assert(m_pPool->getShm()->isLocked(m_pShmLock));
     LsShmHElemLink *pLink = pElem->getLruLinkPtr();
+    if (!pLink)
+        return;
     iteroffset next = pLink->x_iLinkNext;
     if (next.m_iOffset != 0)      // not top of list already
     {
@@ -1700,11 +1713,14 @@ void LsShmHash::linkSetTop(LsShmHElem *pElem, iteroffset offElem)
         if (prev.m_iOffset == 0)  // last one
             pLru->linkLast = next;
         else
-            set_linkNext(prev, next);
-        set_linkPrev(next, prev);
+            if (set_linkNext(prev, next))
+                return;
+        if (set_linkPrev(next, prev))
+            return;
         pLink->x_iLinkNext.m_iOffset = 0;
         pLink->x_iLinkPrev = pLru->linkFirst;
-        set_linkNext(pLru->linkFirst, offElem);
+        if (set_linkNext(pLru->linkFirst, offElem))
+            return;
         pLru->linkFirst = offElem;
     }
     pLink->x_lasttime = time((time_t *)NULL);
@@ -1795,7 +1811,11 @@ int LsShmHash::linkMvTopTime(iteroffset offset, time_t lasttime)
                 pLink->x_iLinkNext = pPrev->x_iLinkNext;
                 pLink->x_iLinkPrev = prev;
                 pPrev->x_iLinkNext = offset;
-                set_linkPrev(pLink->x_iLinkNext, offset);
+                if (set_linkPrev(pLink->x_iLinkNext, offset))
+                {
+                    autoUnlock();
+                    return LS_FAIL;
+                }
                 break;
             }
         }

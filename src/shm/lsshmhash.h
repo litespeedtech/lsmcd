@@ -101,71 +101,57 @@ typedef struct lsShm_hElem_s
     { ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_size = len; }
 
     LsShmHElemLink  *getLruLinkPtr() const
-    {   return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); }
+    {   
+        if (x_iValOff > (uint32_t)x_iLen)
+        {
+            LS_DBG_M("x_iValOff: %d, x_iLen: %d, this should not happen.\n", 
+                     x_iValOff, x_iLen);
+            return NULL;
+        }
+        return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); 
+    }
     LsShmHIterOff    getLruLinkNext() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemLen_t      len = x_iLen;          // element size
-        LsShmHElemOffs_t     valOff = x_iValOff;
-        LsShmHIterOff        next = x_iNext;         // offset to next in element list
-        LsShmHKey            hkey = x_hkey;          // the key itself
-        int32_t              keylen = getKeyLen();
-        int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d link: %p this: %p\n", 
-                  len, valOff, next.m_iOffset, keylen, link, this);
-        return link->x_iLinkNext; 
+        if (link)
+            return link->x_iLinkNext; 
+        LsShmHIterOff offZero = { 0 };
+        return offZero;
     }
     LsShmHIterOff    getLruLinkPrev() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemLen_t      len = x_iLen;          // element size
-        LsShmHElemOffs_t     valOff = x_iValOff;
-        LsShmHIterOff        next = x_iNext;         // offset to next in element list
-        LsShmHKey            hkey = x_hkey;          // the key itself
-        int32_t              keylen = getKeyLen();
-        int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d link: %p this: %p\n", 
-                  len, valOff, next.m_iOffset, keylen, link, this);
-        return link->x_iLinkPrev; 
+        if (link)
+            return link->x_iLinkPrev; 
+        LsShmHIterOff offZero = { 0 };
+        return offZero;
     }
     time_t           getLruLasttime() const
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemLen_t      len = x_iLen;          // element size
-        LsShmHElemOffs_t     valOff = x_iValOff;
-        LsShmHIterOff        next = x_iNext;         // offset to next in element list
-        LsShmHKey            hkey = x_hkey;          // the key itself
-        int32_t              keylen = getKeyLen();
-        int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d link: %p this: %p\n", 
-                  len, valOff, next.m_iOffset, keylen, link, this);
-        return link->x_lasttime; 
+        if (link)
+            return link->x_lasttime; 
+        return 0;
     }
-    void             setLruLinkNext(LsShmHIterOff off)
+    int              setLruLinkNext(LsShmHIterOff off)
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemLen_t      len = x_iLen;          // element size
-        LsShmHElemOffs_t     valOff = x_iValOff;
-        LsShmHIterOff        next = x_iNext;         // offset to next in element list
-        LsShmHKey            hkey = x_hkey;          // the key itself
-        int32_t              keylen = getKeyLen();
-        int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d, off: %d link: %p this: %p\n", 
-                  len, valOff, next.m_iOffset, keylen, off.m_iOffset, link, this);
-        link->x_iLinkNext = off; 
+        if (link)
+        {
+            link->x_iLinkNext = off; 
+            return 0;
+        }
+        return -1;
     }
-    void             setLruLinkPrev(LsShmHIterOff off)
+    int              setLruLinkPrev(LsShmHIterOff off)
     { 
         LsShmHElemLink *link = getLruLinkPtr();
-        LsShmHElemLen_t      len = x_iLen;          // element size
-        LsShmHElemOffs_t     valOff = x_iValOff;
-        LsShmHIterOff        next = x_iNext;         // offset to next in element list
-        LsShmHKey            hkey = x_hkey;          // the key itself
-        int32_t              keylen = getKeyLen();
-        int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d, off: %d link: %p this: %p\n", 
-                  len, valOff, next.m_iOffset, keylen, off.m_iOffset, link, this);
-        link->x_iLinkPrev = off; 
+        if (link)
+        {
+            link->x_iLinkPrev = off; 
+            return 0;
+        }
+        return -1;
     }
 
     void            *getExtraPtr(LsShmOffset_t off)
@@ -795,30 +781,28 @@ protected:
     {   return m_iAutoLock && ls_shmlock_setup(m_pShmLock); }
 
     // auxiliary double linked list of hash elements
-    void set_linkNext(iteroffset offThis, iteroffset offNext)
+    int  set_linkNext(iteroffset offThis, iteroffset offNext)
     {
         if (offNext.m_iOffset)
         {
             iterator iterThis = offset2iterator(offThis);
             if (iterThis)
-            {
-                size_t sz = m_pPool->getShm()->getAvailAddrSpace(offThis.m_iOffset, sizeof(LsShmHElemLink));
-                iterThis->setLruLinkNext(offNext);
-            }
+                return iterThis->setLruLinkNext(offNext);
+            return -1;
         }
+        return 0;
     }
 
-    void set_linkPrev(iteroffset offThis, iteroffset offPrev)
+    int  set_linkPrev(iteroffset offThis, iteroffset offPrev)
     {
         if (offPrev.m_iOffset)
         {
             iterator iterThis = offset2iterator(offThis);
             if (iterThis)
-            {
-                size_t sz = m_pPool->getShm()->getAvailAddrSpace(offThis.m_iOffset, sizeof(LsShmHElemLink));
-                iterThis->setLruLinkPrev(offPrev);
-            }
+                return iterThis->setLruLinkPrev(offPrev);
+            return -1;
         }
+        return 0;
     }
 
     void linkHElem(LsShmHElem *pElem, iteroffset offElem);

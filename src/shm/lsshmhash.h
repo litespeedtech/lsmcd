@@ -119,9 +119,11 @@ typedef struct lsShm_hElem_s
         LsShmHElemLen_t  len = sizeof(struct lsShm_hElem_s) /*+ valueOff*/
                                + sizeof(ls_vardata_t) + round4(valLen);
         
-        if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len)
+        if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len
+            || iLen > 100000000) // A large number
         {
-            LS_NOTICE("x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
+            LS_NOTICE("Delete shared memory files or force rehash: "
+                      "x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
                       x_iValOff, valOff, x_iLen, len);
             return -1;
         }

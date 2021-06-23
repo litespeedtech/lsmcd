@@ -287,6 +287,49 @@ int do_partial()
 }
 
 
+int do_rehash()
+{
+/* My rehash request example
+0000: 80200000 00000000 00000000 01020304 
+0010: 00000000 00000000 
+*/
+    memset(buffer, 0, 24);
+    buffer[0] = 0x80;
+    buffer[1] = 0x20;
+    buffer[12] = 0x01;
+    buffer[13] = 0x02;
+    buffer[14] = 0x03;
+    buffer[15] = 0x04;
+    if (send(sock_fd, buffer, 24, 0) != 24)
+    {
+        printf("Error in send of rehash: %s\n", strerror(errno));
+        return -1;
+    }
+/* My LIST_MECHS response 
+0000: 81200000 00000000 00000005 00680000 . ...........h..
+0010: 00000000 00000000 504c4149 4e       ........PLAIN
+*/
+    ssize_t recvd = recv(sock_fd, buffer, BUFFER_LEN, 0);
+    if (recvd < 29)
+    {
+        printf("Error in list_mechs response1 (partial): %s (recvd: %ld)\n", strerror(errno), recvd);
+        return -1;
+    }
+    if (buffer[0] != 0x81 ||
+        buffer[1] != 0x20 ||
+        buffer[6] != 0x00 ||
+        buffer[7] != 0x00 ||
+        buffer[11] < 0x05 ||
+        memcmp((char *)&buffer[24], "PLAIN", 5))
+    {
+        printf("Error in list_mechs response data rehash (turn on the trace)\n");
+        return -1;
+    }
+    printf("Rehash send ok\n");
+    return 0;
+}
+
+
 int do_multi2()
 {
 /* My multiple requests example: 
@@ -339,7 +382,7 @@ int main()
     if (!do_login())
     {
         if (!do_set() && !do_get(false) && !do_multi1() && 
-            !do_get(true) && !do_partial() &&
+            !do_get(true) && !do_partial() && !do_rehash() &&
             !do_multi2())   // multi2 must be last as it closes the connection
         {
             printf("All tests passed\n");

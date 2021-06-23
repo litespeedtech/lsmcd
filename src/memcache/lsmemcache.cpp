@@ -3519,6 +3519,13 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD, pConn);
         return;
     }
+    if (pHdr->opaque == 0x04030201)
+    {
+        LS_NOTICE("Forcing rehash\n");
+        pConn->getHash()->lock();
+        pConn->getHash()->lockChkRehash();
+        pConn->getHash()->unlock();
+    }
     if ((len = pConn->GetSasl()->listMechs(&result)) < 0)
     {
         if (getVerbose(pConn) > 0)

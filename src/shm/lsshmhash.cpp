@@ -709,7 +709,7 @@ int LsShmHash::rehash()
     int szTable;
     int szBitMap;
     uint count = 0;
-    LS_DBG_M("Doing rehash, pid: %d\n", getpid());
+    LS_NOTICE("Doing rehash, pid: %d\n", getpid());
 #ifdef DEBUG_RUN
     SHM_NOTICE("LsShmHash::rehash %6d %X size %d cap %d NEW %d",
                getpid(), m_pPool->getShmMap(),
@@ -846,12 +846,18 @@ LsShmHash::iteroffset LsShmHash::doGet(
     iteroffset iterOff, LsShmHKey key, ls_strpair_t *pParms,
     int *pFlag)
 {
+    LS_DBG_M("Enter doGet iterOff: %d\n", iterOff.m_iOffset);
     if (iterOff.m_iOffset != 0)
     {
         iterator iter = offset2iterator(iterOff);
         if (iter)
+        {
             if (m_iFlags & LSSHM_FLAG_LRU)
                 linkSetTop(iter, iterOff);
+        }
+        else 
+            LS_DBG_M("NULL iterator\n");
+
         *pFlag = LSSHM_VAL_NONE;
         return iterOff;
     }
@@ -863,6 +869,7 @@ LsShmHash::iteroffset LsShmHash::doGet(
         {
             if (!offset2iteratorData(iterOff))
             {
+                LS_DBG_M("Failed getting data, return %d\n", iterOff.m_iOffset);
                 *pFlag = LSSHM_VAL_NONE;
                 return iterOff;
             }
@@ -882,6 +889,7 @@ LsShmHash::iteroffset LsShmHash::doGet(
 //             ((shmlru_val_t *)offset2iteratorData(iterOff))->offdata = 0;
         *pFlag = LSSHM_VAL_CREATED;
     }
+    LS_DBG_M("Exit doGet iterOff: %d\n", iterOff.m_iOffset);
     return iterOff;
 }
 
@@ -1081,6 +1089,7 @@ LsShmHash::iteroffset LsShmHash::insert2(
 LsShmHash::iteroffset LsShmHash::insertCopy2(LsShmHKey key,
         ls_strpair_t *pParms)
 {
+    LS_DBG_M("insertCopy2\n");
     assert(m_pPool->getShm()->isLocked(m_pShmLock));
 
     LsShmHash::iteroffset offset;
@@ -1097,11 +1106,15 @@ LsShmHash::iteroffset LsShmHash::insertCopy2(LsShmHKey key,
     offset = allocIter(ls_str_len(&pParms->key),
                                      ls_str_len(&pParms->val));
     if (offset.m_iOffset == 0)
+    {
+        LS_DBG_M("allocIter failed\n");
         return offset;
+    }
     LsShmHElem *pNew = (LsShmHElem *)m_pPool->offset2ptr(offset.m_iOffset);
 
     if (!pNew)
     {
+        LS_DBG_M("offset2ptr failed: %d\n", offset.m_iOffset);
         offset.m_iOffset = 0;
         return offset;
     }
@@ -1130,6 +1143,7 @@ LsShmHash::iteroffset LsShmHash::insertCopy2(LsShmHKey key,
 #endif
     incrTableSize();
 
+    LS_DBG_M("insertCopy2 final offset: %d\n", offset.m_iOffset);
     return offset;
 }
 

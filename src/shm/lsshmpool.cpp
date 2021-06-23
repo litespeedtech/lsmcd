@@ -282,14 +282,17 @@ LsShmPool::~LsShmPool()
 
 LsShmOffset_t LsShmPool::getReg(const char *name)
 {
+    LS_DBG_M("getReg name: %s\n", name);
     if (name == NULL)
         return 0;
 
     LsShmOffset_t offReg = m_pShm->findRegOff(name);
     if (offReg == 0)
     {
+        LS_DBG_M("try to add it\n");
         if ((offReg = m_pShm->addRegOff(name)) == 0)
         {
+            LS_DBG_M("Add failed, bad map file\n");
             m_status = LSSHM_BADMAPFILE;
             return 0;
         }
@@ -316,29 +319,43 @@ LsShmHash *LsShmPool::getNamedHash(const char *name,
     if ((itor != NULL)
         && ((pObj = LsShmHash::checkHTable(itor, this, name, hf,
                                            vc)) != (LsShmHash *)-1))
+    {
+        LS_DBG_M("LsShmPool::getNamedHash itor: %p, pObj: %p\n", itor, pObj);
         return pObj;
-
+    }
     LsShmOffset_t offReg = getReg(name);
     if (offReg == 0)
+    {
+        LS_DBG_M("LsShmPool::getNamedHash reg 0\n");
         return NULL;
+    }
     LsShmReg * pReg = (LsShmReg *)offset2ptr(offReg);
     if (!pReg)
+    {
+        LS_DBG_M("LsShmPool::getNamedHash pReg now 0 for offReg: %d\n", offReg);
         return NULL;
-
+    }
     if (pReg->x_iValue == 0)
     {
+        LS_DBG_M("LsShmPool::getNamedHash allocate new\n");
         LsShmOffset_t offset = allocateNewHash( init_size, hf != NULL, iFlags);
         if (offset != 0)
         {
             pReg = (LsShmReg *)offset2ptr(offReg);
             if (!pReg)
+            {
+                LS_DBG_M("LsShmPool::getNamedHash Bad ptr pReg\n");
                 return NULL;
+            }
             pReg->x_iValue = offset;
         }
     }
     if (!pReg->x_iValue)
+    {
+        LS_DBG_M("LsShmPool::getNamedHash pReg->x_iValue 0\n");
         return NULL;
-
+    }
+    LS_DBG_M("LsShmPool::getNamedHash call newHashByOffset\n");
     return newHashByOffset(pReg->x_iValue, name, hf, vc, iFlags);
 }
 

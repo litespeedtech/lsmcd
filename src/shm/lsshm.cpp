@@ -1026,7 +1026,10 @@ LsShmOffset_t LsShm::addRegOff(const char *name)
 
     LsShmHash * pGlobal = getGlobalHash(LSSHM_REG_DEFAULT_SIZE);
     if (!pGlobal)
+    {
+        LS_DBG_M("No global hash\n");
         return 0;
+    }
     int valLen = sizeof(LsShmReg);
     int flag = LSSHM_VAL_INIT;
     return pGlobal->get(name, strlen(name), &valLen, &flag);

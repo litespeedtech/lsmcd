@@ -85,6 +85,8 @@ typedef struct lsShm_hElem_s
     LsShmHKey            x_hkey;          // the key itself
     uint32_t             x_aData[0];
 
+    /* I'm going to assume these functions don't need validation as they get 
+     * validated in advance to being called */
     uint8_t         *getKey() const
     { return ((ls_vardata_t *)x_aData)->x_data; }
     int32_t          getKeyLen() const
@@ -103,6 +105,28 @@ typedef struct lsShm_hElem_s
     static int round4(int x)
     {   return (x + 0x3) & ~0x3; }
     
+    int              validate(bool lru) const
+    {
+        /* The original calculation for x_iValOff (valOff) and x_iLen, missing 
+         * the actual lengths of the key and value as they're not available 
+         * until we're sure the buffer is intact.  This calculation makes a try
+         * at determining if the buffer is correct (to avoid constant crashes). */
+        LsShmHElemLen_t  iLen = x_iLen;         // Put this into locals for the debugger
+        LsShmHElemOffs_t iValOff = x_iValOff;   // Put this into locals for the debugger
+        LsShmHElemOffs_t valOff = sizeof(ls_vardata_t) //+ round4(keyLen)
+                                  + (lru ? sizeof(LsShmHElemLink) : 0);
+        int              valLen = /*realValLen +*/ (lru ? sizeof(LsShmHElemLink) : 0);
+        LsShmHElemLen_t  len = sizeof(struct lsShm_hElem_s) /*+ valueOff*/
+                               + sizeof(ls_vardata_t) + round4(valLen);
+        
+        if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len)
+        {
+            LS_NOTICE("x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
+                      x_iValOff, valOff, x_iLen, len);
+            return -1;
+        }
+        return 0;
+    }
     LsShmHElemLink  *getLruLinkPtr() const
     {   
         /* The original calculation for x_iValOff (valOff) and x_iLen, missing 
@@ -111,18 +135,8 @@ typedef struct lsShm_hElem_s
          * at determining if the buffer is correct (to avoid constant crashes). */
         LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
         LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
-        LsShmHElemOffs_t valOff = sizeof(ls_vardata_t) //+ round4(keyLen)
-                                  + sizeof(LsShmHElemLink);
-        int valLen = /*realValLen +*/ sizeof(LsShmHElemLink);
-        LsShmHElemLen_t len = sizeof(struct lsShm_hElem_s) /*+ valueOff*/
-                                      + sizeof(ls_vardata_t) + round4(valLen);
-        
-        if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len)
-        {
-            LS_NOTICE("x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
-                      x_iValOff, valOff, x_iLen, len);
+        if (validate(true))
             return NULL;
-        }
         return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); 
     }
     LsShmHIterOff    getLruLinkNext() const
@@ -309,8 +323,8 @@ public:
         if (m_pPool)
         {
             iterator iterThis = (iterator)m_pPool->offset2ptr(offset.m_iOffset);
-            if (iterThis && (iterThis->x_iValOff < 32 || 
-                             m_pPool->offset2ptr(iterThis->x_iValOff)))
+            if (iterThis && (iterThis->x_iValOff < 32 /* initialization */ || 
+                             !iterThis->validate(false)))
                 return iterThis;
             //if (!iterThis)
             //    assert(0);
@@ -323,16 +337,23 @@ public:
 
     ls_attr_inline void *offset2iteratorData(iteroffset offset) const
     {   
-        if (m_pPool && (iterator)m_pPool->offset2ptr(offset.m_iOffset))
-            return ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getVal(); 
+        if (m_pPool)
+        {
+            iterator iter = (iterator)m_pPool->offset2ptr(offset.m_iOffset);
+            if (iter && !iter->validate(false))
+                return iter->getVal(); 
+        }
         return NULL;
     }
 
     ls_attr_inline LsShmOffset_t iter2DataOffset(iteroffset offset) const
     {   
-        if (m_pPool && (iterator)m_pPool->offset2ptr(offset.m_iOffset))
-            return offset.m_iOffset + 
-                   ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getValStartOff(); 
+        if (m_pPool)
+        {
+            iterator iter = (iterator)m_pPool->offset2ptr(offset.m_iOffset);
+            if (iter && !iter->validate(false))
+                return offset.m_iOffset + iter->getValStartOff(); 
+        }
         return 0;
     }
     
@@ -430,6 +451,7 @@ public:
     {
         iteroffset iterOff;
         ls_strpair_t parms;
+        
         iterOff = getIterator(setParms(&parms, pKey, keyLen, NULL, *valLen)
                               , pFlag);
         if (iterOff.m_iOffset == 0)

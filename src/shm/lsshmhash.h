@@ -111,8 +111,8 @@ typedef struct lsShm_hElem_s
         LsShmHKey            hkey = x_hkey;          // the key itself
         int32_t              keylen = getKeyLen();
         int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d\n", 
-                  len, valOff, next.m_iOffset, keylen);
+        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d link: %p this: %p\n", 
+                  len, valOff, next.m_iOffset, keylen, link, this);
         return link->x_iLinkNext; 
     }
     LsShmHIterOff    getLruLinkPrev() const
@@ -124,8 +124,8 @@ typedef struct lsShm_hElem_s
         LsShmHKey            hkey = x_hkey;          // the key itself
         int32_t              keylen = getKeyLen();
         int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d\n", 
-                  len, valOff, next.m_iOffset, keylen);
+        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d link: %p this: %p\n", 
+                  len, valOff, next.m_iOffset, keylen, link, this);
         return link->x_iLinkPrev; 
     }
     time_t           getLruLasttime() const
@@ -137,8 +137,8 @@ typedef struct lsShm_hElem_s
         LsShmHKey            hkey = x_hkey;          // the key itself
         int32_t              keylen = getKeyLen();
         int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d\n", 
-                  len, valOff, next.m_iOffset, keylen);
+        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d link: %p this: %p\n", 
+                  len, valOff, next.m_iOffset, keylen, link, this);
         return link->x_lasttime; 
     }
     void             setLruLinkNext(LsShmHIterOff off)
@@ -150,8 +150,8 @@ typedef struct lsShm_hElem_s
         LsShmHKey            hkey = x_hkey;          // the key itself
         int32_t              keylen = getKeyLen();
         int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d, off: %d\n", 
-                  len, valOff, next.m_iOffset, keylen, off.m_iOffset);
+        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d, off: %d link: %p this: %p\n", 
+                  len, valOff, next.m_iOffset, keylen, off.m_iOffset, link, this);
         link->x_iLinkNext = off; 
     }
     void             setLruLinkPrev(LsShmHIterOff off)
@@ -163,8 +163,8 @@ typedef struct lsShm_hElem_s
         LsShmHKey            hkey = x_hkey;          // the key itself
         int32_t              keylen = getKeyLen();
         int32_t              valStartOff = getValStartOff();
-        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d, off: %d\n", 
-                  len, valOff, next.m_iOffset, keylen, off.m_iOffset);
+        LS_NOTICE("len: %d, valOff: %d, next: %d, keylen: %d, off: %d link: %p this: %p\n", 
+                  len, valOff, next.m_iOffset, keylen, off.m_iOffset, link, this);
         link->x_iLinkPrev = off; 
     }
 

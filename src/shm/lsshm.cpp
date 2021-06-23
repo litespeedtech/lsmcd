@@ -873,7 +873,7 @@ int LsShm::recoverOrphanShm()
         return 0;
 
     m_pGHash->disableAutoLock();
-    m_pGHash->lockChkRehash();
+    m_pGHash->lockChkRehash(false);
     LsShmSize_t size = m_pGHash->size();
     m_pGHash->for_each2(m_pGHash->begin(), m_pGHash->end(), chkReg, this);
     size -= m_pGHash->size();

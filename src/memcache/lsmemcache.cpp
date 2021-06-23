@@ -416,7 +416,7 @@ int LsMemcache::multiInitFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
     int ret = LS_OK;
     LS_DBG_M("ShmSlice: [%s].\n", fileName);
     pHash->disableAutoLock();
-    pHash->lockChkRehash();
+    pHash->lockChkRehash(false);
 
     iHelperOff = pHash->getHTableReservedOffset();
     pHelper = (LsMcTidInfoHelper *)pHash->offset2ptr(iHelperOff);
@@ -1006,7 +1006,7 @@ void LsMemcache::dataItemUpdate(uint8_t *pBuf, MemcacheConn *pConn)
     }
     if (!iter || !pItem)
     {
-        pConn->getHash()->lockChkRehash();
+        pConn->getHash()->lockChkRehash(false);
         m_retcode = UPDRET_INTERNAL_ERROR;
         return;
     }
@@ -1046,7 +1046,7 @@ int LsMemcache::tidGetNxtItems(LsShmHash *pHash, uint64_t *pTidLast,
     void *pBlk = NULL;
     int isAutoLock = pHash->isAutoLock();
     pHash->disableAutoLock();
-    pHash->lockChkRehash();
+    pHash->lockChkRehash(false);
     while ((ret = getNxtTidItem(pHash, pTidLast, &pBlk, (LsMcTidPkt *)pBuf,
                                 iBufSz)) > 0)
     {
@@ -1134,7 +1134,7 @@ int LsMemcache::tidSetItems(LsShmHash *pHash, uint8_t *pBuf, int iBufSz)
     int isAutoLock = pHash->isAutoLock();
     LsShmTidMgr *pTidMgr = pHash->getTidMgr();
     pHash->disableAutoLock();
-    pHash->lockChkRehash();
+    pHash->lockChkRehash(false);
     while (((unsigned int)iBufSz > (int)sizeof(LsShmPktHdr))
         && ((unsigned int)iBufSz >= ((LsShmPktHdr *)pBuf)->m_iSize))
     {
@@ -1198,7 +1198,7 @@ int LsMemcache::delTidItem(LsShmHash *pHash, LsMcTidPkt *pPkt,
             LsShmHElem *pElem = pHash->offset2iterator(off);
             if (!pElem)
             {
-                pHash->lockChkRehash();
+                pHash->lockChkRehash(false);
                 return -1;
             }
             LsMcTidPkt *pNxtPkt = (LsMcTidPkt *)pBuf;
@@ -1526,7 +1526,7 @@ int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
                                     &valLen);
             if (!iter || !pItem)
             {
-                pConn->getHash()->lockChkRehash();
+                pConn->getHash()->lockChkRehash(false);
                 miss = true;
             }
             else if (pThis->isExpired(pItem))
@@ -1592,7 +1592,7 @@ LsShmHash::iteroffset LsMemcache::doHashInsert(ls_strpair_t *pParms,
         if (!item)
         {
             pOpt->m_iRetcode = UPDRET_INTERNAL_ERROR;
-            pConn->getHash()->lockChkRehash();
+            pConn->getHash()->lockChkRehash(false);
             m_retcode = UPDRET_INTERNAL_ERROR;
         }
         else if (LsMemcache::isExpired(item))
@@ -1628,7 +1628,7 @@ LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
         pItem = (LsMcDataItem *)iter->getVal();
     if (!iter || !pItem)
     {
-        pConn->getHash()->lockChkRehash();
+        pConn->getHash()->lockChkRehash(false);
         m_retcode = UPDRET_INTERNAL_ERROR;
         return pConn->getHash()->end();
     }
@@ -1689,7 +1689,7 @@ LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
         if (!iter)
         {
             pOpt->m_iRetcode = UPDRET_INTERNAL_ERROR;
-            pConn->getHash()->lockChkRehash();
+            pConn->getHash()->lockChkRehash(false);
             return pConn->getHash()->end();            
         }
         mcIter2data(iter, pOpt->m_iFlags & LSMC_USECAS, &valPtr, &valLen);
@@ -2322,7 +2322,7 @@ int LsMemcache::multiStatFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
     LS_DBG_M("multiStatFunc pHash: %p, HdrOff: %d, Total ptr: %p\n",
              pHash, iHdrOff, pTotal);
     pHash->disableAutoLock();
-    pHash->lockChkRehash();
+    pHash->lockChkRehash(false);
     LsMcStats *pStats = &((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats;
     pTotal->get_cmds += pStats->get_cmds;
     pTotal->set_cmds += pStats->set_cmds;
@@ -2361,7 +2361,7 @@ int LsMemcache::multiStatResetFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
     if (iHdrOff == 0)
         return LS_FAIL;
     pHash->disableAutoLock();
-    pHash->lockChkRehash();
+    pHash->lockChkRehash(false);
     ::memset(&((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats, 0,
         sizeof(LsMcStats));
     pHash->unlock();
@@ -2455,7 +2455,7 @@ int LsMemcache::multiFlushFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
         LS_DBG_M("multiFlushFunc for TidMaster\n");
         LsShmOffset_t iHdrOff = pConn->getHdrOff();
         pHash->disableAutoLock();
-        pHash->lockChkRehash();
+        pHash->lockChkRehash(false);
         pHash->clear();
         if (iHdrOff != 0)
             ++((LsMcHdr *)pHash->offset2ptr(iHdrOff))->x_stats.flush_cmds;
@@ -3074,7 +3074,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         if (!iter || !pItem)
         {
             binErrRespond(pHdr, MC_BINSTAT_INTERNAL_ERROR, pConn);
-            pConn->getHash()->lockChkRehash();
+            pConn->getHash()->lockChkRehash(false);
             unlock(pConn);
             return;
         }
@@ -3196,7 +3196,7 @@ void LsMemcache::doBinDelete(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         {
             statDeleteMiss(pConn);
             binErrRespond(pHdr, MC_BINSTAT_INTERNAL_ERROR, pConn);
-            pConn->getHash()->lockChkRehash();
+            pConn->getHash()->lockChkRehash(false);
             unlock(pConn);
             return;
         }
@@ -3523,7 +3523,7 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     {
         LS_NOTICE("Forcing rehash\n");
         pConn->getHash()->lock();
-        pConn->getHash()->lockChkRehash();
+        pConn->getHash()->lockChkRehash(true);
         pConn->getHash()->unlock();
     }
     if ((len = pConn->GetSasl()->listMechs(&result)) < 0)

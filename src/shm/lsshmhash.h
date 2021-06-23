@@ -422,7 +422,7 @@ public:
         ls_strpair_t parms;
         ls_str_set(&parms.key, (char *)pKey, keyLen);
         
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iterOff = (*m_find)(this, &parms);
         if (iterOff.m_iOffset != 0)
         {
@@ -520,7 +520,7 @@ public:
 
     void eraseIterator(iteroffset iterOff)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         eraseIteratorHelper(iterOff);
         autoUnlock();
     }
@@ -528,7 +528,7 @@ public:
     iteroffset  insertCopy(LsShmHKey key, ls_strpair_t *pParms)
     {
         iteroffset off;
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         off = insertCopy2(key, pParms);
         autoUnlock();
         return off;
@@ -540,7 +540,7 @@ public:
     //
     iteroffset findIterator(ls_strpair_t *pParms)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = (*m_find)(this, pParms);
         autoUnlock();
         return iterOff;
@@ -548,7 +548,7 @@ public:
 
     iteroffset getIterator(ls_strpair_t *pParms, int *pFlag)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = (*m_get)(this, pParms, pFlag);
         autoUnlock();
         return iterOff;
@@ -556,7 +556,7 @@ public:
 
     iteroffset insertIterator(ls_strpair_t *pParms)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = (*m_insert)(this, pParms);
         autoUnlock();
         return iterOff;
@@ -564,7 +564,7 @@ public:
 
     iteroffset setIterator(ls_strpair_t *pParms)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = (*m_set)(this, pParms);
         autoUnlock();
         return iterOff;
@@ -572,7 +572,7 @@ public:
 
     iteroffset updateIterator(ls_strpair_t *pParms)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = (*m_update)(this, pParms);
         autoUnlock();
         return iterOff;
@@ -580,7 +580,7 @@ public:
 
     iteroffset findIteratorWithKey(LsShmHKey key, ls_strpair_t *pParms)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = find2(key, pParms);
         autoUnlock();
         return iterOff;
@@ -589,7 +589,7 @@ public:
     iteroffset getIteratorWithKey(LsShmHKey key, ls_strpair_t *pParms,
                                   int *pFlag)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = find2(key, pParms);
         iterOff = doGet(iterOff, key, pParms, pFlag);
         autoUnlock();
@@ -598,7 +598,7 @@ public:
 
     iteroffset insertIteratorWithKey(LsShmHKey key, ls_strpair_t *pParms)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = find2(key, pParms);
         iterOff = doInsert(iterOff, key, pParms);
         autoUnlock();
@@ -607,7 +607,7 @@ public:
 
     iteroffset setIteratorWithKey(LsShmHKey key, ls_strpair_t *pParms)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = find2(key, pParms);
         iterOff = doSet(iterOff, key, pParms);
         autoUnlock();
@@ -616,7 +616,7 @@ public:
 
     iteroffset updateIteratorWithKey(LsShmHKey key, ls_strpair_t *pParms)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         iteroffset iterOff = find2(key, pParms);
         iterOff = doUpdate(iterOff, key, pParms);
         autoUnlock();
@@ -738,7 +738,7 @@ public:
     int unlock()
     {   return m_iAutoLock ? 0 : ls_shmlock_unlock(m_pShmLock); }
 
-    void lockChkRehash();
+    void lockChkRehash(bool force);
 
     int getRef()     { return m_iRef; }
     int upRef()      { return ++m_iRef; }
@@ -775,7 +775,7 @@ protected:
     void setBitMapEnt(uint32_t indx);
     void clrBitMapEnt(uint32_t indx);
 
-    int         rehash();
+    int         rehash(bool force);
     iteroffset  find2(LsShmHKey key, ls_strpair_t *pParms);
     iteroffset  insert2(LsShmHKey key, ls_strpair_t *pParms);
     iteroffset  insertCopy2(LsShmHKey key, ls_strpair_t *pParms);
@@ -832,7 +832,7 @@ protected:
     {   assert(m_pPool->getShm()->isLocked(m_pShmLock));
         return m_iAutoLock && ls_shmlock_unlock(m_pShmLock); }
 
-    void autoLockChkRehash();
+    void autoLockChkRehash(bool force);
 
     // stat helper
     int statIdx(iteroffset iterOff, for_each_fn2 fun, void *pUData);

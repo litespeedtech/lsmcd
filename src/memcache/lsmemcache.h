@@ -413,7 +413,7 @@ public:
     void lock(MemcacheConn *pConn)
     {
         pConn->getHash()->disableAutoLock();
-        pConn->getHash()->lockChkRehash();
+        pConn->getHash()->lockChkRehash(false);
     }
 
     void unlock(MemcacheConn *pConn)

@@ -277,17 +277,17 @@ inline uint8_t *LsShmHash::getBitMap() const
 }
 
 
-void LsShmHash::lockChkRehash()
+void LsShmHash::lockChkRehash(bool force)
 {
     if ((lock() < 0) && (getHTable()->x_iHIdx != getHTable()->x_iHIdxNew))
-        rehash();
+        rehash(force);
 }
 
 
-void LsShmHash::autoLockChkRehash()
+void LsShmHash::autoLockChkRehash(bool force)
 {
     if ((autoLock() < 0) && (getHTable()->x_iHIdx != getHTable()->x_iHIdxNew))
-        rehash();
+        rehash(force);
 }
 
 
@@ -694,8 +694,10 @@ void LsShmHash::destroy()
 }
 
 
-int LsShmHash::rehash()
+int LsShmHash::rehash(bool force)
 {
+    if (!force)
+        return 0; // Don't do it for now
     LsShmSize_t oldSize = capacity();
     LsShmSize_t newSize;
     LsShmOffset_t newIdxOff;
@@ -1098,7 +1100,7 @@ LsShmHash::iteroffset LsShmHash::insertCopy2(LsShmHKey key,
 
     if (size() * fullFactor() > capacity())
     {
-        if (rehash() < 0)
+        if (rehash(false) < 0)
         {
             if (size() == capacity())
                 return end();
@@ -1524,7 +1526,7 @@ int LsShmHash::trim(time_t tmCutoff, LsShmHash::TrimCb func, void *arg)
     int del = 0;
     LsShmHElem *pElem;
     iteroffset next;
-    autoLockChkRehash();
+    autoLockChkRehash(false);
     LsHashLruInfo *pLru = getLru();
     iteroffset offElem = pLru->linkLast;
     while (offElem.m_iOffset != 0)
@@ -1573,7 +1575,7 @@ int LsShmHash::trimsize(int need, LsShmHash::TrimCb func, void *arg)
     int del = 0;
     LsShmHElem *pElem;
     iteroffset next;
-    autoLockChkRehash();
+    autoLockChkRehash(false);
     LsHashLruInfo *pLru = getLru();
     iteroffset offElem = pLru->linkLast;
     while ((offElem.m_iOffset != 0) && (need > 0))
@@ -1616,7 +1618,7 @@ int LsShmHash::trimByCb(int maxCnt, LsShmHash::TrimCb func, void *arg)
     int del = 0;
     LsShmHElem *pElem;
     iteroffset next;
-    autoLockChkRehash();
+    autoLockChkRehash(false);
     LsHashLruInfo *pLru = getLru();
     iteroffset offElem = pLru->linkLast;
     while ((offElem.m_iOffset != 0) && (maxCnt > 0))
@@ -1657,7 +1659,7 @@ int LsShmHash::touchLru(iteroffset iterOff)
     if ((m_iFlags & LSSHM_FLAG_LRU) == 0)
         return 0;
 
-    autoLockChkRehash();
+    autoLockChkRehash(false);
     if (offset2iterator(iterOff))
         linkSetTop(offset2iterator(iterOff), iterOff);
     autoUnlock();
@@ -1748,7 +1750,7 @@ int LsShmHash::linkSetTopTime(iteroffset offset, time_t lasttime)
 {
     if (m_iFlags & LSSHM_FLAG_LRU)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         LsShmHElemLink *pLink = offset2iterator(offset)->getLruLinkPtr();
         if (!pLink || (pLink->x_iLinkNext.m_iOffset != 0) || (lasttime > time((time_t *)NULL)))
         {
@@ -1777,7 +1779,7 @@ int LsShmHash::linkMvTopTime(iteroffset offset, time_t lasttime)
 {
     if (m_iFlags & LSSHM_FLAG_LRU)
     {
-        autoLockChkRehash();
+        autoLockChkRehash(false);
         LsShmHElemLink *pLink = offset2iterator(offset)->getLruLinkPtr();
         if (!pLink || (pLink->x_iLinkNext.m_iOffset != 0) || (lasttime <= 0))
         {
@@ -1890,7 +1892,7 @@ int LsShmHash::check()
     int datacnt = 0;
     int ret;
     LsShmHElem *pElem;
-    autoLockChkRehash();
+    autoLockChkRehash(false);
     LsHashLruInfo *pLru = getLru();
     iteroffset offElem = pLru->linkLast;
     while (offElem.m_iOffset != 0)
@@ -1991,7 +1993,7 @@ int LsShmHash::stat(LsHashStat *pHashStat, for_each_fn2 fun, void *pData)
     ::memset(pHashStat, 0, sizeof(LsHashStat));
     pHashStat->userData = pData;
 
-    autoLockChkRehash();
+    autoLockChkRehash(false);
     // search each idx
     LsShmHIterOff *p = getHIdx();
     LsShmHIterOff *pIdxEnd = p + capacity();

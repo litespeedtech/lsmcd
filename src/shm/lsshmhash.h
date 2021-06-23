@@ -126,7 +126,7 @@ typedef struct lsShm_hElem_s
             if (!s_Reported_Corruption)
             {
                 s_Reported_Corruption = 1;
-                LS_NOTICE("Delete shared memory files or force rehash: "
+                LS_NOTICE("Delete shared memory files: "
                           "x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
                           x_iValOff, valOff, x_iLen, len);
             }

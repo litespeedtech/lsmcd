@@ -279,14 +279,14 @@ inline uint8_t *LsShmHash::getBitMap() const
 
 void LsShmHash::lockChkRehash()
 {
-    if ((lock() < 0) && (getHTable()->x_iHIdx == getHTable()->x_iHIdxNew))
+    if ((lock() < 0) && (getHTable()->x_iHIdx != getHTable()->x_iHIdxNew))
         rehash();
 }
 
 
 void LsShmHash::autoLockChkRehash()
 {
-    if ((autoLock() < 0) && (getHTable()->x_iHIdx == getHTable()->x_iHIdxNew))
+    if ((autoLock() < 0) && (getHTable()->x_iHIdx != getHTable()->x_iHIdxNew))
         rehash();
 }
 

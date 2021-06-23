@@ -30,6 +30,7 @@
 #include <unistd.h>
 
 
+int s_Reported_Corruption = 0;
 // LruHash info
 struct LsHashLruInfo_s
 {
@@ -802,6 +803,7 @@ int LsShmHash::rehash()
     pTable->x_iCapacity = newSize;
     pTable->x_iHIdx = newIdxOff;
     LS_DBG_M("Done rehash, pid: %d\n", getpid());
+    s_Reported_Corruption = 0;
     return 0;
 }
 

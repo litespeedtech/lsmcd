@@ -63,6 +63,7 @@ typedef struct lsshmobsiter_s LsShmObsIter_t;
 class LsShmObserver;
 
 
+extern int s_Reported_Corruption;
 
 typedef struct
 {
@@ -122,9 +123,13 @@ typedef struct lsShm_hElem_s
         if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len
             || iLen > 100000000) // A large number
         {
-            LS_NOTICE("Delete shared memory files or force rehash: "
-                      "x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
-                      x_iValOff, valOff, x_iLen, len);
+            if (!s_Reported_Corruption)
+            {
+                s_Reported_Corruption = 1;
+                LS_NOTICE("Delete shared memory files or force rehash: "
+                          "x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
+                          x_iValOff, valOff, x_iLen, len);
+            }
             return -1;
         }
         return 0;

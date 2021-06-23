@@ -373,23 +373,67 @@ int do_multi2()
 }
 
 
-int main()
+int main(int argc, char *argv[])
 {
     int ret = 1;
+    int login = 0;
+    int rehash = 0;
+    int test = 0;
+    int passed = 1;
     signal(SIGPIPE, SIG_IGN);    
-    if (do_connect())
-        return 1;
-    if (!do_login())
+    char opt;
+    while ((opt = getopt(argc, argv, "lrth?")) != -1)
     {
-        if (!do_set() && !do_get(false) && !do_multi1() && 
-            !do_get(true) && !do_partial() && !do_rehash() &&
-            !do_multi2())   // multi2 must be last as it closes the connection
+        switch (opt)
         {
-            printf("All tests passed\n");
-            ret = 0;
+            case 'l':
+                printf("Do login with the default user/password\n");
+                login = 1;
+                break;
+            case 'r':
+                printf("Force rehash\n");
+                rehash = 1;
+                break;
+            case 't':
+                printf("Test\n");
+                test = 1;
+                break;
+            case 'h':
+            case '?':
+                printf("unittest for lsmcd and forces rehash\n");
+                printf("Use: 'l' (login), 't' (test), 'r' (rehash)\n");
+                return 1;
         }
     }
-    if (sock_fd >= 0)
+    if (!login && !rehash && !test)
+    {
+        printf("You did not specify an option\n");
+        return 1;
+    }
+    if (do_connect())
+        return 1;
+    if (login)
+    {
+        if (do_login())
+            passed = 0;
+        else
+        {
+            if (do_set() || do_get(false))
+                passed = 0;
+            else if (do_multi2() ||   // multi2 must be last as it closes the connection    
+                     do_connect())
+                passed = 0; // Can't reconnect
+        }
+    }
+    if (passed && test)
+        if (do_multi1() || do_partial())
+            passed = 0;
+    if (passed && rehash)
+        if (do_rehash())
+            passed = 0;
+    if (passed)
+        printf("All tests passed\n");
+    if (sock_fd > 0)
         close(sock_fd);
-    return ret;
+    return !passed;
 }

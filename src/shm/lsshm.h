@@ -219,6 +219,11 @@ public:
         return (x_pStats->m_iFileSize == m_iMaxSizeO) ? LSSHM_OK : remap();
     }
 
+    int unlock(ls_shmlock_t *pLock)
+    {
+        return ls_shmlock_unlock(pLock);
+    }
+
     LsShmStatus_t remap();
 
     //

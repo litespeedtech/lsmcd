@@ -55,6 +55,7 @@ struct LsMcUpdOpt
 #define UPDRET_APPEND       10
 #define UPDRET_PREPEND      11
 #define UPDRET_NONE         20
+#define UPDRET_INTERNAL_ERROR 0x84
 
 typedef struct
 {
@@ -996,10 +997,19 @@ void LsMemcache::dataItemUpdate(uint8_t *pBuf, MemcacheConn *pConn)
     int valLen;
     uint8_t *valPtr;
     LsShmHElem *iter = pConn->getHash()->offset2iterator(m_iterOff);
-    LsMcDataItem *pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, 
-                                      &valLen);
-    LS_DBG_M("dataItemUpdate, pConn: %p, iter: %p, retcode: %d, valLen: %d\n",
-             pConn, iter, m_retcode, valLen);
+    LsMcDataItem *pItem = NULL;
+    if (iter)
+    {
+        pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, &valLen);
+        LS_DBG_M("dataItemUpdate, pConn: %p, iter: %p, retcode: %d, valLen: %d\n",
+                 pConn, iter, m_retcode, valLen);
+    }
+    if (!iter || !pItem)
+    {
+        pConn->getHash()->lockChkRehash();
+        m_retcode = UPDRET_INTERNAL_ERROR;
+        return;
+    }
     if (m_retcode == UPDRET_APPEND)
     {
         valLen = m_parms.val.len;
@@ -1080,6 +1090,8 @@ int LsMemcache::getNxtTidItem(LsShmHash *pHash, uint64_t *pTidLast,
         {
             iIterOff.m_iOffset = pTidMgr->tidVal2iterOff(*pVal);
             LsShmHElem *pElem = pHash->offset2iterator(iIterOff);
+            if (!pElem)
+                return -1;
             if (isExpired((LsMcDataItem *)pElem->getVal()))
             {
                 *ppBlk = NULL;  // block may be deleted or remapped on del tid
@@ -1184,6 +1196,10 @@ int LsMemcache::delTidItem(LsShmHash *pHash, LsMcTidPkt *pPkt,
         if ((off = pTidMgr->tid2iterOff(pPkt->m_del.m_tid, &pBlk)).m_iOffset != 0)
         {
             LsShmHElem *pElem = pHash->offset2iterator(off);
+            if (!pElem)
+            {
+                return -1;
+            }
             LsMcTidPkt *pNxtPkt = (LsMcTidPkt *)pBuf;
             if (((unsigned int)iBufSz <= sizeof(LsShmPktHdr))
                 || ((unsigned int)iBufSz < pNxtPkt->m_hdr.m_iSize)
@@ -1456,7 +1472,7 @@ int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 {
     LsShmHash::iteroffset iterOff;
     LsShmHElem *iter;
-    LsMcDataItem *pItem;
+    LsMcDataItem *pItem = NULL;
     int valLen;
     uint8_t *valPtr;
     pThis->m_noreply = false;
@@ -1492,6 +1508,7 @@ int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
     tokIter = pThis->m_keyList.begin();
     for (; tokIter < pThis->m_keyList.end(); ++tokIter)
     {
+        bool miss = false;
         pTok = *tokIter;
         pThis->m_parms.key.ptr = pTok->ptr;
         pThis->m_parms.key.len = pTok->len;
@@ -1503,9 +1520,14 @@ int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         if (iterOff.m_iOffset != 0)
         {
             iter = pConn->getHash()->offset2iterator(iterOff);
-            pItem = mcIter2data(iter, pThis->m_mcparms.m_usecas, &valPtr, 
-                                &valLen);
-            if (pThis->isExpired(pItem))
+            if (iter)
+                pItem = mcIter2data(iter, pThis->m_mcparms.m_usecas, &valPtr, 
+                                    &valLen);
+            if (!iter || !pItem)
+            {
+                miss = true;
+            }
+            else if (pThis->isExpired(pItem))
             {
                 pConn->getHash()->eraseIterator(iterOff);
                 iter = pConn->getHash()->offset2iterator(iterOff); // remap?
@@ -1541,6 +1563,8 @@ int LsMemcache::doCmdGet(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
             }
         }
         else
+            miss = true;
+        if (miss)
             pThis->statGetMiss(pConn);
         pThis->unlock(pConn);
     }
@@ -1562,8 +1586,14 @@ LsShmHash::iteroffset LsMemcache::doHashInsert(ls_strpair_t *pParms,
         findIteratorWithKey(m_hkey, pParms);
     if (iterOff.m_iOffset != 0)
     {
-        if (LsMemcache::isExpired((LsMcDataItem *)pConn->getHash()->
-            offset2iteratorData(iterOff)))
+        LsMcDataItem *item = (LsMcDataItem *)pConn->getHash()->offset2iteratorData(iterOff);
+        if (!item)
+        {
+            pOpt->m_iRetcode = UPDRET_INTERNAL_ERROR;
+            //pConn->getHash()->rehash(true);
+            m_retcode = UPDRET_INTERNAL_ERROR;
+        }
+        else if (LsMemcache::isExpired(item))
         {
             pOpt->m_iRetcode = UPDRET_DONE;
             iterOff = pConn->getHash()->doSet(iterOff, m_hkey, pParms);
@@ -1591,7 +1621,15 @@ LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
         return iterOff;
     }
     LsShmHElem *iter = pConn->getHash()->offset2iterator(iterOff);
-    LsMcDataItem *pItem = (LsMcDataItem *)iter->getVal();
+    LsMcDataItem *pItem = NULL;
+    if (iter)
+        pItem = (LsMcDataItem *)iter->getVal();
+    if (!iter || !pItem)
+    {
+        pConn->getHash()->rehash(false); // maybe not that bad
+        m_retcode = UPDRET_INTERNAL_ERROR;
+        return pConn->getHash()->end();
+    }
     if (LsMemcache::isExpired(pItem))
     {
         pConn->getHash()->eraseIterator(iterOff);
@@ -1646,6 +1684,12 @@ LsShmHash::iteroffset LsMemcache::doHashUpdate(ls_strpair_t *pParms,
         if (iterOff.m_iOffset == 0 || cmd == MC_BINCMD_APPEND)
             return iterOff;
         iter = pConn->getHash()->offset2iterator(iterOff);
+        if (!iter)
+        {
+            pOpt->m_iRetcode = UPDRET_INTERNAL_ERROR;
+            pConn->getHash()->rehash(false); // I'm not sure this is that bad.
+            return pConn->getHash()->end();            
+        }
         mcIter2data(iter, pOpt->m_iFlags & LSMC_USECAS, &valPtr, &valLen);
         ::memmove(valPtr + lenExp, valPtr, valLen - lenExp);
         return iterOff;
@@ -2037,9 +2081,12 @@ int LsMemcache::doCmdDelete(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
     if ((iterOff = pConn->getHash()->
         findIteratorWithKey(pThis->m_hkey, &pThis->m_parms)).m_iOffset != 0)
     {
-        expired = pThis->isExpired((LsMcDataItem *)pConn->getHash()->
-            offset2iteratorData(iterOff));
-        pConn->getHash()->eraseIterator(iterOff);
+        LsMcDataItem *item = (LsMcDataItem *)pConn->getHash()->offset2iteratorData(iterOff);
+        if (item)
+        {
+            expired = pThis->isExpired(item);
+            pConn->getHash()->eraseIterator(iterOff);
+        }
     }
     if ((iterOff.m_iOffset != 0) && !expired)
     {
@@ -2100,8 +2147,14 @@ int LsMemcache::doCmdTouch(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
         pThis->m_hkey, &pThis->m_parms)).m_iOffset != 0)
     {
         LsShmHElem *iter = pConn->getHash()->offset2iterator(iterOff);
-        LsMcDataItem *pItem = (LsMcDataItem *)iter->getVal();
-        if (pThis->isExpired(pItem))
+        LsMcDataItem *pItem = NULL;
+        if (iter)
+            pItem = (LsMcDataItem *)iter->getVal();
+        if (!iter || !pItem)
+        {
+            /* Report an error in the future */
+        }
+        else if (pThis->isExpired(pItem))
             pConn->getHash()->eraseIterator(iterOff);
         else
         {
@@ -3010,12 +3063,20 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         m_hkey, &m_parms)).m_iOffset != 0)
     {
         LsShmHElem *iter;
-        LsMcDataItem *pItem;
+        LsMcDataItem *pItem = NULL;
         int valLen;
         uint8_t *valPtr;
         iter = pConn->getHash()->offset2iterator(m_iterOff);
-        pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, &valLen);
-        if (isExpired(pItem))
+        if (iter)
+            pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, &valLen);
+        if (!iter || !pItem)
+        {
+            binErrRespond(pHdr, MC_BINSTAT_INTERNAL_ERROR, pConn);
+            pConn->getHash()->lockChkRehash();
+            unlock(pConn);
+            return;
+        }
+        else if (isExpired(pItem))
         {
             pConn->getHash()->eraseIterator(m_iterOff);
             notifyChange(pConn);
@@ -3107,7 +3168,9 @@ int LsMemcache::doBinDataUpdate(uint8_t *pBuf, McBinCmdHdr *pHdr,
     {
         McBinStat stat;
         unlock(pConn);
-        if (m_retcode == UPDRET_NOTFOUND)
+        if (m_retcode == UPDRET_INTERNAL_ERROR)
+            stat = MC_BINSTAT_INTERNAL_ERROR;
+        else if (m_retcode == UPDRET_NOTFOUND)
             stat = MC_BINSTAT_KEYENOENT;
         else if (m_retcode == UPDRET_EEXISTS)   // also CASFAIL
             stat = MC_BINSTAT_KEYEEXISTS;
@@ -3127,6 +3190,14 @@ void LsMemcache::doBinDelete(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     {
         LsMcDataItem *pItem =
             (LsMcDataItem *)pConn->getHash()->offset2iteratorData(m_iterOff);
+        if (!pItem)
+        {
+            statDeleteMiss(pConn);
+            binErrRespond(pHdr, MC_BINSTAT_INTERNAL_ERROR, pConn);
+            pConn->getHash()->lockChkRehash();
+            unlock(pConn);
+            return;
+        }
         if (isExpired(pItem))
         {
             pConn->getHash()->eraseIterator(m_iterOff);
@@ -3446,6 +3517,13 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD, pConn);
         return;
     }
+    if (pHdr->opaque == 0x04030201)
+    {
+        LS_NOTICE("Forcing rehash\n");
+        lock(pConn);
+        pConn->getHash()->rehash(true);
+        unlock(pConn);
+    }
     if ((len = pConn->GetSasl()->listMechs(&result)) < 0)
     {
         if (getVerbose(pConn) > 0)
@@ -3627,6 +3705,18 @@ void LsMemcache::binErrRespond(McBinCmdHdr *pHdr, McBinStat err,
         break;
     case MC_BINSTAT_ENOMEM:
         text = "Out of memory allocating item";
+        break;
+    case MC_BINSTAT_NOT_SUPPORTED:
+        text = "Not supported";
+        break;
+    case MC_BINSTAT_INTERNAL_ERROR:
+        text = "Internal error";
+        break;
+    case MC_BINSTAT_BUSY:
+        text = "Busy";
+        break;
+    case MC_BINSTAT_TEMPORARY_FAILURE:
+        text = "Temporary failure";
         break;
     default:
         text = "UNHANDLED ERROR";

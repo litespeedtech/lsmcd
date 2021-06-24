@@ -219,6 +219,11 @@ public:
         return (x_pStats->m_iFileSize == m_iMaxSizeO) ? LSSHM_OK : remap();
     }
 
+    int unlock(ls_shmlock_t *pLock)
+    {
+        return ls_shmlock_unlock(pLock);
+    }
+
     LsShmStatus_t remap();
 
     //
@@ -241,6 +246,9 @@ public:
     // for debug purpose
     friend class debugBase;
 #endif
+
+    size_t getAvailAddrSpace( size_t offset, size_t required_size)
+    {   return m_addrMap.getAvailAddrSpace(offset, required_size);  }
 
 private:
     LsShm(const LsShm &other);

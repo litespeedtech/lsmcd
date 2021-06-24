@@ -29,7 +29,7 @@
 #include <util/gpointerlist.h>
 #include <util/objpool.h>
 
-#define VERSION_TO_LOG  "1.4.23"
+#define VERSION_TO_LOG  "1.4.24"
 #define VERSION         "1.0.0"
 
 #define ULL_MAXLEN      24      // maximum buffer size of unsigned long long
@@ -161,18 +161,23 @@ typedef enum
 
 typedef enum
 {
-    MC_BINSTAT_SUCCESS      = 0x00,
-    MC_BINSTAT_KEYENOENT    = 0x01,
-    MC_BINSTAT_KEYEEXISTS   = 0x02,
-    MC_BINSTAT_E2BIG        = 0x03,
-    MC_BINSTAT_EINVAL       = 0x04,
-    MC_BINSTAT_NOTSTORED    = 0x05,
-    MC_BINSTAT_DELTABADVAL  = 0x06,
-    MC_BINSTAT_AUTHERROR    = 0x20,
-    MC_BINSTAT_AUTHCONTINUE = 0x21,
-    MC_BINSTAT_REMOTEERROR  = 0x30,
-    MC_BINSTAT_UNKNOWNCMD   = 0x81,
-    MC_BINSTAT_ENOMEM       = 0x82
+    MC_BINSTAT_SUCCESS              = 0x00,
+    MC_BINSTAT_KEYENOENT            = 0x01,
+    MC_BINSTAT_KEYEEXISTS           = 0x02,
+    MC_BINSTAT_E2BIG                = 0x03,
+    MC_BINSTAT_EINVAL               = 0x04,
+    MC_BINSTAT_NOTSTORED            = 0x05,
+    MC_BINSTAT_DELTABADVAL          = 0x06,
+    MC_BINSTAT_AUTHERROR            = 0x20,
+    MC_BINSTAT_AUTHCONTINUE         = 0x21,
+    MC_BINSTAT_REMOTEERROR          = 0x30,
+    MC_BINSTAT_UNKNOWNCMD           = 0x81,
+    MC_BINSTAT_ENOMEM               = 0x82,
+    MC_BINSTAT_NOT_SUPPORTED        = 0x83,
+    MC_BINSTAT_INTERNAL_ERROR       = 0x84,
+    MC_BINSTAT_BUSY                 = 0x85,
+    MC_BINSTAT_TEMPORARY_FAILURE    = 0x86,
+    
 } McBinStat;
 
 typedef struct

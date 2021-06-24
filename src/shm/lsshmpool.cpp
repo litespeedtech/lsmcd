@@ -282,14 +282,17 @@ LsShmPool::~LsShmPool()
 
 LsShmOffset_t LsShmPool::getReg(const char *name)
 {
+    LS_DBG_M("getReg name: %s\n", name);
     if (name == NULL)
         return 0;
 
     LsShmOffset_t offReg = m_pShm->findRegOff(name);
     if (offReg == 0)
     {
+        LS_DBG_M("try to add it\n");
         if ((offReg = m_pShm->addRegOff(name)) == 0)
         {
+            LS_DBG_M("Add failed, bad map file\n");
             m_status = LSSHM_BADMAPFILE;
             return 0;
         }
@@ -316,29 +319,43 @@ LsShmHash *LsShmPool::getNamedHash(const char *name,
     if ((itor != NULL)
         && ((pObj = LsShmHash::checkHTable(itor, this, name, hf,
                                            vc)) != (LsShmHash *)-1))
+    {
+        LS_DBG_M("LsShmPool::getNamedHash itor: %p, pObj: %p\n", itor, pObj);
         return pObj;
-
+    }
     LsShmOffset_t offReg = getReg(name);
     if (offReg == 0)
+    {
+        LS_DBG_M("LsShmPool::getNamedHash reg 0\n");
         return NULL;
+    }
     LsShmReg * pReg = (LsShmReg *)offset2ptr(offReg);
     if (!pReg)
+    {
+        LS_DBG_M("LsShmPool::getNamedHash pReg now 0 for offReg: %d\n", offReg);
         return NULL;
-
+    }
     if (pReg->x_iValue == 0)
     {
+        LS_DBG_M("LsShmPool::getNamedHash allocate new\n");
         LsShmOffset_t offset = allocateNewHash( init_size, hf != NULL, iFlags);
         if (offset != 0)
         {
             pReg = (LsShmReg *)offset2ptr(offReg);
             if (!pReg)
+            {
+                LS_DBG_M("LsShmPool::getNamedHash Bad ptr pReg\n");
                 return NULL;
+            }
             pReg->x_iValue = offset;
         }
     }
     if (!pReg->x_iValue)
+    {
+        LS_DBG_M("LsShmPool::getNamedHash pReg->x_iValue 0\n");
         return NULL;
-
+    }
+    LS_DBG_M("LsShmPool::getNamedHash call newHashByOffset\n");
     return newHashByOffset(pReg->x_iValue, name, hf, vc, iFlags);
 }
 
@@ -500,7 +517,7 @@ LsShmOffset_t LsShmPool::alloc2(LsShmSize_t *size, int &remapped)
         LS_ERROR("[SHM] [%d-%d:%p] FATAL ERROR alloc2 cross large page boundary, "
                  "offset: %X, size: %d.  You must remove all of the files in "
                  "/dev/shm/lsmcd and restart the lsmcd server\n", 
-                 s_pid, m_pShm->getfd(), this, offset, size);
+                 s_pid, m_pShm->getfd(), this, offset, *size);
         autoUnlock();
         return -1;
     } while(1);
@@ -835,7 +852,12 @@ LsShmOffset_t LsShmPool::allocFromDataBucket(LsShmSize_t size)
     if ((offset = *pBucket) != 0)
     {
         np = (LsShmOffset_t *)offset2ptr(offset);
-        if (!m_pShm->isOffsetValid(*np))
+        if (!np)
+        {
+            LS_ERROR("[SHM] Unable to access data at offset: %d\n", offset);
+            *pBucket = (LsShmOffset_t)0;
+        }
+        else if (!m_pShm->isOffsetValid(*np))
         {
             LS_ERROR("[SHM] [%d-%d:%p] pool free bucket [%d] corruption, at "
                      "offset: %d, invalid value: %d, usage: alloc %d, free %d\n",
@@ -912,7 +934,7 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
     if (num > LSSHM_MAX_BUCKET_SLOT)
         num = LSSHM_MAX_BUCKET_SLOT;
 
-    LsShmOffset_t xoffset, offset;
+    LsShmOffset_t xoffset = 0, offset = 0;
     if ((m_pParent != NULL)
         && ((offset = m_pParent->allocFromGlobalBucket(bucketNum, num)) != 0))
     {
@@ -944,7 +966,7 @@ LsShmOffset_t LsShmPool::fillDataBucket(LsShmSize_t bucketNum, LsShmSize_t size)
                   this, num, offset, xoffset);
     if (--num != 0)
     {
-        LsShmSize_t max = m_pShm->getFileSize();
+        //LsShmSize_t max = m_pShm->getFileSize();
         if (!m_pShm->isOffsetValid(xoffset))
             return offset;
         getDataMap()->x_aFreeBucket[bucketNum] = xoffset;

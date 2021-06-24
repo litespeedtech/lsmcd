@@ -80,7 +80,8 @@ start()
         echo "[ERROR] Cannot find the configure file $CONF"
         return 
     fi
-    ./bin/${EXECUTABLE} -f $CONF
+    export ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer
+    ASAN_OPTIONS=symbolize=1:debug=true:abort_on_error=1:disable_coredump=0:unmap_shadow_on_exit=1 "${BASE_DIR}/bin/${EXECUTABLE}" -f $CONF 2>>/tmp/lsmcd.log
     ret=$?
 
     if [ $ret -eq 0 ]; then

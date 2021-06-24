@@ -27,6 +27,8 @@ class debugBase;
 #include <shm/lsshm.h>
 #include <shm/lsshmpool.h>
 
+#include <log4cxx/logger.h>
+
 #define LSSHM_FLAG_NONE         0
 #define LSSHM_FLAG_LRU          (1<<0)
 #define LSSHM_FLAG_TID          (1<<1)    // `transaction' id
@@ -61,6 +63,7 @@ typedef struct lsshmobsiter_s LsShmObsIter_t;
 class LsShmObserver;
 
 
+extern int s_Reported_Corruption;
 
 typedef struct
 {
@@ -83,6 +86,8 @@ typedef struct lsShm_hElem_s
     LsShmHKey            x_hkey;          // the key itself
     uint32_t             x_aData[0];
 
+    /* I'm going to assume these functions don't need validation as they get 
+     * validated in advance to being called */
     uint8_t         *getKey() const
     { return ((ls_vardata_t *)x_aData)->x_data; }
     int32_t          getKeyLen() const
@@ -98,20 +103,108 @@ typedef struct lsShm_hElem_s
     void             setValLen(int32_t len)
     { ((ls_vardata_t *)((uint8_t*)x_aData + x_iValOff))->x_size = len; }
 
+    static int round4(int x)
+    {   return (x + 0x3) & ~0x3; }
+    
+    int              validate(bool lru) const
+    {
+        /* The original calculation for x_iValOff (valOff) and x_iLen, missing 
+         * the actual lengths of the key and value as they're not available 
+         * until we're sure the buffer is intact.  This calculation makes a try
+         * at determining if the buffer is correct (to avoid constant crashes). */
+        LsShmHElemLen_t  iLen = x_iLen;         // Put this into locals for the debugger
+        LsShmHElemOffs_t iValOff = x_iValOff;   // Put this into locals for the debugger
+        LsShmHElemOffs_t valOff = sizeof(ls_vardata_t) //+ round4(keyLen)
+                                  + (lru ? sizeof(LsShmHElemLink) : 0);
+        int              valLen = /*realValLen +*/ (lru ? sizeof(LsShmHElemLink) : 0);
+        LsShmHElemLen_t  len = sizeof(struct lsShm_hElem_s) /*+ valueOff*/
+                               + sizeof(ls_vardata_t) + round4(valLen);
+        
+        if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len
+            || iLen > 100000000) // A large number
+        {
+            if (!s_Reported_Corruption)
+            {
+                s_Reported_Corruption = 1;
+                LS_NOTICE("Delete shared memory files: "
+                          "x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
+                          x_iValOff, valOff, x_iLen, len);
+            }
+            return -1;
+        }
+        return 0;
+    }
     LsShmHElemLink  *getLruLinkPtr() const
-    { 
-        return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); }
+    {   
+        /* The original calculation for x_iValOff (valOff) and x_iLen, missing 
+         * the actual lengths of the key and value as they're not available 
+         * until we're sure the buffer is intact.  This calculation makes a try
+         * at determining if the buffer is correct (to avoid constant crashes). */
+        LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+        LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
+        if (validate(true))
+            return NULL;
+        return ((LsShmHElemLink *)((uint8_t*)x_aData + x_iValOff) - 1); 
+    }
     LsShmHIterOff    getLruLinkNext() const
     { 
-        return getLruLinkPtr()->x_iLinkNext; }
+        LsShmHElemLink *link = getLruLinkPtr();
+        if (link)
+        {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
+            return link->x_iLinkNext; 
+        }
+        LsShmHIterOff offZero = { 0 };
+        return offZero;
+    }
     LsShmHIterOff    getLruLinkPrev() const
-    { return getLruLinkPtr()->x_iLinkPrev; }
+    { 
+        LsShmHElemLink *link = getLruLinkPtr();
+        if (link)
+        {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
+            return link->x_iLinkPrev; 
+        }
+        LsShmHIterOff offZero = { 0 };
+        return offZero;
+    }
     time_t           getLruLasttime() const
-    { return getLruLinkPtr()->x_lasttime; }
-    void             setLruLinkNext(LsShmHIterOff off)
-    { getLruLinkPtr()->x_iLinkNext = off; }
-    void             setLruLinkPrev(LsShmHIterOff off)
-    { getLruLinkPtr()->x_iLinkPrev = off; }
+    { 
+        LsShmHElemLink *link = getLruLinkPtr();
+        if (link)
+        {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
+            return link->x_lasttime; 
+        }
+        return 0;
+    }
+    int              setLruLinkNext(LsShmHIterOff off)
+    { 
+        LsShmHElemLink *link = getLruLinkPtr();
+        if (link)
+        {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
+            link->x_iLinkNext = off; 
+            return 0;
+        }
+        return -1;
+    }
+    int              setLruLinkPrev(LsShmHIterOff off)
+    { 
+        LsShmHElemLink *link = getLruLinkPtr();
+        if (link)
+        {
+            LsShmHElemLen_t      iLen = x_iLen;         // Put this into locals for the debugger
+            LsShmHElemOffs_t     iValOff = x_iValOff;   // Put this into locals for the debugger
+            link->x_iLinkPrev = off; 
+            return 0;
+        }
+        return -1;
+    }
 
     void            *getExtraPtr(LsShmOffset_t off)
     { return ((uint8_t *)x_aData + x_iValOff - off); }
@@ -235,22 +328,39 @@ public:
     ls_attr_inline iterator offset2iterator(iteroffset offset) const
     {   
         if (m_pPool)
-            return (iterator)m_pPool->offset2ptr(offset.m_iOffset); 
+        {
+            iterator iterThis = (iterator)m_pPool->offset2ptr(offset.m_iOffset);
+            if (iterThis && (iterThis->x_iValOff < 32 /* initialization */ || 
+                             !iterThis->validate(false)))
+                return iterThis;
+            //if (!iterThis)
+            //    assert(0);
+            //uint32_t off = iterThis->x_iValOff;
+            //assert(0);
+        }
+        //assert(0);
         return NULL;
     }
 
     ls_attr_inline void *offset2iteratorData(iteroffset offset) const
     {   
-        if (m_pPool && (iterator)m_pPool->offset2ptr(offset.m_iOffset))
-            return ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getVal(); 
+        if (m_pPool)
+        {
+            iterator iter = (iterator)m_pPool->offset2ptr(offset.m_iOffset);
+            if (iter && !iter->validate(false))
+                return iter->getVal(); 
+        }
         return NULL;
     }
 
     ls_attr_inline LsShmOffset_t iter2DataOffset(iteroffset offset) const
     {   
-        if (m_pPool && (iterator)m_pPool->offset2ptr(offset.m_iOffset))
-            return offset.m_iOffset + 
-                   ((iterator)m_pPool->offset2ptr(offset.m_iOffset))->getValStartOff(); 
+        if (m_pPool)
+        {
+            iterator iter = (iterator)m_pPool->offset2ptr(offset.m_iOffset);
+            if (iter && !iter->validate(false))
+                return offset.m_iOffset + iter->getValStartOff(); 
+        }
         return 0;
     }
     
@@ -348,6 +458,7 @@ public:
     {
         iteroffset iterOff;
         ls_strpair_t parms;
+        
         iterOff = getIterator(setParms(&parms, pKey, keyLen, NULL, *valLen)
                               , pFlag);
         if (iterOff.m_iOffset == 0)
@@ -582,8 +693,7 @@ public:
 
 
     iteroffset begin();
-    iteroffset end()
-    {   iteroffset tmp = {0}; return tmp;   }
+    iteroffset end()                   {   return m_end;   }
     iteroffset next(iteroffset iterOff);
     int for_each(iteroffset beg, iteroffset end, for_each_fn fun);
     int for_each2(iteroffset beg, iteroffset end, for_each_fn2 fun,
@@ -630,6 +740,8 @@ public:
 
     void lockChkRehash();
 
+    int         rehash(bool force);
+
     int getRef()     { return m_iRef; }
     int upRef()      { return ++m_iRef; }
     int downRef()    { return --m_iRef; }
@@ -665,7 +777,6 @@ protected:
     void setBitMapEnt(uint32_t indx);
     void clrBitMapEnt(uint32_t indx);
 
-    int         rehash();
     iteroffset  find2(LsShmHKey key, ls_strpair_t *pParms);
     iteroffset  insert2(LsShmHKey key, ls_strpair_t *pParms);
     iteroffset  insertCopy2(LsShmHKey key, ls_strpair_t *pParms);
@@ -731,16 +842,28 @@ protected:
     {   return m_iAutoLock && ls_shmlock_setup(m_pShmLock); }
 
     // auxiliary double linked list of hash elements
-    void set_linkNext(iteroffset offThis, iteroffset offNext)
+    int  set_linkNext(iteroffset offThis, iteroffset offNext)
     {
-        if (offset2iterator(offThis))
-            (offset2iterator(offThis))->setLruLinkNext(offNext);
+        if (offNext.m_iOffset)
+        {
+            iterator iterThis = offset2iterator(offThis);
+            if (iterThis)
+                return iterThis->setLruLinkNext(offNext);
+            return -1;
+        }
+        return 0;
     }
 
-    void set_linkPrev(iteroffset offThis, iteroffset offPrev)
+    int  set_linkPrev(iteroffset offThis, iteroffset offPrev)
     {
-        if (offset2iterator(offThis))
-            (offset2iterator(offThis))->setLruLinkPrev(offPrev);
+        if (offPrev.m_iOffset)
+        {
+            iterator iterThis = offset2iterator(offThis);
+            if (iterThis)
+                return iterThis->setLruLinkPrev(offPrev);
+            return -1;
+        }
+        return 0;
     }
 
     void linkHElem(LsShmHElem *pElem, iteroffset offElem);
@@ -778,7 +901,7 @@ protected:
     LsShmStatus_t       m_status;
     LsShmHashLruAddon  *m_pLruAddon;
     LsShmObsIter_t     *m_pObservers;
-
+    LsShmHIterOff       m_end;
     // house keeping
     int m_iRef;
 

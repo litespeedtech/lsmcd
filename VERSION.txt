@@ -112,3 +112,7 @@ VERSION 1.4.22 June 1, 2021
 
 VERSION 1.4.23 June 17, 2021
 [BUGFIX] No longer report incorrect messages "Received length < header minimum"
+
+VERSION 1.4.24 June 23, 2021
+[BUGFIX] A number of significant fixes which should reduce crashes.
+[IMPROVEMENT] Add address sanitizer to the debug build (enable Sanitizer in CMakeLists.txt 'cmake .', make clean, make).  You'll need to install cmake, libasan, llvm.  Doc has been updated for this.

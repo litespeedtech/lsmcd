@@ -287,6 +287,49 @@ int do_partial()
 }
 
 
+int do_rehash()
+{
+/* My rehash request example
+0000: 80200000 00000000 00000000 01020304 
+0010: 00000000 00000000 
+*/
+    memset(buffer, 0, 24);
+    buffer[0] = 0x80;
+    buffer[1] = 0x20;
+    buffer[12] = 0x01;
+    buffer[13] = 0x02;
+    buffer[14] = 0x03;
+    buffer[15] = 0x04;
+    if (send(sock_fd, buffer, 24, 0) != 24)
+    {
+        printf("Error in send of rehash: %s\n", strerror(errno));
+        return -1;
+    }
+/* My LIST_MECHS response 
+0000: 81200000 00000000 00000005 00680000 . ...........h..
+0010: 00000000 00000000 504c4149 4e       ........PLAIN
+*/
+    ssize_t recvd = recv(sock_fd, buffer, BUFFER_LEN, 0);
+    if (recvd < 29)
+    {
+        printf("Error in list_mechs response1 (partial): %s (recvd: %ld)\n", strerror(errno), recvd);
+        return -1;
+    }
+    if (buffer[0] != 0x81 ||
+        buffer[1] != 0x20 ||
+        buffer[6] != 0x00 ||
+        buffer[7] != 0x00 ||
+        buffer[11] < 0x05 ||
+        memcmp((char *)&buffer[24], "PLAIN", 5))
+    {
+        printf("Error in list_mechs response data rehash (turn on the trace)\n");
+        return -1;
+    }
+    printf("Rehash send ok\n");
+    return 0;
+}
+
+
 int do_multi2()
 {
 /* My multiple requests example: 
@@ -330,23 +373,67 @@ int do_multi2()
 }
 
 
-int main()
+int main(int argc, char *argv[])
 {
     int ret = 1;
+    int login = 0;
+    int rehash = 0;
+    int test = 0;
+    int passed = 1;
     signal(SIGPIPE, SIG_IGN);    
-    if (do_connect())
-        return 1;
-    if (!do_login())
+    char opt;
+    while ((opt = getopt(argc, argv, "lrth?")) != -1)
     {
-        if (!do_set() && !do_get(false) && !do_multi1() && 
-            !do_get(true) && !do_partial() &&
-            !do_multi2())   // multi2 must be last as it closes the connection
+        switch (opt)
         {
-            printf("All tests passed\n");
-            ret = 0;
+            case 'l':
+                printf("Do login with the default user/password\n");
+                login = 1;
+                break;
+            case 'r':
+                printf("Force rehash\n");
+                rehash = 1;
+                break;
+            case 't':
+                printf("Test\n");
+                test = 1;
+                break;
+            case 'h':
+            case '?':
+                printf("unittest for lsmcd and forces rehash\n");
+                printf("Use: 'l' (login), 't' (test), 'r' (rehash)\n");
+                return 1;
         }
     }
-    if (sock_fd >= 0)
+    if (!login && !rehash && !test)
+    {
+        printf("You did not specify an option\n");
+        return 1;
+    }
+    if (do_connect())
+        return 1;
+    if (login)
+    {
+        if (do_login())
+            passed = 0;
+        else
+        {
+            if (do_set() || do_get(false))
+                passed = 0;
+            else if (do_multi2() ||   // multi2 must be last as it closes the connection    
+                     do_connect())
+                passed = 0; // Can't reconnect
+        }
+    }
+    if (passed && test)
+        if (do_multi1() || do_partial())
+            passed = 0;
+    if (passed && rehash)
+        if (do_rehash())
+            passed = 0;
+    if (passed)
+        printf("All tests passed\n");
+    if (sock_fd > 0)
         close(sock_fd);
-    return ret;
+    return !passed;
 }

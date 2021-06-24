@@ -1100,7 +1100,7 @@ LsShmHash::iteroffset LsShmHash::insertCopy2(LsShmHKey key,
 
     if (size() * fullFactor() > capacity())
     {
-        if (rehash(true) < 0)
+        //if (rehash(true) < 0)
         {
             if (size() == capacity())
                 return end();

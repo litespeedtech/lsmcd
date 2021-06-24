@@ -1590,7 +1590,7 @@ LsShmHash::iteroffset LsMemcache::doHashInsert(ls_strpair_t *pParms,
         if (!item)
         {
             pOpt->m_iRetcode = UPDRET_INTERNAL_ERROR;
-            pConn->getHash()->rehash(true);
+            //pConn->getHash()->rehash(true);
             m_retcode = UPDRET_INTERNAL_ERROR;
         }
         else if (LsMemcache::isExpired(item))

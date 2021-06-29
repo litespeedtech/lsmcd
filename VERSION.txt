@@ -120,3 +120,4 @@ VERSION 1.4.24 June 23, 2021
 VERSION 1.4.25 June 29, 2021
 [BUGFIX] Several unnecessary assertions removed.
 [BUGFIX] Detect NULL in chkMemSz.
+[BUGFIX] Removed assertion in ls_atomic_spin_pidwait.

@@ -1912,6 +1912,7 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
 
     total = pConn->getHash()->getHashDataSize() + more;
     LsShmOffset_t helperOff = pConn->getHash()->getHTableReservedOffset();
+    LS_DBG_M("arg: %d, more: %d, helperOff: %d\n", arg, more, helperOff);
     LsMcTidInfoHelper *pHelper = (LsMcTidInfoHelper *)pConn->getHash()->
         offset2ptr(helperOff);
     if (!pHelper)

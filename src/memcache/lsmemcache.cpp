@@ -1914,8 +1914,14 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
     LsShmOffset_t helperOff = pConn->getHash()->getHTableReservedOffset();
     LsMcTidInfoHelper *pHelper = (LsMcTidInfoHelper *)pConn->getHash()->
         offset2ptr(helperOff);
+    if (!pHelper)
+    {
+        LS_DBG_M("Unexpected NULL pHelper\n");
+        return MC_BINSTAT_SUCCESS;
+    }
     total -= pHelper->x_iSize;
-    LS_DBG_M("Testing total %d maxsize %d\n", total, m_mcparms.m_iMemMaxSz);
+    LS_DBG_M("Testing total %d maxsize %d pHelper: %p\n", 
+             total, m_mcparms.m_iMemMaxSz, pHelper);
 
     if (total > m_mcparms.m_iMemMaxSz)
     {

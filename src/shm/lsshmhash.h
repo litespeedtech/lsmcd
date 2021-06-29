@@ -126,9 +126,9 @@ typedef struct lsShm_hElem_s
             if (!s_Reported_Corruption)
             {
                 s_Reported_Corruption = 1;
-                LS_NOTICE("Delete shared memory files: "
-                          "x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
-                          x_iValOff, valOff, x_iLen, len);
+                LS_DBG_M("[PID: %d] Shared memory files should be deleted: "
+                         "x_iValOff: %d (%d), x_iLen: %d (%d)\n", 
+                         getpid(), x_iValOff, valOff, x_iLen, len);
             }
             return -1;
         }

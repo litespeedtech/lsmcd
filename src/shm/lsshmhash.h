@@ -120,8 +120,11 @@ typedef struct lsShm_hElem_s
         LsShmHElemLen_t  len = sizeof(struct lsShm_hElem_s) /*+ valueOff*/
                                + sizeof(ls_vardata_t) + round4(valLen);
         
-        if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len
-            || iLen > 100000000) // A large number
+        
+        if ((x_iLen != 0 && x_iValOff > (uint32_t)x_iLen) || 
+            x_iValOff <= valOff || 
+            (x_iLen != 0 && x_iLen <= len) || 
+            iLen > 100000000) // A large number
         {
             if (!s_Reported_Corruption)
             {

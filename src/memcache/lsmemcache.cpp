@@ -3526,9 +3526,9 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     }
     if (pHdr->opaque == 0x04030201)
     {
-        LS_NOTICE("Forcing rehash\n");
+        LS_NOTICE("Forcing rebuild\n");
         lock(pConn);
-        pConn->getHash()->rehash(true);
+        pConn->getHash()->rebuild();
         unlock(pConn);
     }
     if ((len = pConn->GetSasl()->listMechs(&result)) < 0)

@@ -129,6 +129,7 @@ private:
     virtual int forkError( int seq, int err );
     virtual int postFork( int seq, pid_t pid );
     virtual int childExit( int seq, pid_t pid, int stat );
+    virtual int childSignaled(int seq, pid_t pid, int signal, int coredump);
     uint8_t             m_procId;                 
 };
 

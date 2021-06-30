@@ -325,6 +325,8 @@ public:
         return NULL;
     }
 
+    void        rebuild() const;
+    
     ls_attr_inline iterator offset2iterator(iteroffset offset) const
     {   
         if (m_pPool)
@@ -339,6 +341,8 @@ public:
             //assert(0);
         }
         //assert(0);
+        LS_NOTICE("[PID: %d] During iterator test, noted shared memory may be damaged.  Rebuilding\n", getpid());
+        rebuild();
         return NULL;
     }
 
@@ -350,6 +354,8 @@ public:
             if (iter && !iter->validate(false))
                 return iter->getVal(); 
         }
+        LS_NOTICE("[PID: %d] During iterator data test, noted shared memory may be damaged.  Rebuilding\n", getpid());
+        rebuild();
         return NULL;
     }
 

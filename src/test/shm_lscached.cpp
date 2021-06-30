@@ -92,6 +92,7 @@ static void sig_hup ( int sig )
 
 static void sig_usr1 ( int sig )
 {
+    sEvents |= HS_STOP;
     sEvents |= HS_USR1 ;
 }
 
@@ -252,6 +253,7 @@ int LsmcdImpl::EventLoop()
     register int event;
     alarm ( 1 );
     MemcacheConn::s_curTime = time ( NULL );
+    //LS_NOTICE("Entering shm_lscached event loop\n"); NOT USED
     while ( true )
     {
         ret = m_pMultiplexer->waitAndProcessEvents (
@@ -271,6 +273,8 @@ int LsmcdImpl::EventLoop()
                 alarm ( 1 );
                 ProcessTimerEvent();
             }
+            if (event & HS_USR1)
+                LS_NOTICE("Doing restart (EventLoop)\n");
             if ( event & HS_STOP )
             {
                 break;
@@ -279,6 +283,8 @@ int LsmcdImpl::EventLoop()
         if (getppid() == 1)
             break;
     }
+    if (event & HS_USR1)
+        return HS_USR1;
     return 0;
 }
 
@@ -337,6 +343,10 @@ int LsCache2ReplEvent::onNotified(int count)
 
 int Lsmcd::Main ( int argc, char ** argv )
 {
+#define MAX_CMD 256
+    char cwd[MAX_CMD];
+    getcwd(cwd, sizeof(cwd));
+    
     if ( argc > 1 )
     {
         _pImpl->ParseOpt ( argc, argv );
@@ -436,10 +446,12 @@ int Lsmcd::Main ( int argc, char ** argv )
     init_signals();
 
     _pImpl->IsServer = true;
-    _pImpl->EventLoop();
+    int rc = _pImpl->EventLoop();
 
     ReleaseAll();
 
+    if (rc == HS_USR1)
+        LS_NOTIFY("Not restarting here\n");
     return 0;
 }
 

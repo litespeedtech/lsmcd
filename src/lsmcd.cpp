@@ -655,6 +655,8 @@ int LsmcdImpl::EventLoop()
     {
         ret = m_pMultiplexer->waitAndProcessEvents(
                     MLTPLX_TIMEOUT );
+        int err = errno;
+        errno = err;
         if (( ret == -1 )&& errno )
         {
             if (!((errno == EINTR )||(errno == EAGAIN)))
@@ -724,6 +726,10 @@ static void init_signals()
 
 int Lsmcd::Main(int argc, char **argv)
 {
+#define MAX_CMD 256
+    char cwd[MAX_CMD];
+    getcwd(cwd, sizeof(cwd));
+    
     _pReplSvrImpl = new LsmcdImpl();
 
     if (_pReplSvrImpl->Init(argc, argv) < 0)
@@ -757,6 +763,12 @@ int Lsmcd::Main(int argc, char **argv)
         int ret = cg.guardCrash( 1 + getReplConf()->getCachedProcCnt() );
         if (ret == -1)
             return 8;
+        if (ret == HS_USR1 && !getuid())
+        {
+            chdir(cwd);
+            return execv(argv[0], argv);
+        }
+            
         //int zeroLen = strlen(argv[0]);
         for( int i = 1; i< argc; ++i)
         {
@@ -783,11 +795,11 @@ int Lsmcd::Main(int argc, char **argv)
     
     init_signals();
 
-    _pReplSvrImpl->EventLoop();
+    int rc = _pReplSvrImpl->EventLoop();
 
     ReleaseAll();
 
-    return 0;
+    return rc;
 }
 
 
@@ -848,4 +860,38 @@ void Lsmcd::setProcId(uint8_t procId)
 UsockClnt* Lsmcd::getUsockConn() const
 {
     return _pReplSvrImpl->m_pUsockClnt;
+}
+
+
+int Lsmcd::childSignaled(int seq, pid_t pid, int signal, int coredump)
+{
+    if (signal == SIGUSR2)
+    {
+        char *shmdir = (char *)"/dev/shm/lsmcd";
+        LS_NOTICE("Deleting the shared memory database\n");
+        DIR *dir = opendir(shmdir);
+        if (!dir)
+            LS_ERROR("Unable to open the shared memory directory: %s\n", 
+                     strerror(errno));
+        else 
+        {
+            struct dirent *ent;
+            while ((ent = readdir(dir)))
+            {
+                if (ent->d_type == DT_REG && !strncmp(ent->d_name, "data", 4))
+                {
+                    char filename[512];
+                    snprintf(filename, sizeof(filename), "%s/%s", shmdir, 
+                             ent->d_name);
+                    LS_DBG_M("Deleting %s\n", filename);
+                    if (unlink(filename))
+                        LS_NOTICE("Error deleting %s: %s\n", filename, 
+                                  strerror(errno));
+                }
+            }
+            LS_DBG_M("Restarting service with no databases...\n");
+            kill(getpid(), SIGUSR1);
+        }
+    }
+    return 0;
 }

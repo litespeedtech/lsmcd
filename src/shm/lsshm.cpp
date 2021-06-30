@@ -128,6 +128,13 @@ static inline HashStringMap< LsShm * > *getBase()
 }
 
 
+void        LsShm::rebuild() const
+{
+    LS_DBG_M("Doing rebuild!, pid: %d\n", getpid());
+    kill(getpid(), SIGUSR2);
+    LS_NOTICE("Rebuild in progress\n");
+}
+   
 const char *LsShm::strLsShmStatus(LsShmStatus_t status)
 {
     switch (status)
@@ -245,7 +252,9 @@ void LsShm::tryRecoverBadOffset(LsShmOffset_t offset)
     LsShmSize_t curMaxSize = x_pShmMap->x_stat.m_iFileSize; 
     if ( offset < curMaxSize)
     {
-        assert(offset < curMaxSize);
+        LS_NOTICE("[PID: %d] In attempt to recover shared memory, doing rebuild\n", getpid());
+        rebuild();
+        //assert(offset < curMaxSize);
     }
 }
 
@@ -786,12 +795,16 @@ LsShmStatus_t LsShm::remap()
                   (unsigned long)x_pShmMap->x_stat.m_iFileSize);
         if ( x_pShmMap->x_stat.m_iFileSize - mystat.st_size > 100 * 1024 * 1024)
         {
+            LS_NOTICE("[PID: %d] In attempt to remap shared memory, doing rebuild\n", getpid());
+            rebuild();
+            /*
             LsShmMap mapCopy = *x_pShmMap;
             deleteFile();
             if (s_fatalErrorCb)
                 (*s_fatalErrorCb)();
             
             assert( (char *)"bad file size." == (char *)&mapCopy);
+            */
         }
     }
     LsShmXSize_t size = x_pShmMap->x_stat.m_iFileSize;

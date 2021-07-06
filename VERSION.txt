@@ -124,3 +124,6 @@ VERSION 1.4.25 June 29, 2021
 [BUGFIX] Fixed a regression introduced in 1.4.24 where the database size will not be increased correctly.
 [IMPROVEMENT] USR1 signal can be used to restart the service.
 [IMPROVEMENT] On the detection of corrupt shared memory, it is rebuilt.
+
+VERSION 1.4.26 July 6, 2021
+[BUGFIX] A response is generated for a GETKQ.

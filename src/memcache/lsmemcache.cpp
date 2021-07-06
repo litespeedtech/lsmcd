@@ -2726,6 +2726,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
             // no break
         case MC_BINCMD_GET:
         case MC_BINCMD_GETK:
+        case MC_BINCMD_GETKQ:
             doBinGet(pHdr, cmd, doTouch, pConn);
             break;
         case MC_BINCMD_SET:

@@ -1896,6 +1896,7 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
     LsShmXSize_t total;
     if ((arg == MC_BINCMD_ADD) || (arg == MC_BINCMD_SET))
     {
+        LS_DBG_M("Get size (set/add)\n");
         more = LsShmPool::size2roundSize(
             + pConn->getHash()->round4(m_parms.key.len)
             + sizeof(ls_vardata_t)
@@ -1907,10 +1908,13 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
     }
     else
     {
+        LS_DBG_M("Get size\n");
         more = LsShmPool::size2roundSize(m_parms.val.len);   // additional
     }
+    LS_DBG_M("more size: %d\n", more);
 
     total = pConn->getHash()->getHashDataSize() + more;
+    LS_DBG_M("total size: %d\n", total);
     LsShmOffset_t helperOff = pConn->getHash()->getHTableReservedOffset();
     LS_DBG_M("arg: %d, more: %d, helperOff: %d\n", arg, more, helperOff);
     LsMcTidInfoHelper *pHelper = (LsMcTidInfoHelper *)pConn->getHash()->

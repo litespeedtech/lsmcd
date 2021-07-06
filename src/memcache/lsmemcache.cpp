@@ -2824,6 +2824,8 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
             binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD, pConn);
             break;
     }
+    LS_DBG_M("BINCMD flags CMDWAIT: %d, consumed: %d\n", 
+             (pConn->GetConnFlags() & CS_CMDWAIT), consumed);
     return ((pConn->GetConnFlags() & CS_CMDWAIT) ? -1 : consumed);
 }
 

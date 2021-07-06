@@ -674,7 +674,7 @@ bool LsMemcache::isSliceRemote(LsMcHashSlice *pSlice)
 bool LsMemcache::fwdToRemote(LsMcHashSlice *pSlice, char *pNxt, 
                              MemcacheConn *pConn)
 {
-    if (!pConn->getHash()->isTidMaster())
+    if (LsMemcache::getConfigReplication() && !pConn->getHash()->isTidMaster())
     {
         if (isSliceRemote(pSlice))
         {
@@ -2946,9 +2946,15 @@ uint8_t *LsMemcache::setupBinCmd(
             pSlice = canProcessNow(m_parms.key.ptr, m_parms.key.len, pConn);
             LS_DBG_M("canProcessNow return pSlice: %p\n", pSlice);
             if (pSlice == NULL)
+            {
+                LS_DBG_M("Queued for remote\n");
                 return (uint8_t *)-1;   // queued for remote
+            }
             if (fwdBinToRemote(pSlice, pHdr, pConn))
+            {
+                LS_DBG_M("Sent to remote\n");
                 return (uint8_t *)-2;   // sent to remote
+            }
         }
         else
         {

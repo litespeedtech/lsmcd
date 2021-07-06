@@ -3168,7 +3168,7 @@ int LsMemcache::doBinDataUpdate(uint8_t *pBuf, McBinCmdHdr *pHdr,
         dataItemUpdate(pBuf, pConn);
         unlock(pConn);
         notifyChange(pConn);
-        if (m_retcode != UPDRET_NONE)
+        //if (m_retcode != UPDRET_NONE)
             binOkRespond(pHdr, pConn);
         m_iterOff.m_iOffset = 0;
     }

@@ -2695,8 +2695,9 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
         cmd = MC_BINCMD_REPLACE;
     if ((pVal = setupBinCmd(pHdr, cmd, &updOpt, pConn)) == NULL)
     {
+        LS_DBG_M("setupBinCmd returned NULL!\n");
         binErrRespond(pHdr, MC_BINSTAT_EINVAL, pConn);
-        return 0;
+        return consumed;
     }
     else if (pVal == (uint8_t *)-1)    // queued for remote
     {
@@ -2713,6 +2714,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
     {
         unlock(pConn);   // locked in setup
         binErrRespond(pHdr, (McBinStat)(long)pVal, pConn);
+        LS_DBG_M("setupBinCmd Error!\n");
         return consumed;
     }
     m_retcode = UPDRET_DONE;
@@ -2772,6 +2774,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
             break;
         case MC_BINCMD_QUIT:
             binOkRespond(pHdr, pConn);
+            LS_DBG_M("QUIT command closing connection\n");
             return 0;   // close connection
         case MC_BINCMD_FLUSH:
             doBinFlush(pHdr, pConn);

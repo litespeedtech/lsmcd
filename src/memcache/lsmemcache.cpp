@@ -3102,10 +3102,12 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         int valLen;
         uint8_t *valPtr;
         iter = pConn->getHash()->offset2iterator(m_iterOff);
+        LS_DBG_M("doBinGet, iter: %p\n", iter);
         if (iter)
             pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, &valLen);
         if (!iter || !pItem)
         {
+            LS_DBG_M("doBinGet, iter: %p, pItem: %p\n", iter, pItem);
             binErrRespond(pHdr, MC_BINSTAT_INTERNAL_ERROR, pConn);
             pConn->getHash()->lockChkRehash();
             unlock(pConn);
@@ -3113,6 +3115,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         }
         else if (isExpired(pItem))
         {
+            LS_DBG_M("doBinGet, Expired\n");
             pConn->getHash()->eraseIterator(m_iterOff);
             notifyChange(pConn);
             if (doTouch)
@@ -3122,6 +3125,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         }
         else
         {
+            LS_DBG_M("doBinGet, pItem %p\n", pItem);
             int extra = sizeof(((McBinResExtra *)0)->value.flags);
             McBinResExtra *pResX = (McBinResExtra *)(&resBuf[sizeof(McBinCmdHdr)]);
             pResX->value.flags = (uint32_t)htonl(pItem->x_flags);
@@ -3150,6 +3154,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
             if (valLen != 0)
                 binRespond(valPtr, valLen, pConn);
             unlock(pConn);
+            LS_DBG_M("doBinGet, return early\n");
             return;
         }
     }

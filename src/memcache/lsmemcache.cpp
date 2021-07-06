@@ -2700,10 +2700,12 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
     }
     else if (pVal == (uint8_t *)-1)    // queued for remote
     {
+        LS_DBG_M("BINCMD cmd: %d QUEUED FOR REMOTE!\n", cmd);
         return -1;
     }
     else if (pVal == (uint8_t *)-2)    // sent to remote
     {
+        LS_DBG_M("BINCMD cmd: %d SENT TO REMOTE\n", cmd);
         return consumed;
     }
     else if ((pVal == (uint8_t *)MC_BINSTAT_E2BIG)
@@ -2715,6 +2717,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
     }
     m_retcode = UPDRET_DONE;
     m_rescas = 0;
+    LS_DBG_M("BINCMD cmd: %d\n", cmd);
 
     doTouch = false;
     switch (cmd)
@@ -3684,6 +3687,7 @@ void LsMemcache::binErrRespond(McBinCmdHdr *pHdr, McBinStat err,
 {
     const char *text;
     uint8_t resBuf[sizeof(McBinCmdHdr)];
+    LS_DBG_M("binErrRespond err: %d\n", err);
     switch (err)
     {
     case MC_BINSTAT_KEYENOENT:

@@ -1930,7 +1930,7 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
         return MC_BINSTAT_SUCCESS;
     }
     total -= pHelper->x_iSize;
-    LS_DBG_M("Testing total %d maxsize %d pHelper: %p\n", 
+    LS_DBG_M("Testing total %u maxsize %u pHelper: %p\n", 
              total, m_mcparms.m_iMemMaxSz, pHelper);
 
     if (total > m_mcparms.m_iMemMaxSz)
@@ -1938,7 +1938,7 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
         LS_DBG_M("Exceeding max size: %d > %d\n", total, m_mcparms.m_iMemMaxSz);
         if (m_mcparms.m_nomemfail)
         {
-            LS_ERROR("Exceeding specified max size: %d > %d - configured to "
+            LS_ERROR("Exceeding specified max size: %u > %u - configured to "
                      "fail\n", total, m_mcparms.m_iMemMaxSz);
             return MC_BINSTAT_ENOMEM;
         }
@@ -1948,8 +1948,14 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
         int rc;
         rc = pConn->getHash()->trimsize((int)(total - m_mcparms.m_iMemMaxSz)<<3, 
                                         NULL, 0);
-        LS_DBG_M("After trim.  Rc: %d, size: %d\n", rc,
+        LS_DBG_M("After trim.  Rc: %d, size: %u\n", rc,
                  pConn->getHash()->getHashDataSize());
+        if (pConn->getHash()->getHashDataSize() > m_mcparms.m_iMemMaxSz)
+        {
+            LS_NOTICE("[PID: %d] During size test, noted shared memory may be damaged.  Rebuilding\n", getpid());
+            pConn->getHash()->rebuild();
+            return MC_BINSTAT_ENOMEM;
+        }
     }
     return MC_BINSTAT_SUCCESS;
 }

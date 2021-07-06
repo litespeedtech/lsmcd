@@ -19,6 +19,7 @@
 #define LSSHM_H
 
 #include <lsdef.h>
+#include <log4cxx/logger.h>
 #include <shm/lsshmlock.h>
 #include <shm/lsshmtypes.h>
 #include "addrmap.h"
@@ -206,8 +207,10 @@ public:
 
     ls_attr_inline int lockRemap(ls_shmlock_t *pLock)
     {
+        LS_DBG_M("Enter lock, pLock: %p\n", pLock);
         int ret = ls_shmlock_lock(pLock);
         chkRemap();
+        LS_DBG_M("Exit lock, pLock: %p\n", pLock);
         return ret;
     }
 
@@ -223,7 +226,10 @@ public:
 
     int unlock(ls_shmlock_t *pLock)
     {
-        return ls_shmlock_unlock(pLock);
+        LS_DBG_M("Enter unlock, pLock: %p\n", pLock);
+        int ret = ls_shmlock_unlock(pLock);
+        LS_DBG_M("Enter unlock, pLock: %p\n", pLock);
+        return ret;
     }
 
     LsShmStatus_t remap();

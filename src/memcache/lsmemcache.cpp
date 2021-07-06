@@ -2979,9 +2979,15 @@ uint8_t *LsMemcache::setupBinCmd(
                     return NULL;
                 }
                 // special case
+                LS_DBG_M("About to lock\n");
                 lock(pConn);
+                LS_DBG_M("Locked\n");
                 if ((ret = chkMemSz(pConn, cmd)) != MC_BINSTAT_SUCCESS)
+                {
+                    LS_DBG_M("chkMemSz ret (err): %d\n", ret);
                     return (uint8_t *)ret;
+                }
+                LS_DBG_M("chkMemSz ret (ok): %d\n", ret);
                 m_item.x_flags = (uint32_t)ntohl(pReqX->value.flags);
                 m_item.x_exptime = (time_t)ntohl(pReqX->value.exptime);
                 m_parms.val.len = parmAdjLen(m_parms.val.len);

@@ -1872,6 +1872,7 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 
 McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
 {
+    LS_DBG_M("chkMemSz entry\n");
     if (arg == MC_BINCMD_FLUSH)
     {
         LS_DBG_M("Do not do chkMemSz for a flush\n");
@@ -1883,9 +1884,13 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
         LsShmHash::iteroffset iterOff;
         if (arg == MC_BINCMD_SET)
         {
+            LS_DBG_M("chkMemSz find/erase\n");
             if ((iterOff = pConn->getHash()->
                     findIteratorWithKey(m_hkey,&m_parms)).m_iOffset != 0)
+            {
+                LS_DBG_M("chkMemSz erase\n");
                 pConn->getHash()->eraseIterator(iterOff);
+            }
         }
         LS_NOTICE("Binary data is too long\n");
         return MC_BINSTAT_E2BIG;

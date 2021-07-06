@@ -412,14 +412,18 @@ public:
 
     void lock(MemcacheConn *pConn)
     {
+        LS_DBG_M("Enter lock, pConn: %p\n", pConn);
         pConn->getHash()->disableAutoLock();
         pConn->getHash()->lockChkRehash();
+        LS_DBG_M("Exit lock, pConn: %p\n", pConn);
     }
 
     void unlock(MemcacheConn *pConn)
     {
+        LS_DBG_M("Enter unlock, pConn: %p\n", pConn);
         pConn->getHash()->unlock();
         pConn->getHash()->enableAutoLock();
+        LS_DBG_M("Exit unlock, pConn: %p\n", pConn);
     }
 
     bool useMulti()

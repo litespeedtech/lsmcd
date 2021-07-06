@@ -2979,9 +2979,7 @@ uint8_t *LsMemcache::setupBinCmd(
                     return NULL;
                 }
                 // special case
-                LS_DBG_M("About to lock\n");
                 lock(pConn);
-                LS_DBG_M("Locked\n");
                 if ((ret = chkMemSz(pConn, cmd)) != MC_BINSTAT_SUCCESS)
                 {
                     LS_DBG_M("chkMemSz ret (err): %d\n", ret);

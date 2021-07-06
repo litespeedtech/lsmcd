@@ -2731,8 +2731,10 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
             break;
         case MC_BINCMD_SET:
             // locked in setup
+            LS_DBG_M("MC_BINCMD_SET\n");
             statSetCmd(pConn);
             m_iterOff = pConn->getHash()->setIteratorWithKey(m_hkey, &m_parms);
+            LS_DBG_M("MC_BINCMD_SET m_iterOff: %d\n", m_iterOff.m_iOffset);
             doBinDataUpdate(pVal, pHdr, pConn);
             break;
         case MC_BINCMD_ADD:

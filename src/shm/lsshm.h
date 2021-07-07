@@ -228,7 +228,7 @@ public:
     {
         LS_DBG_M("Enter unlock, pLock: %p\n", pLock);
         int ret = ls_shmlock_unlock(pLock);
-        LS_DBG_M("Enter unlock, pLock: %p\n", pLock);
+        LS_DBG_M("Exit unlock, pLock: %p\n", pLock);
         return ret;
     }
 

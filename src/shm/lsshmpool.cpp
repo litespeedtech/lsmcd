@@ -296,6 +296,7 @@ LsShmOffset_t LsShmPool::getReg(const char *name)
             m_status = LSSHM_BADMAPFILE;
             return 0;
         }
+        LS_DBG_M("added\n");
     }
     return offReg;
 }
@@ -1007,6 +1008,7 @@ LsShmOffset_t LsShmPool::allocFromDataChunk(LsShmSize_t size,
     LsShmSize_t avail;
     LsShmPoolMap *pDataMap = getDataMap();
 
+    LS_DBG_M("allocFromDataChunk this: %p, size: %d, num: %d\n", this, size, num);
     avail = pDataMap->x_chunk.x_iEnd - pDataMap->x_chunk.x_iStart;
     numAvail = avail / size;
     if (numAvail)

@@ -192,7 +192,7 @@ private:
 
     int autoUnlock()
     {   assert(!m_pParent || getShm()->isLocked(m_pShmLock));
-        return m_iAutoLock ? ls_shmlock_unlock(m_pShmLock) : 0;     }
+        return m_iAutoLock ? LsShm::unlock(m_pShmLock) : 0;     }
     
     LsShmOffset_t getReg(const char *name);
 

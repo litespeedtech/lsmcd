@@ -325,6 +325,7 @@ LsShmHash *LsShmPool::getNamedHash(const char *name,
         return pObj;
     }
     LsShmOffset_t offReg = getReg(name);
+    LS_DBG_M("getReg returned %d\n", offReg);
     if (offReg == 0)
     {
         LS_DBG_M("LsShmPool::getNamedHash reg 0\n");
@@ -1070,6 +1071,7 @@ LsShmOffset_t LsShmPool::allocFromDataChunk(LsShmSize_t size,
     }
     pDataMap->x_chunk.x_iStart = offset;
     pDataMap->x_chunk.x_iEnd = offset + needed;
+    LS_DBG_M("recursize allocFromDataChunk\n");
     return allocFromDataChunk(size, num);
 }
 
@@ -1332,6 +1334,7 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
 {
     LsShmOffset_t offset;
 
+    LS_DBG_M("allocPage this: %p, size: %d\n", this, pagesize);
     if ((pagesize&0x80000000) || (pagesize>LSSHM_MAXSIZE))
     {
          LsShm::setErrMsg(LSSHM_BADPARAM, "Invalid page size parameter: %u\n",

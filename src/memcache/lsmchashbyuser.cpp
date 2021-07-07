@@ -120,6 +120,7 @@ bool LsMcHashByUser::init(
             return false; 
         }
     }
+    LS_DBG_M("HashByUser Done ok\n");
     return true;
 }
 

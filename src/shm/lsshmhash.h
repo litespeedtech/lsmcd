@@ -845,7 +845,7 @@ protected:
     int autoUnlock()
     {   
         assert(m_pPool->getShm()->isLocked(m_pShmLock));
-        if (m_iAutoLock)
+        if (!m_iAutoLock)
             return 0;
         return LsShm::unlock(m_pShmLock);
     }

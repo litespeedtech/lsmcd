@@ -224,7 +224,7 @@ public:
         return (x_pStats->m_iFileSize == m_iMaxSizeO) ? LSSHM_OK : remap();
     }
 
-    int unlock(ls_shmlock_t *pLock)
+    static int unlock(ls_shmlock_t *pLock)
     {
         LS_DBG_M("Enter unlock, pLock: %p\n", pLock);
         int ret = ls_shmlock_unlock(pLock);
@@ -272,7 +272,7 @@ private:
 
     int unlock()
     {
-        return ls_shmlock_unlock(m_pShmLock);
+        return unlock(m_pShmLock);
     }
 
     LsShmStatus_t setupLocks()

@@ -1340,8 +1340,12 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
     remap = 0;
 
     LsShmPool *pPagePool = ((m_pParent != NULL) ? m_pParent : this);
+    bool locked = false;
     if (m_pParent != NULL)
+    {
         pPagePool->autoLock();
+        locked = true;
+    }
     if ((offset = pPagePool->getFromFreeList(pagesize)) == 0)
     {
         if ((offset = m_pShm->allocPage(pagesize, remap)) == 0)
@@ -1356,7 +1360,7 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
     incrCheck(&pPagePool->getDataMap()->x_stat.m_iGpAllocated,
         (pagesize / LSSHM_SHM_UNITSIZE));
 out:
-    if (m_pParent != NULL)
+    if (locked)
         pPagePool->autoUnlock();
 
     return offset;

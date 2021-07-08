@@ -674,7 +674,7 @@ bool LsMemcache::isSliceRemote(LsMcHashSlice *pSlice)
 bool LsMemcache::fwdToRemote(LsMcHashSlice *pSlice, char *pNxt, 
                              MemcacheConn *pConn)
 {
-    if (!pConn->getHash()->isTidMaster())
+    if (LsMemcache::getConfigReplication() && !pConn->getHash()->isTidMaster())
     {
         if (isSliceRemote(pSlice))
         {
@@ -1872,6 +1872,7 @@ int LsMemcache::doCmdUpdate(LsMemcache *pThis, ls_strpair_t *pInput, int arg,
 
 McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
 {
+    LS_DBG_M("chkMemSz entry\n");
     if (arg == MC_BINCMD_FLUSH)
     {
         LS_DBG_M("Do not do chkMemSz for a flush\n");
@@ -1883,9 +1884,13 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
         LsShmHash::iteroffset iterOff;
         if (arg == MC_BINCMD_SET)
         {
+            LS_DBG_M("chkMemSz find/erase\n");
             if ((iterOff = pConn->getHash()->
                     findIteratorWithKey(m_hkey,&m_parms)).m_iOffset != 0)
+            {
+                LS_DBG_M("chkMemSz erase\n");
                 pConn->getHash()->eraseIterator(iterOff);
+            }
         }
         LS_NOTICE("Binary data is too long\n");
         return MC_BINSTAT_E2BIG;
@@ -1896,6 +1901,7 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
     LsShmXSize_t total;
     if ((arg == MC_BINCMD_ADD) || (arg == MC_BINCMD_SET))
     {
+        LS_DBG_M("Get size (set/add)\n");
         more = LsShmPool::size2roundSize(
             + pConn->getHash()->round4(m_parms.key.len)
             + sizeof(ls_vardata_t)
@@ -1907,22 +1913,32 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
     }
     else
     {
+        LS_DBG_M("Get size\n");
         more = LsShmPool::size2roundSize(m_parms.val.len);   // additional
     }
+    LS_DBG_M("more size: %d\n", more);
 
     total = pConn->getHash()->getHashDataSize() + more;
+    LS_DBG_M("total size: %d\n", total);
     LsShmOffset_t helperOff = pConn->getHash()->getHTableReservedOffset();
+    LS_DBG_M("arg: %d, more: %d, helperOff: %d\n", arg, more, helperOff);
     LsMcTidInfoHelper *pHelper = (LsMcTidInfoHelper *)pConn->getHash()->
         offset2ptr(helperOff);
+    if (!pHelper)
+    {
+        LS_DBG_M("Unexpected NULL pHelper\n");
+        return MC_BINSTAT_SUCCESS;
+    }
     total -= pHelper->x_iSize;
-    LS_DBG_M("Testing total %d maxsize %d\n", total, m_mcparms.m_iMemMaxSz);
+    LS_DBG_M("Testing total %u maxsize %u pHelper: %p\n", 
+             total, m_mcparms.m_iMemMaxSz, pHelper);
 
     if (total > m_mcparms.m_iMemMaxSz)
     {
         LS_DBG_M("Exceeding max size: %d > %d\n", total, m_mcparms.m_iMemMaxSz);
         if (m_mcparms.m_nomemfail)
         {
-            LS_ERROR("Exceeding specified max size: %d > %d - configured to "
+            LS_ERROR("Exceeding specified max size: %u > %u - configured to "
                      "fail\n", total, m_mcparms.m_iMemMaxSz);
             return MC_BINSTAT_ENOMEM;
         }
@@ -1932,8 +1948,14 @@ McBinStat LsMemcache::chkMemSz(MemcacheConn *pConn, int arg)
         int rc;
         rc = pConn->getHash()->trimsize((int)(total - m_mcparms.m_iMemMaxSz)<<3, 
                                         NULL, 0);
-        LS_DBG_M("After trim.  Rc: %d, size: %d\n", rc,
+        LS_DBG_M("After trim.  Rc: %d, size: %u\n", rc,
                  pConn->getHash()->getHashDataSize());
+        if (pConn->getHash()->getHashDataSize() > m_mcparms.m_iMemMaxSz)
+        {
+            LS_NOTICE("[PID: %d] During size test, noted shared memory may be damaged.  Rebuilding\n", getpid());
+            pConn->getHash()->rebuild();
+            return MC_BINSTAT_ENOMEM;
+        }
     }
     return MC_BINSTAT_SUCCESS;
 }
@@ -2688,15 +2710,18 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
         cmd = MC_BINCMD_REPLACE;
     if ((pVal = setupBinCmd(pHdr, cmd, &updOpt, pConn)) == NULL)
     {
+        LS_DBG_M("setupBinCmd returned NULL!\n");
         binErrRespond(pHdr, MC_BINSTAT_EINVAL, pConn);
-        return 0;
+        return consumed;
     }
     else if (pVal == (uint8_t *)-1)    // queued for remote
     {
+        LS_DBG_M("BINCMD cmd: %d QUEUED FOR REMOTE!\n", cmd);
         return -1;
     }
     else if (pVal == (uint8_t *)-2)    // sent to remote
     {
+        LS_DBG_M("BINCMD cmd: %d SENT TO REMOTE\n", cmd);
         return consumed;
     }
     else if ((pVal == (uint8_t *)MC_BINSTAT_E2BIG)
@@ -2704,10 +2729,12 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
     {
         unlock(pConn);   // locked in setup
         binErrRespond(pHdr, (McBinStat)(long)pVal, pConn);
+        LS_DBG_M("setupBinCmd Error!\n");
         return consumed;
     }
     m_retcode = UPDRET_DONE;
     m_rescas = 0;
+    LS_DBG_M("BINCMD cmd: %d\n", cmd);
 
     doTouch = false;
     switch (cmd)
@@ -2719,12 +2746,15 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
             // no break
         case MC_BINCMD_GET:
         case MC_BINCMD_GETK:
+        case MC_BINCMD_GETKQ:
             doBinGet(pHdr, cmd, doTouch, pConn);
             break;
         case MC_BINCMD_SET:
             // locked in setup
+            LS_DBG_M("MC_BINCMD_SET\n");
             statSetCmd(pConn);
             m_iterOff = pConn->getHash()->setIteratorWithKey(m_hkey, &m_parms);
+            LS_DBG_M("MC_BINCMD_SET m_iterOff: %d\n", m_iterOff.m_iOffset);
             doBinDataUpdate(pVal, pHdr, pConn);
             break;
         case MC_BINCMD_ADD:
@@ -2759,6 +2789,7 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
             break;
         case MC_BINCMD_QUIT:
             binOkRespond(pHdr, pConn);
+            LS_DBG_M("QUIT command closing connection\n");
             return 0;   // close connection
         case MC_BINCMD_FLUSH:
             doBinFlush(pHdr, pConn);
@@ -2811,6 +2842,8 @@ int LsMemcache::processBinCmd(uint8_t *pBinBuf, int iLen, MemcacheConn *pConn)
             binErrRespond(pHdr, MC_BINSTAT_UNKNOWNCMD, pConn);
             break;
     }
+    LS_DBG_M("BINCMD flags CMDWAIT: %d, consumed: %d\n", 
+             (pConn->GetConnFlags() & CS_CMDWAIT), consumed);
     return ((pConn->GetConnFlags() & CS_CMDWAIT) ? -1 : consumed);
 }
 
@@ -2915,11 +2948,19 @@ uint8_t *LsMemcache::setupBinCmd(
         m_parms.key.len = keyLen;
         if (isRemoteEligible(cmd))
         {
+            LS_DBG_M("canProcessNow call\n");
             pSlice = canProcessNow(m_parms.key.ptr, m_parms.key.len, pConn);
+            LS_DBG_M("canProcessNow return pSlice: %p\n", pSlice);
             if (pSlice == NULL)
+            {
+                LS_DBG_M("Queued for remote\n");
                 return (uint8_t *)-1;   // queued for remote
+            }
             if (fwdBinToRemote(pSlice, pHdr, pConn))
+            {
+                LS_DBG_M("Sent to remote\n");
                 return (uint8_t *)-2;   // sent to remote
+            }
         }
         else
         {
@@ -2946,7 +2987,11 @@ uint8_t *LsMemcache::setupBinCmd(
                 // special case
                 lock(pConn);
                 if ((ret = chkMemSz(pConn, cmd)) != MC_BINSTAT_SUCCESS)
+                {
+                    LS_DBG_M("chkMemSz ret (err): %d\n", ret);
                     return (uint8_t *)ret;
+                }
+                LS_DBG_M("chkMemSz ret (ok): %d\n", ret);
                 m_item.x_flags = (uint32_t)ntohl(pReqX->value.flags);
                 m_item.x_exptime = (time_t)ntohl(pReqX->value.exptime);
                 m_parms.val.len = parmAdjLen(m_parms.val.len);
@@ -3067,10 +3112,12 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         int valLen;
         uint8_t *valPtr;
         iter = pConn->getHash()->offset2iterator(m_iterOff);
+        LS_DBG_M("doBinGet, iter: %p\n", iter);
         if (iter)
             pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, &valLen);
         if (!iter || !pItem)
         {
+            LS_DBG_M("doBinGet, iter: %p, pItem: %p\n", iter, pItem);
             binErrRespond(pHdr, MC_BINSTAT_INTERNAL_ERROR, pConn);
             pConn->getHash()->lockChkRehash();
             unlock(pConn);
@@ -3078,6 +3125,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         }
         else if (isExpired(pItem))
         {
+            LS_DBG_M("doBinGet, Expired\n");
             pConn->getHash()->eraseIterator(m_iterOff);
             notifyChange(pConn);
             if (doTouch)
@@ -3087,6 +3135,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         }
         else
         {
+            LS_DBG_M("doBinGet, pItem %p\n", pItem);
             int extra = sizeof(((McBinResExtra *)0)->value.flags);
             McBinResExtra *pResX = (McBinResExtra *)(&resBuf[sizeof(McBinCmdHdr)]);
             pResX->value.flags = (uint32_t)htonl(pItem->x_flags);
@@ -3115,6 +3164,7 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
             if (valLen != 0)
                 binRespond(valPtr, valLen, pConn);
             unlock(pConn);
+            LS_DBG_M("doBinGet, return early\n");
             return;
         }
     }
@@ -3160,7 +3210,7 @@ int LsMemcache::doBinDataUpdate(uint8_t *pBuf, McBinCmdHdr *pHdr,
         dataItemUpdate(pBuf, pConn);
         unlock(pConn);
         notifyChange(pConn);
-        if (m_retcode != UPDRET_NONE)
+        //if (m_retcode != UPDRET_NONE)
             binOkRespond(pHdr, pConn);
         m_iterOff.m_iOffset = 0;
     }
@@ -3519,9 +3569,9 @@ void LsMemcache::doBinSaslList(McBinCmdHdr *pHdr, MemcacheConn *pConn)
     }
     if (pHdr->opaque == 0x04030201)
     {
-        LS_NOTICE("Forcing rehash\n");
+        LS_NOTICE("Forcing rebuild\n");
         lock(pConn);
-        pConn->getHash()->rehash(true);
+        pConn->getHash()->rebuild();
         unlock(pConn);
     }
     if ((len = pConn->GetSasl()->listMechs(&result)) < 0)
@@ -3674,6 +3724,7 @@ void LsMemcache::binErrRespond(McBinCmdHdr *pHdr, McBinStat err,
 {
     const char *text;
     uint8_t resBuf[sizeof(McBinCmdHdr)];
+    LS_DBG_M("binErrRespond err: %d\n", err);
     switch (err)
     {
     case MC_BINSTAT_KEYENOENT:

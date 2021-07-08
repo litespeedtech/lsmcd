@@ -73,7 +73,7 @@ void ls_atomic_pidspin_init()
 int ls_atomic_spin_pidwait(ls_atom_spinlock_t *p)
 {
     int waitpid;
-    assert(*p != ls_spin_pid);
+    //assert(*p != ls_spin_pid);
     int cnt = MAX_SPINCNT_CHECK;
     while (1)
     {

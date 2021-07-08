@@ -24,6 +24,8 @@ static int s_iRunning = 0;
 static int s_iSigChild = 0;
 static int * s_pidChildren  = NULL;
 static int s_pid    = 0;
+static int s_usr1   = 0;
+
 static void sigchild(int sig)
 {
     //printf( "signchild()!\n" );
@@ -36,12 +38,19 @@ static void sig_term(int sig)
     s_iRunning = false;
 }
 
+static void sigusr1(int sig)
+{
+    //printf( "sig_broadcast(%d)!\n", sig );
+    s_usr1 = true;
+}
+
 static void init()
 {
     SignalUtil::signal(SIGTERM, sig_term);
     SignalUtil::signal(SIGINT, sig_term);
     SignalUtil::signal(SIGHUP, sig_term);
     SignalUtil::signal(SIGCHLD, sigchild);
+    SignalUtil::signal(SIGUSR1, sigusr1);
 }
 
 int CrashGuard::guardCrash()
@@ -51,6 +60,7 @@ int CrashGuard::guardCrash()
     int  rpid   = 0;
     int  ret = 0;
     int  stat;
+    int  usr1_noted = 0;
     assert(m_pGuardedApp);
     init();
     s_iRunning = 1;
@@ -90,6 +100,13 @@ int CrashGuard::guardCrash()
 
         }
         ::sleep(1);
+        if (s_usr1 && !usr1_noted)
+        {
+            usr1_noted = 1;
+            LS_NOTICE("[PID: %d] Doing a restart upon USR1\n", getpid());
+            kill(-1, SIGTERM);
+        }
+        
         if (s_iSigChild)
         {
             s_iSigChild = 0;
@@ -108,7 +125,7 @@ int CrashGuard::guardCrash()
                     int sig_num = WTERMSIG(stat);
                     if (sig_num == SIGKILL)
                         break;
-                    if (WCOREDUMP(stat))
+                    if (WCOREDUMP(stat) && sig_num != SIGUSR2)
                         LS_NOTICE("Program crashed and may have produced a core file.  Automatically restarted.\n");
                     ret = m_pGuardedApp->childSignaled(1, rpid, sig_num,
 #ifdef WCOREDUMP
@@ -207,6 +224,12 @@ int CrashGuard::guardCrash(int workers)
         }
         else
             ::sleep(1);
+        if (s_usr1)
+        {
+            LS_NOTICE("[PID: %d] Doing a restart upon USR1\n", getpid());
+            break;
+        }
+        
         if (s_iSigChild)
         {
             s_iSigChild = 0;
@@ -232,7 +255,7 @@ int CrashGuard::guardCrash(int workers)
                     int sig_num = WTERMSIG(stat);
                     if (sig_num == SIGKILL)
                         break;
-                    if (WCOREDUMP(stat))
+                    if (WCOREDUMP(stat) && sig_num != SIGUSR2)
                         LS_NOTICE("Program crashed and may have produced a core file.  Automatically restarted\n");
                     ret = m_pGuardedApp->childSignaled(count, rpid, sig_num,
 #ifdef WCOREDUMP
@@ -265,6 +288,8 @@ int CrashGuard::guardCrash(int workers)
         ++count;
     }
     free(s_pidChildren);
+    if (s_usr1)
+        return 16;
     exit(ret);
 }
 

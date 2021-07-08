@@ -694,6 +694,14 @@ void LsShmHash::destroy()
 }
 
 
+void LsShmHash::rebuild() const
+{
+    LS_DBG_M("Doing rebuild!, pid: %d\n", getpid());
+    kill(getpid(), SIGUSR2);
+    LS_NOTICE("Rebuild in progress\n");
+}
+
+
 int LsShmHash::rehash(bool force)
 {
     if (!force)
@@ -712,7 +720,7 @@ int LsShmHash::rehash(bool force)
     int szTable;
     int szBitMap;
     uint count = 0;
-    LS_NOTICE("Doing rehash, pid: %d\n", getpid());
+    LS_DBG_M("Doing rehash, pid: %d\n", getpid());
 #ifdef DEBUG_RUN
     SHM_NOTICE("LsShmHash::rehash %6d %X size %d cap %d NEW %d",
                getpid(), m_pPool->getShmMap(),
@@ -789,11 +797,12 @@ int LsShmHash::rehash(bool force)
             if (++count > oldSize + oldSize / 2)
             {
                 LS_ERROR("LsShmHash::rehash() (pid: %d) is in a infinity loop, "
-                         "likely due to SHM corruption. remove corrupted file.",
+                         "likely due to SHM corruption. removing corrupted file.",
                          getpid());
-                fprintf(stderr, "LsShmHash::rehash() is in a infinity loop, likely due to SHM corruption. remove corrupted file.");
-                getPool()->getShm()->tryRecoverCorruption();
-                abort();
+                //fprintf(stderr, "LsShmHash::rehash() is in a infinity loop, likely due to SHM corruption. remove corrupted file.");
+                //getPool()->getShm()->tryRecoverCorruption();
+                //abort();
+                rebuild();
             }
         }
     }
@@ -825,7 +834,8 @@ void LsShmHash::clear()
 {
     LsShmHTable *pTable = getHTable();
     int n = for_each2(begin(), end(), release_hash_elem, this);
-    assert(n == (int)size());
+    //assert(n == (int)size());
+    LS_DBG_M("LsShmHash::clear n: %d, size: %d, should be the same!\n", n, size());
 
     if (offset2ptr(pTable->x_iBitMap))
     {
@@ -967,7 +977,7 @@ void LsShmHash::eraseIteratorHelper(iteroffset iterOff)
 
     //NOTE:race condition, two process release the object at the same time. 
     //     ShmHash was not properly locked. 
-    assert(offset != 0);
+    //assert(offset != 0);
 #ifdef DEBUG_RUN
     if (offset == 0)
     {
@@ -1100,10 +1110,14 @@ LsShmHash::iteroffset LsShmHash::insertCopy2(LsShmHKey key,
 
     if (size() * fullFactor() > capacity())
     {
-        //if (rehash(true) < 0)
+        if (rehash(true) < 0)
         {
             if (size() == capacity())
+            {
+                LS_DBG_M("size: %d == capacity: %d, returning end\n", size(),
+                         capacity());
                 return end();
+            }
         }
     }
 

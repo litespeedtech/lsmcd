@@ -116,3 +116,16 @@ VERSION 1.4.23 June 17, 2021
 VERSION 1.4.24 June 23, 2021
 [BUGFIX] A number of significant fixes which should reduce crashes.
 [IMPROVEMENT] Add address sanitizer to the debug build (enable Sanitizer in CMakeLists.txt 'cmake .', make clean, make).  You'll need to install cmake, libasan, llvm.  Doc has been updated for this.
+
+VERSION 1.4.25 June 29, 2021
+[BUGFIX] Several unnecessary assertions removed.
+[BUGFIX] Detect NULL in chkMemSz.
+[BUGFIX] Removed assertion in ls_atomic_spin_pidwait.
+[BUGFIX] Fixed a regression introduced in 1.4.24 where the database size will not be increased correctly.
+[IMPROVEMENT] USR1 signal can be used to restart the service.
+[IMPROVEMENT] On the detection of corrupt shared memory, it is rebuilt.
+
+VERSION 1.4.26 July 8, 2021
+[BUGFIX] A response is generated for a GETKQ.
+[BUGFIX] Response avoids timeouts for SET.
+[IMPROVEMENT] On the detection of a corrupt database size, it is rebuilt.

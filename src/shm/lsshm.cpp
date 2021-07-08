@@ -128,6 +128,13 @@ static inline HashStringMap< LsShm * > *getBase()
 }
 
 
+void        LsShm::rebuild() const
+{
+    LS_DBG_M("Doing rebuild!, pid: %d\n", getpid());
+    kill(getpid(), SIGUSR2);
+    LS_NOTICE("Rebuild in progress\n");
+}
+   
 const char *LsShm::strLsShmStatus(LsShmStatus_t status)
 {
     switch (status)
@@ -245,7 +252,9 @@ void LsShm::tryRecoverBadOffset(LsShmOffset_t offset)
     LsShmSize_t curMaxSize = x_pShmMap->x_stat.m_iFileSize; 
     if ( offset < curMaxSize)
     {
-        assert(offset < curMaxSize);
+        LS_NOTICE("[PID: %d] In attempt to recover shared memory, doing rebuild\n", getpid());
+        rebuild();
+        //assert(offset < curMaxSize);
     }
 }
 
@@ -786,12 +795,16 @@ LsShmStatus_t LsShm::remap()
                   (unsigned long)x_pShmMap->x_stat.m_iFileSize);
         if ( x_pShmMap->x_stat.m_iFileSize - mystat.st_size > 100 * 1024 * 1024)
         {
+            LS_NOTICE("[PID: %d] In attempt to remap shared memory, doing rebuild\n", getpid());
+            rebuild();
+            /*
             LsShmMap mapCopy = *x_pShmMap;
             deleteFile();
             if (s_fatalErrorCb)
                 (*s_fatalErrorCb)();
             
             assert( (char *)"bad file size." == (char *)&mapCopy);
+            */
         }
     }
     LsShmXSize_t size = x_pShmMap->x_stat.m_iFileSize;
@@ -818,13 +831,19 @@ LsShmOffset_t LsShm::allocPage(LsShmSize_t pagesize, int &remap)
     LsShmSize_t availSize;
 
     remap = 0;
-
+    
+    bool locked = false;
     //
     //  MUTEX SHOULD BE HERE for multi process/thread environment
     // Only use lock when m_status is Ready.
     if (m_status == LSSHM_READY)
+    {
         if (lock() > 0)
             return 0; // no lock acquired...
+        else
+            locked = true;
+    }
+            
 
     // Allocate from heap space
     availSize = avail();
@@ -861,8 +880,9 @@ LsShmOffset_t LsShm::allocPage(LsShmSize_t pagesize, int &remap)
     offset = x_pShmMap->x_stat.m_iUsedSize;
     used(pagesize);
 out:
-    if (m_status == LSSHM_READY)
+    if (locked)
         unlock();
+    LS_DBG("[SHM] [PID:%d] Exiting allocPage, offset: %d\n", getpid(), offset);
     return offset;
 }
 
@@ -902,16 +922,20 @@ int LsShm::chkReg(LsShmHIterOff iterOff, void *pUData)
 LsShmPool *LsShm::getGlobalPool()
 {
     if ((m_pGPool != NULL) && (m_pGPool->getMagic() == LSSHM_POOL_MAGIC))
+    {
+        LS_DBG_M("getGlobalPool -> %p\n", m_pGPool);
         return m_pGPool;
-
+    }
     const char *name = LSSHM_SYSPOOL;
     m_pGPool = new LsShmPool();
     if (m_pGPool != NULL)
     {
         if (m_pGPool->init(this, name, NULL) == LS_OK
             && m_pGPool->getRef() != 0)
+        {
+            LS_DBG_M("getGlobalPool init/ref -> %p\n", m_pGPool);
             return m_pGPool;
-
+        }
         delete m_pGPool;
         m_pGPool = NULL;
     }
@@ -920,6 +944,7 @@ LsShmPool *LsShm::getGlobalPool()
         setErrMsg(LSSHM_ERROR, "Unable to get Global Pool, MapFile [%s].",
                   m_pFileName);
     }
+    LS_DBG_M("getGlobalPool FAIL!\n");
     return NULL;
 }
 
@@ -972,23 +997,31 @@ LsShmPool *LsShm::getNamedPool(const char *name)
 LsShmHash *LsShm::getGlobalHash(int initSize)
 {
     if (m_pGHash)
+    {
+        LS_DBG_M("getGlobalHash: %p\n", m_pGHash);
         return m_pGHash;
+    }
+    LS_DBG_M("Creating globalHash\n");
     LsShmPool *gpool = getGlobalPool();
     if (!x_pShmMap->x_globalHashOff)
     {
         x_pShmMap->x_globalHashOff = gpool->allocateNewHash(initSize, 1,
                                                             LSSHM_FLAG_NONE);
         if (!x_pShmMap->x_globalHashOff)
+        {
+            LS_DBG_M("Unabled to create globalHash\n");
             return NULL;
+        }
     }
     m_pGHash = gpool->newHashByOffset(x_pShmMap->x_globalHashOff, "_G",
             LsShmHash::hashXXH32, memcmp, LSSHM_FLAG_NONE);
+    LS_DBG_M("Created globalHash\n");
     return m_pGHash;
 
 }
 
 
-#define LSSHM_REG_DEFAULT_SIZE 10
+#define LSSHM_REG_DEFAULT_SIZE 1000000
 
 LsShmOffset_t LsShm::findRegOff(const char *name)
 {

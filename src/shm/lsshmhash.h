@@ -120,15 +120,18 @@ typedef struct lsShm_hElem_s
         LsShmHElemLen_t  len = sizeof(struct lsShm_hElem_s) /*+ valueOff*/
                                + sizeof(ls_vardata_t) + round4(valLen);
         
-        if (x_iValOff > (uint32_t)x_iLen || x_iValOff <= valOff || x_iLen <= len
-            || iLen > 100000000) // A large number
+        
+        if ((x_iLen != 0 && x_iValOff > (uint32_t)x_iLen) || 
+            x_iValOff <= valOff || 
+            (x_iLen != 0 && x_iLen <= len) || 
+            iLen > 100000000) // A large number
         {
             if (!s_Reported_Corruption)
             {
                 s_Reported_Corruption = 1;
-                LS_NOTICE("Delete shared memory files: "
-                          "x_iValOff: %d (%d), x_iLen: %d (%d), this should not happen.\n", 
-                          x_iValOff, valOff, x_iLen, len);
+                LS_DBG_M("[PID: %d] Shared memory files should be deleted: "
+                         "x_iValOff: %d (%d), x_iLen: %d (%d)\n", 
+                         getpid(), x_iValOff, valOff, x_iLen, len);
             }
             return -1;
         }
@@ -325,6 +328,8 @@ public:
         return NULL;
     }
 
+    void        rebuild() const;
+    
     ls_attr_inline iterator offset2iterator(iteroffset offset) const
     {   
         if (m_pPool)
@@ -339,6 +344,8 @@ public:
             //assert(0);
         }
         //assert(0);
+        LS_NOTICE("[PID: %d] During iterator test, noted shared memory may be damaged.  Rebuilding\n", getpid());
+        rebuild();
         return NULL;
     }
 
@@ -350,6 +357,8 @@ public:
             if (iter && !iter->validate(false))
                 return iter->getVal(); 
         }
+        LS_NOTICE("[PID: %d] During iterator data test, noted shared memory may be damaged.  Rebuilding\n", getpid());
+        rebuild();
         return NULL;
     }
 
@@ -736,7 +745,11 @@ public:
     }
 
     int unlock()
-    {   return m_iAutoLock ? 0 : ls_shmlock_unlock(m_pShmLock); }
+    {   
+        if (m_iAutoLock)
+            return 0;
+        return LsShm::unlock(m_pShmLock); 
+    }
 
     void lockChkRehash();
 
@@ -830,8 +843,12 @@ protected:
     }
 
     int autoUnlock()
-    {   assert(m_pPool->getShm()->isLocked(m_pShmLock));
-        return m_iAutoLock && ls_shmlock_unlock(m_pShmLock); }
+    {   
+        assert(m_pPool->getShm()->isLocked(m_pShmLock));
+        if (!m_iAutoLock)
+            return 0;
+        return LsShm::unlock(m_pShmLock);
+    }
 
     void autoLockChkRehash();
 

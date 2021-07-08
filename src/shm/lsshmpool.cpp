@@ -296,6 +296,7 @@ LsShmOffset_t LsShmPool::getReg(const char *name)
             m_status = LSSHM_BADMAPFILE;
             return 0;
         }
+        LS_DBG_M("added\n");
     }
     return offReg;
 }
@@ -324,6 +325,7 @@ LsShmHash *LsShmPool::getNamedHash(const char *name,
         return pObj;
     }
     LsShmOffset_t offReg = getReg(name);
+    LS_DBG_M("getReg returned %d\n", offReg);
     if (offReg == 0)
     {
         LS_DBG_M("LsShmPool::getNamedHash reg 0\n");
@@ -1007,6 +1009,7 @@ LsShmOffset_t LsShmPool::allocFromDataChunk(LsShmSize_t size,
     LsShmSize_t avail;
     LsShmPoolMap *pDataMap = getDataMap();
 
+    LS_DBG_M("allocFromDataChunk this: %p, size: %d, num: %d\n", this, size, num);
     avail = pDataMap->x_chunk.x_iEnd - pDataMap->x_chunk.x_iStart;
     numAvail = avail / size;
     if (numAvail)
@@ -1068,6 +1071,7 @@ LsShmOffset_t LsShmPool::allocFromDataChunk(LsShmSize_t size,
     }
     pDataMap->x_chunk.x_iStart = offset;
     pDataMap->x_chunk.x_iEnd = offset + needed;
+    LS_DBG_M("recursize allocFromDataChunk\n");
     return allocFromDataChunk(size, num);
 }
 
@@ -1330,6 +1334,7 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
 {
     LsShmOffset_t offset;
 
+    LS_DBG_M("allocPage this: %p, size: %d\n", this, pagesize);
     if ((pagesize&0x80000000) || (pagesize>LSSHM_MAXSIZE))
     {
          LsShm::setErrMsg(LSSHM_BADPARAM, "Invalid page size parameter: %u\n",
@@ -1340,8 +1345,12 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
     remap = 0;
 
     LsShmPool *pPagePool = ((m_pParent != NULL) ? m_pParent : this);
+    bool locked = false;
     if (m_pParent != NULL)
+    {
         pPagePool->autoLock();
+        locked = true;
+    }
     if ((offset = pPagePool->getFromFreeList(pagesize)) == 0)
     {
         if ((offset = m_pShm->allocPage(pagesize, remap)) == 0)
@@ -1356,7 +1365,7 @@ LsShmOffset_t LsShmPool::allocPage(LsShmSize_t pagesize, int &remap)
     incrCheck(&pPagePool->getDataMap()->x_stat.m_iGpAllocated,
         (pagesize / LSSHM_SHM_UNITSIZE));
 out:
-    if (m_pParent != NULL)
+    if (locked)
         pPagePool->autoUnlock();
 
     return offset;

@@ -287,9 +287,9 @@ int do_partial()
 }
 
 
-int do_rehash()
+int do_rebuild()
 {
-/* My rehash request example
+/* My rebuild request example
 0000: 80200000 00000000 00000000 01020304 
 0010: 00000000 00000000 
 */
@@ -302,30 +302,14 @@ int do_rehash()
     buffer[15] = 0x04;
     if (send(sock_fd, buffer, 24, 0) != 24)
     {
-        printf("Error in send of rehash: %s\n", strerror(errno));
+        printf("Error in send of rebuild: %s\n", strerror(errno));
         return -1;
     }
 /* My LIST_MECHS response 
 0000: 81200000 00000000 00000005 00680000 . ...........h..
 0010: 00000000 00000000 504c4149 4e       ........PLAIN
 */
-    ssize_t recvd = recv(sock_fd, buffer, BUFFER_LEN, 0);
-    if (recvd < 29)
-    {
-        printf("Error in list_mechs response1 (partial): %s (recvd: %ld)\n", strerror(errno), recvd);
-        return -1;
-    }
-    if (buffer[0] != 0x81 ||
-        buffer[1] != 0x20 ||
-        buffer[6] != 0x00 ||
-        buffer[7] != 0x00 ||
-        buffer[11] < 0x05 ||
-        memcmp((char *)&buffer[24], "PLAIN", 5))
-    {
-        printf("Error in list_mechs response data rehash (turn on the trace)\n");
-        return -1;
-    }
-    printf("Rehash send ok\n");
+    printf("rebuild send ok\n");
     return 0;
 }
 
@@ -377,7 +361,7 @@ int main(int argc, char *argv[])
 {
     int ret = 1;
     int login = 0;
-    int rehash = 0;
+    int rebuild = 0;
     int test = 0;
     int passed = 1;
     signal(SIGPIPE, SIG_IGN);    
@@ -391,8 +375,8 @@ int main(int argc, char *argv[])
                 login = 1;
                 break;
             case 'r':
-                printf("Force rehash\n");
-                rehash = 1;
+                printf("Force rebuild\n");
+                rebuild = 1;
                 break;
             case 't':
                 printf("Test\n");
@@ -400,12 +384,12 @@ int main(int argc, char *argv[])
                 break;
             case 'h':
             case '?':
-                printf("unittest for lsmcd and forces rehash\n");
-                printf("Use: 'l' (login), 't' (test), 'r' (rehash)\n");
+                printf("unittest for lsmcd and forces rebuild\n");
+                printf("Use: 'l' (login), 't' (test), 'r' (rebuild)\n");
                 return 1;
         }
     }
-    if (!login && !rehash && !test)
+    if (!login && !rebuild && !test)
     {
         printf("You did not specify an option\n");
         return 1;
@@ -428,8 +412,8 @@ int main(int argc, char *argv[])
     if (passed && test)
         if (do_multi1() || do_partial())
             passed = 0;
-    if (passed && rehash)
-        if (do_rehash())
+    if (passed && rebuild)
+        if (do_rebuild())
             passed = 0;
     if (passed)
         printf("All tests passed\n");

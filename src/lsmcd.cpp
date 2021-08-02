@@ -718,7 +718,7 @@ static void init_signals()
 {
     SignalUtil::signal( SIGTERM, sig_quit );
     SignalUtil::signal( SIGHUP, sig_hup );
-    SignalUtil::signal( SIGPIPE, sig_pipe );
+    SignalUtil::signal( SIGPIPE, SIG_IGN );
     SignalUtil::signal( SIGALRM, sig_alarm );
     SignalUtil::signal( SIGUSR1, sig_usr1 );
     SignalUtil::signal( SIGINT, sig_quit );

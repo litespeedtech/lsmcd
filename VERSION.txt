@@ -129,3 +129,6 @@ VERSION 1.4.26 July 8, 2021
 [BUGFIX] A response is generated for a GETKQ.
 [BUGFIX] Response avoids timeouts for SET.
 [IMPROVEMENT] On the detection of a corrupt database size, it is rebuilt.
+
+VERSION 1.4.27 August 2, 2021
+[BUGFIX] Ignore a SIGPIPE rather than process it.

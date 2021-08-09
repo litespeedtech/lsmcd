@@ -1022,7 +1022,7 @@ void LsMemcache::dataItemUpdate(uint8_t *pBuf, MemcacheConn *pConn)
         if ((m_item.x_exptime != 0)
           && (m_item.x_exptime <= LSMC_MAXDELTATIME))
         {
-            m_item.x_exptime += iter->getLruLasttime();
+            m_item.x_exptime += iter->getLruLasttime(pConn->getHash());
         }
         ::memcpy((void *)pItem, (void *)&m_item, sizeof(m_item));
     }

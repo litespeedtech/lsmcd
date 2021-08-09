@@ -94,7 +94,7 @@ time_t LruHashReplBridge::for_each_tmslot(time_t tm, time_t endTm, for_each_fn2 
         return nextTm;
     }
     iter        = getHash()->offset2iterator(iterOff);
-    nextTm      = iter->getLruLasttime();
+    nextTm      = iter->getLruLasttime(getHash());
     if (nextTm > endTm)
         return nextTm;
 
@@ -106,7 +106,7 @@ time_t LruHashReplBridge::for_each_tmslot(time_t tm, time_t endTm, for_each_fn2 
         if (iterOff.m_iOffset == 0 )
             break;
         iter = getHash()->offset2iterator(iterOff);
-        if (nextTm != iter->getLruLasttime())
+        if (nextTm != iter->getLruLasttime(getHash()))
         {
             break;
         }
@@ -206,7 +206,7 @@ time_t LruHashReplBridge::getElmLruTm(LsShmHash::iteroffset offCurr) const
         return 0;
     LsShmHash::iterator iter;
     iter = getHash()->offset2iterator(offCurr);
-    return iter->getLruLasttime();
+    return iter->getLruLasttime(getHash());
 }
 
 

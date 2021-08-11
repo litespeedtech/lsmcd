@@ -138,4 +138,6 @@ VERSION 1.4.28 August 9, 2021
 [BUGFIX] Added additional code to detect data corruption.
 
 VERSION 1.4.29 
-[FEATURE] A debug validation option has been added.
+[FEATURE] Report PID rather than user in log.
+[FEATURE] A debug validation option has been added (DBG.VALIDATE=TRUE)
+

@@ -47,7 +47,7 @@
 
 static log4cxx::Logger* initLogger(const char* logFile, const char* logLevel)
 {
-    static char s_parttern[] = "%d [%p] [%c] %m";
+    static char s_parttern[] = "%d [%p] [%i] %m";
     using namespace LOG4CXX_NS;    
     Logger *pLogger = Logger::getRootLogger() ;
     Appender * appender

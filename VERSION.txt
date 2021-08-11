@@ -136,3 +136,6 @@ VERSION 1.4.27 August 2, 2021
 VERSION 1.4.28 August 9, 2021
 [BUGFIX] Fixed a few small bugs with NULL pointer references.
 [BUGFIX] Added additional code to detect data corruption.
+
+VERSION 1.4.29 
+[FEATURE] A debug validation option has been added.

@@ -841,6 +841,13 @@ void Lsmcd::setMcParms(LsMcParms *pParms)
     pParms->m_iMemMaxSz = getReplConf()->getMemMaxSz();
     pParms->m_userSize  = getReplConf()->getUserSize();
     pParms->m_hashSize  = getReplConf()->getHashSize();
+    pParms->m_dbgValidate = getReplConf()->getDbgValidate();
+    if (pParms->m_dbgValidate)
+    {
+        LS_DBG_M("Enable Debug Validation in debugging\n");
+        LsMemcache::setDbgValidate(pParms->m_dbgValidate);
+    }
+
     if (pParms->m_iMemMaxSz < 1024)
         pParms->m_iMemMaxSz *= 1024 * 1024; 
     return;

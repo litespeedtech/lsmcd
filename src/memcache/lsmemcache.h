@@ -25,11 +25,13 @@
 #include "lsmchashmulti.h"
 #include "lsmcsasl.h"
 #include <util/tsingleton.h>
+#include <lsr/ls_hash.h>
+#include <lsr/ls_pool.h>
 #include <lsr/ls_str.h>
 #include <util/gpointerlist.h>
 #include <util/objpool.h>
 
-#define VERSION_TO_LOG  "1.4.28"
+#define VERSION_TO_LOG  "1.4.29"
 #define VERSION         "1.0.0"
 
 #define ULL_MAXLEN      24      // maximum buffer size of unsigned long long
@@ -239,6 +241,7 @@ typedef struct LsMcParms_s
     LsShmXSize_t    m_iMemMaxSz;
     uint32_t        m_userSize;
     uint32_t        m_hashSize;
+    bool            m_dbgValidate;
 } LsMcParms;
 
 class LsMemcache;
@@ -438,7 +441,7 @@ public:
         return LS_OK;
     }
     void m_pHash();
-
+    static void setDbgValidate(bool dbgValidate) { m_dbgValidate = dbgValidate; }
 
 private:
     LsMemcache();
@@ -731,6 +734,104 @@ private:
     LsShmHash::iteroffset doHashInsert(ls_strpair_s *m_parms, 
                                        LsMcUpdOpt *updOpt,
                                        MemcacheConn *pConn);
+    
+    void *dbgValidateKeyData(char *key, size_t keyLen, void *data, size_t dataLen,
+                             char **keyOut)
+    {
+        size_t len = keyLen + 1 + sizeof(size_t) + dataLen;
+        int pos;
+        char *ptr = (char *)ls_palloc(len);
+        if (!ptr)
+            return NULL;
+        memcpy(ptr, key, keyLen);
+        *(ptr + keyLen) = 0;
+        pos = keyLen + 1;
+        memcpy(ptr + pos, &dataLen, sizeof(dataLen));
+        pos += sizeof(dataLen);
+        memcpy(ptr + pos, data, dataLen);
+        *keyOut = ptr;
+        return ptr;
+    }
+    void *dbgValidateParseData(void *data, char **key, size_t *dataLen)
+    {
+        char *ptr = (char *)data;
+        int pos;
+        *key = ptr;
+        pos = strlen(ptr) + 1;
+        *dataLen = *(size_t *)(ptr + pos);
+        pos += sizeof(size_t);
+        return (void *)(ptr + pos);
+    }
+    
+    void dbgValidateAdd(char *key, size_t keyLen, void *data, size_t dataLen)
+    {
+        char *keyPtr;
+        if (!m_dbgValidate || !m_dbgValidateHash)
+            return;
+        void *ptr = dbgValidateKeyData(key, keyLen, data, dataLen, &keyPtr);
+        if (!ptr)
+        {
+            LS_ERROR("Debug Validation error - can't allocate data\n");
+            return;
+        }
+        if (!ls_hash_update(m_dbgValidateHash, keyPtr, ptr))
+        {
+            LS_ERROR("Debug Validation error - can't allocate hash entry\n");
+            ls_pfree(ptr);
+            return;
+        }
+        LS_DBG_M("Debug Validation, added key: %s, len: %ld, datalen: %ld\n", keyPtr, keyLen, dataLen);
+    }
+    void dbgValidateGet(char *key, size_t keyLen, void *data, size_t dataLen)
+    {
+        if (!m_dbgValidate || !m_dbgValidateHash)
+            return;
+        char strKey[keyLen + 1];
+        memcpy(strKey, key, keyLen);
+        strKey[keyLen] = 0;
+        ls_hashelem_t *elem = ls_hash_find(m_dbgValidateHash, strKey);
+        if (!elem)
+        {
+            LS_NOTICE("Debug Validation error (get): expected to find: %s\n", strKey);
+            return;
+        }
+        char *hashKey;
+        size_t hashDataLen;
+        void *hashData = dbgValidateParseData(ls_hash_getdata(elem), &hashKey,
+                                              &hashDataLen);
+        if (hashDataLen != dataLen)
+        {
+            LS_NOTICE("Debug Validation error: for key: %s:%s, expected len: %ld, got %ld\n",
+                      strKey, hashKey, dataLen, hashDataLen);
+            return;
+        }
+        if (memcmp(data, hashData, hashDataLen))
+        {
+            LS_NOTICE("Debug Validation error: for key: %s, got correct len: %ld, but data failure\n",
+                      strKey, dataLen);
+            return;
+        }
+        LS_DBG_M("Debug Validation for key: %s validated\n", strKey);
+    }
+    void dbgValidateDelete(char *key, size_t keyLen)
+    {
+        if (!m_dbgValidate || !m_dbgValidateHash)
+            return;
+        char strKey[keyLen + 1];
+        memcpy(strKey, key, keyLen);
+        strKey[keyLen] = 0;
+        ls_hashelem_t *elem = ls_hash_find(m_dbgValidateHash, strKey);
+        if (!elem)
+        {
+            LS_NOTICE("Debug Validation error (delete): expected to find: %s\n", strKey);
+            return;
+        }
+        ls_hash_erase(m_dbgValidateHash, elem);
+        LS_DBG_M("Debug Validation for key: %s deleted\n", strKey);
+        ls_pfree(ls_hash_getdata(elem));
+    }
+        
+        
 
     static LsMcCmdFunc s_LsMcCmdFuncs[];
 
@@ -749,9 +850,12 @@ private:
     LsMcParms               m_mcparms;
     LsMcStrPool             m_keyPool;
     LsMcStrList             m_keyList;
+    ls_str_t                m_key;
     
     static bool             m_bConfigMultiUser;
     static bool             m_bConfigReplication;
+    static bool             m_dbgValidate;
+    static ls_hash_t       *m_dbgValidateHash;
     static const char      *m_pchConfigUser;
     static const char      *m_pchConfigGroup;
 };

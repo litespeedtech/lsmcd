@@ -48,6 +48,7 @@ public:
     bool         getNomemFail() const;
     uint32_t     getValMaxSz() const;
     uint32_t     getMemMaxSz() const;
+    bool         getDbgValidate() const { return m_dbgValidate; }
     
     const char  *getLogLevel();
     const char  *getLogFile();
@@ -89,6 +90,7 @@ private:
     uint32_t            m_userSize;
     uint32_t            m_hashSize;
     AutoStr             m_saslDB;
+    bool                m_dbgValidate;
 
     int                *m_pPriorities;
     char              **m_pShmFiles;

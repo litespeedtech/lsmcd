@@ -73,6 +73,7 @@ LcReplConf::LcReplConf()
     , m_byUser(false)
     , m_userSize(DEF_USERSIZE)
     , m_hashSize(DEF_HASHSIZE)
+    , m_dbgValidate(false)
     , m_pPriorities(NULL)
     , m_pShmFiles(NULL)
 {}
@@ -172,6 +173,12 @@ bool LcReplConf::parse(const char *szFile)
     {
         if ( !strcasecmp(ptr, "TRUE"))
             m_noMemFail = true;        
+    }
+    
+    if ((ptr = m_confParser.getConfig("DBG.VALIDATE")) != NULL )
+    {
+        if ( !strcasecmp(ptr, "TRUE"))
+            m_dbgValidate = true;        
     }
     
     if ((ptr = m_confParser.getConfig("CACHED.SASLDB")) != NULL)

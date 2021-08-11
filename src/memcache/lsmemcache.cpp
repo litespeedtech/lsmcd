@@ -132,6 +132,9 @@ uint64_t htonll(uint64_t val)
  
 bool    LsMemcache::m_bConfigMultiUser = false;
 bool    LsMemcache::m_bConfigReplication = false;
+bool    LsMemcache::m_dbgValidate = false;
+ls_hash_t       *LsMemcache::m_dbgValidateHash = NULL;
+
 
 int LsMemcache::notImplemented(LsMemcache *pThis, ls_strpair_t *pInput, int arg, 
                                MemcacheConn *pConn)
@@ -480,6 +483,17 @@ int LsMemcache::multiInitFunc(LsMcHashSlice *pSlice, MemcacheConn *pConn,
 int LsMemcache::initMcShm(int iCnt, const char **ppPathName,
     const char *pHashName, LsMcParms *pParms)
 {
+    if (pParms->m_dbgValidate && !m_dbgValidateHash)
+    {
+        m_dbgValidateHash = ls_hash_new(100, ls_hash_hfstring, ls_hash_cmpstring, NULL);
+        if (!m_dbgValidateHash)
+        {
+            LS_ERROR("Unable to create validation hash\n");
+            return -1;
+        }
+        LS_NOTICE("Doing Debug Validation\n");
+    }
+            
     setConfigMultiUser(pParms->m_usesasl && pParms->m_byUser);
     if ((getConfigMultiUser()) && 
         (getConfigReplication()))
@@ -1030,6 +1044,7 @@ void LsMemcache::dataItemUpdate(uint8_t *pBuf, MemcacheConn *pConn)
         m_rescas = pItem->x_data->withcas.cas = getCas(pConn);
     if (valLen > 0)
         ::memcpy(valPtr, (void *)pBuf, valLen);
+    dbgValidateAdd(m_key.ptr, m_key.len, valPtr, valLen);
     m_needed = 0;
     return;
 }
@@ -2924,6 +2939,7 @@ uint8_t *LsMemcache::setupBinCmd(
     {
         m_parms.key.ptr = (char *)pBody;
         m_parms.key.len = keyLen;
+        m_key = m_parms.key;
         if (cmd == MC_BINCMD_DELETE)    // remote eligible
         {
             pSlice = canProcessNow(m_parms.key.ptr, m_parms.key.len, pConn);
@@ -2946,6 +2962,7 @@ uint8_t *LsMemcache::setupBinCmd(
 
         m_parms.key.ptr = (char *)pBody;
         m_parms.key.len = keyLen;
+        m_key = m_parms.key;
         if (isRemoteEligible(cmd))
         {
             LS_DBG_M("canProcessNow call\n");
@@ -3114,7 +3131,10 @@ void LsMemcache::doBinGet(McBinCmdHdr *pHdr, uint8_t cmd, bool doTouch,
         iter = pConn->getHash()->offset2iterator(m_iterOff);
         LS_DBG_M("doBinGet, iter: %p\n", iter);
         if (iter)
+        {
             pItem = mcIter2data(iter, m_mcparms.m_usecas, &valPtr, &valLen);
+            dbgValidateGet(m_key.ptr, m_key.len, valPtr, valLen);
+        }
         if (!iter || !pItem)
         {
             LS_DBG_M("doBinGet, iter: %p, pItem: %p\n", iter, pItem);
@@ -3250,6 +3270,7 @@ void LsMemcache::doBinDelete(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         }
         if (isExpired(pItem))
         {
+            dbgValidateDelete(m_key.ptr, m_key.len);
             pConn->getHash()->eraseIterator(m_iterOff);
             statDeleteMiss(pConn);
             unlock(pConn);
@@ -3264,6 +3285,7 @@ void LsMemcache::doBinDelete(McBinCmdHdr *pHdr, MemcacheConn *pConn)
         }
         else
         {
+            dbgValidateDelete(m_key.ptr, m_key.len);
             pConn->getHash()->eraseIterator(m_iterOff);
             statDeleteHit(pConn);
             unlock(pConn);

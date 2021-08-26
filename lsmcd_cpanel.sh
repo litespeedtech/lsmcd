@@ -15,12 +15,14 @@ elif cat /etc/*release | grep -q "CloudLinux 7" ; then
 elif cat /etc/*release | grep -q "CentOS Linux 8" ; then
   echo -e "\nDetecting CentOS 8.x...\n"
   dnf config-manager --set-enabled PowerTools > /dev/null 2>&1
+  dnf config-manager --set-enabled powertools > /dev/null 2>&1
 elif cat /etc/*release | grep -q "CloudLinux 8" ; then
   echo -e "\nDetecting CloudLinux 8.x...\n"
   dnf config-manager --set-enabled cloudlinux-PowerTools > /dev/null 2>&1
   dnf config-manager --set-enabled PowerTools > /dev/null 2>&1
 elif cat /etc/*release | grep -q "AlmaLinux 8" ; then
   echo -e "\nDetecting AlmaLinux 8.x...\n"
+  dnf config-manager --set-enabled PowerTools > /dev/null 2>&1
   dnf config-manager --set-enabled powertools > /dev/null 2>&1
 else
   echo "This script only supports CentOS 7.x , 8.x , CloudLinux 7.x , 8.x and AlmaLinux 8.x"

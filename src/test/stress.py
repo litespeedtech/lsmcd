@@ -17,6 +17,7 @@ parser.add_argument("--g", default=0, type=int, help="get ONLY (assume set has b
 parser.add_argument("--o", default=1, type=int, help="just set key=value for this user (default is 1)")
 parser.add_argument("--e", default=0, type=int, help="Number of entries to add/get before stopping - default is until an entry is missing")
 parser.add_argument("--x", default=0, type=int, help="Test a specific size bit of random data - set and get - the parameter is the size")
+parser.add_argument("--r", default="127.0.0.1:11211", type=str, help="Server addr")
 args = parser.parse_args()
 user = args.u
 password = args.p
@@ -42,7 +43,7 @@ if maximum:
 if sasl_validate:
     print('Doing sasl validate test')
 print('Connect...')
-server='127.0.0.1:11211'
+server=args.r
 if args.n == 1:
     print("Connecting without SASL")
     client = bmemcached.Client((server,),compression=None)

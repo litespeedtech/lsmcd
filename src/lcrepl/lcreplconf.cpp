@@ -195,7 +195,7 @@ bool LcReplConf::parse(const char *szFile)
 
     
     ptr = m_confParser.getConfig("CachedProcCnt");
-    if ((ptr != NULL) && ((v = atoi(ptr)) > 0))
+    if ((ptr != NULL) && ((v = atoi(ptr)) >= 0))
         m_cachedProcCnt = v;
         
     char pBuf[1024], pBuf2[1024];

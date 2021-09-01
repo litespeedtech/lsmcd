@@ -933,9 +933,17 @@ int LsShmHash::rehash(bool force)
             setBitMapEnt(new_idx);
 
             pTable->x_iWorkIterOff = iterOff.m_iOffset;
-            assert(opIdx->m_iOffset == iterOff.m_iOffset);
+            if (opIdx->m_iOffset != iterOff.m_iOffset)
+            {
+                LS_NOTICE("During rehash, index and and offset different.  Rebuilding\n");
+                rebuild();
+            }
             opIdx->m_iOffset = iter->x_iNext.m_iOffset;
-            assert(npIdx->m_iOffset != iterOff.m_iOffset);
+            if (npIdx->m_iOffset == iterOff.m_iOffset) 
+            {
+                LS_NOTICE("During rehash, next index and and offset the same.  Rebuilding\n");
+                rebuild();
+            }
             iter->x_iNext.m_iOffset = npIdx->m_iOffset;
             npIdx->m_iOffset = iterOff.m_iOffset;
             iterOff = iterNextOff;

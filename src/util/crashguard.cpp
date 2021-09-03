@@ -164,6 +164,7 @@ int CrashGuard::guardCrash(int workers)
     int  count = 0;
     int  ret;
     int  stat;
+    LS_DBG_M("guardCrash %d workers\n", workers);
     assert(m_pGuardedApp);
     if ( workers <= 0 )
         return 0;
@@ -212,7 +213,7 @@ int CrashGuard::guardCrash(int workers)
             }
             else if (pidChild == 0)
             {
-                return count;
+                return count + 1;
             }
             else
             {

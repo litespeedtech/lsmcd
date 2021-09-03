@@ -500,7 +500,7 @@ int LsmcdImpl::reinitRepldMpxr(int procNo)
 
 int LsmcdImpl::reinitCachedMpxr(int procNo)
 {
-    assert(procNo > 0  && procNo <= getReplConf()->getCachedProcCnt());
+    assert(procNo > 0  && procNo <= getReplConf()->getCachedProcCnt() + 1);
     
     m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
     m_pMultiplexer->add( &m_pMemcacheListener, POLLIN | POLLHUP | POLLERR );
@@ -761,6 +761,7 @@ int Lsmcd::Main(int argc, char **argv)
         CrashGuard cg(this);
 
         int ret = cg.guardCrash( 1 + getReplConf()->getCachedProcCnt() );
+        LS_DBG_M("GuardCrash ret: %d\n", ret);
         if (ret == -1)
             return 8;
         if (ret == HS_USR1 && !getuid())

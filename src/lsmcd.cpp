@@ -634,7 +634,7 @@ void LsmcdImpl::delUsockFiles()
     {
         ::remove(getReplConf()->getRepldUsPath());
     } 
-    for(int i = 1; i <= getReplConf()->getCachedProcCnt() ; ++i)
+    for(int i = 1; i <= getReplConf()->getCachedProcCnt() + 1; ++i)
     {
         snprintf(pBuf, sizeof(pBuf), "%s%d", getReplConf()->getCachedUsPath(), i);
         if( ::access(pBuf, F_OK ) != -1 )

@@ -143,3 +143,4 @@ VERSION 1.4.29 September 1, 2021
 [FEATURE] stress.py can now specify the server IP:PORT with the --r parameter
 [FEATURE] You can specify a single worker by setting CachedProcCnt=0
 [BUGFIX] During rehash, turn assertion into rebuilds avoiding crashes.
+[BUGFIX] Fixed single worker bugs in listening.

@@ -137,5 +137,10 @@ VERSION 1.4.28 August 9, 2021
 [BUGFIX] Fixed a few small bugs with NULL pointer references.
 [BUGFIX] Added additional code to detect data corruption.
 
-VERSION 1.4.29 
-[FEATURE] A debug validation option has been added.
+VERSION 1.4.29 September 1, 2021
+[FEATURE] Report PID rather than user in log.
+[FEATURE] A debug validation option has been added (DBG.VALIDATE=TRUE) - only usable in -d mode.
+[FEATURE] stress.py can now specify the server IP:PORT with the --r parameter
+[FEATURE] You can specify a single worker by setting CachedProcCnt=0
+[BUGFIX] During rehash, turn assertion into rebuilds avoiding crashes.
+[BUGFIX] Fixed single worker bugs in listening.

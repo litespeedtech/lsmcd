@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 
 BEGIN_LOG4CXX_NS
 struct timeval PatternLayout::s_startTime;
@@ -175,6 +176,9 @@ int PatternLayout::format(LoggingEvent *pEvent, char *pBuf, int len)
                 }
                 pBuf += snprintf(pBuf, pEnd - pBuf, "%d%03d",
                                  (int)tv_diff.tv_sec, (int)(tv_diff.tv_usec / 1000));
+                break;
+            case 'i':
+                pBuf += snprintf(pBuf, pEnd - pBuf, "PID: %d", getpid());
                 break;
             case 'u':   /* not supported */
             case 'x':   /* not supported */

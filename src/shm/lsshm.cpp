@@ -275,6 +275,11 @@ LsShmOffset_t LsShm::getFileSize()
 
 int LsShm::isOffsetValid(LsShmOffset_t offset)
 {
+    if (!x_pShmMap->x_stat.m_iFileSize)
+    {
+        LS_DBG("isOffsetValid, m_iFileSize is 0 - not valid");
+        return 0; 
+    }
     return (offset <= x_pShmMap->x_stat.m_iFileSize);
 }
 

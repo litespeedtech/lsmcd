@@ -144,3 +144,6 @@ VERSION 1.4.29 September 1, 2021
 [FEATURE] You can specify a single worker by setting CachedProcCnt=0
 [BUGFIX] During rehash, turn assertion into rebuilds avoiding crashes.
 [BUGFIX] Fixed single worker bugs in listening.
+
+VERSION 1.4.30
+[BUGFIX] Address crashes caused by incorrect file size in hash table shared memory

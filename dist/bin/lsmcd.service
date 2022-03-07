@@ -10,6 +10,7 @@ ExecStop = /usr/local/lsmcd/bin/lsmcdctrl stop
 
 KillMode=none
 PrivateTmp=false
+RemainAfterExit=yes
 
 # do not want to be limited in anyway
 CPUAccounting=false

@@ -145,5 +145,8 @@ VERSION 1.4.29 September 1, 2021
 [BUGFIX] During rehash, turn assertion into rebuilds avoiding crashes.
 [BUGFIX] Fixed single worker bugs in listening.
 
-VERSION 1.4.30
+VERSION 1.4.30 February 9, 2022
 [BUGFIX] Address crashes caused by incorrect file size in hash table shared memory
+
+VERSION 1.4.31 March 7, 2022
+[BUGFIX] Fix bug where systemd will take down LSMCD when it tries to recover after a crash.  This will make systemd's status misleading - use `ps -ef|grep lsmcd` as the method to determine if lsmcd is running

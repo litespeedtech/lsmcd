@@ -150,3 +150,10 @@ VERSION 1.4.30 February 9, 2022
 
 VERSION 1.4.31 March 7, 2022
 [BUGFIX] Fix bug where systemd will take down LSMCD when it tries to recover after a crash.  This will make systemd's status misleading - use `ps -ef|grep lsmcd` as the method to determine if lsmcd is running
+
+VERSION 1.4.32 
+[BUGFIX] Fixed a bug in the cPanel interface where the uninstall was not removing the icon from the Jupiter theme.
+
+VERSION: 1.4.33 November 14, 2022
+[BUGFIX] Detect when the SHM reports file size: 0 and rebuilds the database.
+[UPDATE]: cPanel interface uses the newest lsmcd icond.

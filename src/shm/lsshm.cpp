@@ -798,7 +798,8 @@ LsShmStatus_t LsShm::remap()
         setErrMsg(LSSHM_SYSERROR, "%s: real file size: %lu, SHM stats file size: %lu.",
                   m_pFileName, (unsigned long)mystat.st_size, 
                   (unsigned long)x_pShmMap->x_stat.m_iFileSize);
-        if ( x_pShmMap->x_stat.m_iFileSize - mystat.st_size > 100 * 1024 * 1024)
+        if (!x_pShmMap->x_stat.m_iFileSize || 
+            x_pShmMap->x_stat.m_iFileSize - mystat.st_size > 100 * 1024 * 1024)
         {
             LS_NOTICE("[PID: %d] In attempt to remap shared memory, doing rebuild\n", getpid());
             rebuild();

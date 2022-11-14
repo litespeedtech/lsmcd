@@ -33,4 +33,4 @@ sudo apt-get install build-essential zlib1g-dev libexpat1-dev openssl libsasl2-d
 
 Configuration Documentation
 --------
-Lsmcd configuration settings are different from memcached. For detail description, please read through https://www.litespeedtech.com/support/wiki/doku.php/litespeed_wiki:lsmcd.
+Lsmcd configuration settings are different from memcached. For detail description, please [read](https://docs.litespeedtech.com/products/lsmcd/).

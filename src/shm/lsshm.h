@@ -95,7 +95,7 @@ typedef struct ls_shmmap_s LsShmMap;
 class LsShm : public ls_shm_s
 {
 public:
-    void        rebuild() const;
+    static void  rebuild();
    
     static LsShm *open(const char *mapName, LsShmXSize_t initSize,
                        const char *pBaseDir = NULL, 

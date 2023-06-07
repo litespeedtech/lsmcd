@@ -156,4 +156,7 @@ VERSION 1.4.32
 
 VERSION: 1.4.33 November 14, 2022
 [BUGFIX] Detect when the SHM reports file size: 0 and rebuilds the database.
-[UPDATE]: cPanel interface uses the newest lsmcd icond.
+[UPDATE]: cPanel interface uses the newest lsmcd icon.
+
+VERSION: 1.4.34 June 7, 2023
+[BUGFIX] Detect when the SHM asserts a number of conditions and rebuilds the database.

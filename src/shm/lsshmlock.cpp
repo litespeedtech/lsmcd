@@ -89,20 +89,35 @@ LsShmLock::~LsShmLock()
 
 ls_shmlock_t *LsShmLock::offset2pLock(LsShmOffset_t offset) const
 {
-    assert(offset < m_pShmLockMap->x_iMaxSize);
+    if (offset >= m_pShmLockMap->x_iMaxSize)
+    {
+        LS_NOTICE("During lookup of offset in lock invalid data.  Rebuilding\n");
+        LsShm::rebuild();
+    }
+    //assert(offset < m_pShmLockMap->x_iMaxSize);
     return (ls_shmlock_t *)(((uint8_t *)m_pShmLockMap) + offset);
 }
 
 void *LsShmLock::offset2ptr(LsShmOffset_t offset) const
 {
-    assert(offset < m_pShmLockMap->x_iMaxSize);
+    if (offset >= m_pShmLockMap->x_iMaxSize)
+    {
+        LS_NOTICE("During lookup of ptr via offset invalid data.  Rebuilding\n");
+        LsShm::rebuild();
+    }
+    ///assert(offset < m_pShmLockMap->x_iMaxSize);
     return (void *)(((uint8_t *)m_pShmLockMap) + offset);
 }
 
 LsShmOffset_t LsShmLock::ptr2offset(const void *ptr) const
 {
-    assert(ptr <
-            ((uint8_t *)m_pShmLockMap) + m_pShmLockMap->x_iMaxSize);
+    if (ptr >= ((uint8_t *)m_pShmLockMap) + m_pShmLockMap->x_iMaxSize)
+    {
+        LS_NOTICE("During lookup of offset via ptr invalid data.  Rebuilding\n");
+        LsShm::rebuild();
+    }
+    //assert(ptr <
+    //        ((uint8_t *)m_pShmLockMap) + m_pShmLockMap->x_iMaxSize);
     return (LsShmOffset_t)((uint8_t *)ptr - (uint8_t *)m_pShmLockMap);
 }
 

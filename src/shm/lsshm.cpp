@@ -128,7 +128,7 @@ static inline HashStringMap< LsShm * > *getBase()
 }
 
 
-void        LsShm::rebuild() const
+void        LsShm::rebuild()
 {
     LS_DBG_M("Doing rebuild!, pid: %d\n", getpid());
     kill(getpid(), SIGUSR2);

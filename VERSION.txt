@@ -160,3 +160,6 @@ VERSION: 1.4.33 November 14, 2022
 
 VERSION: 1.4.34 June 7, 2023
 [BUGFIX] Detect when the SHM asserts a number of conditions and rebuilds the database.
+
+VERSION: 1.4.35 August 14, 2023
+[FEATURE] Move location of lsmcd_cpanel_interface to litespeedtech.

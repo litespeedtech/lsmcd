@@ -111,7 +111,7 @@ systemctl daemon-reload
 systemctl start lsmcd
 systemctl enable lsmcd
 
-git clone https://github.com/rperper/lsmcd_cpanel_plugin.git
+git clone https://github.com/litespeedtech/lsmcd_cpanel_plugin.git
 if ! cd lsmcd_cpanel_plugin/res/lsmcd_usermgr ; then
   echo "failed to enter temp dir, exit"
   exit 1

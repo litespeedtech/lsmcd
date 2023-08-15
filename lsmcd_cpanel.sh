@@ -8,8 +8,12 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+UBUNTU="0"
 if cat /etc/*release | grep -q "CentOS Linux 7" ; then
   echo -e "\nDetecting CentOS 7.x...\n"
+elif cat /etc/*release | grep -q "Ubuntu" ; then
+  echo -e "\nDetecting Ubuntu...\n"
+  UBUNTU="1"
 elif cat /etc/*release | grep -q "CloudLinux 7" ; then
   echo -e "\nDetecting CloudLinux 7.x...\n"
 elif cat /etc/*release | grep -q "CentOS Linux 8" ; then
@@ -63,14 +67,18 @@ echo -e "\n\n\nthe password generated is random and not usable , user will need 
 }
 
 install_lsmcd() {
-if ! yum groupinstall -y "Development Tools" ; then
-  echo "yum install failed, do you have root privilege ?"
-  exit 1
-fi
+if [ $UBUNTU = "1" ]; then
+  apt-get install git build-essential zlib1g-dev libexpat1-dev openssl libssl-dev libsasl2-dev libpcre3-dev sasl2-bin -y
+else
+  if ! yum groupinstall -y "Development Tools" ; then
+    echo "yum install failed, do you have root privilege ?"
+    exit 1
+  fi
 
-if ! yum install -y autoconf automake zlib-devel openssl-devel expat-devel pcre-devel libmemcached-devel cyrus-sasl* ; then
-  echo "yum install failed, do you have root privilege ?"
-  exit 1
+  if ! yum install -y autoconf automake zlib-devel openssl-devel expat-devel pcre-devel libmemcached-devel cyrus-sasl* ; then
+    echo "yum install failed, do you have root privilege ?"
+    exit 1
+  fi
 fi
 
 if ! mkdir -p /home/lsmcd_tmp ; then
@@ -117,7 +125,11 @@ if ! cd lsmcd_cpanel_plugin/res/lsmcd_usermgr ; then
   exit 1
 fi
 
-yum -y install python3 python3-pip
+if [ $UBUNTU = "1" ]; then
+  apt-get install python3 python3-pip -y
+else
+  yum -y install python3 python3-pip
+fi
 
 ./install.sh
 

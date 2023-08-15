@@ -163,3 +163,6 @@ VERSION: 1.4.34 June 7, 2023
 
 VERSION: 1.4.35 August 14, 2023
 [FEATURE] Move location of lsmcd_cpanel_interface to litespeedtech.
+
+VERSION: 1.4.36 August 15, 2023
+[FEATURE] Add Ubuntu support to lsmcd cPanel install.

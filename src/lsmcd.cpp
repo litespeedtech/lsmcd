@@ -382,16 +382,16 @@ int LsmcdImpl::PreEventLoop()
     }
     
     bool uds = !strncasecmp(getReplConf()->getMemCachedAddr(), "UDS:", 4);
-    int mask;
+    int mask, ret;
     if ((uds) && (!geteuid()))
         mask = umask(0);
     m_pMemcacheListener.SetMultiplexer ( m_pMultiplexer );
     m_pMemcacheListener.SetListenerAddr ( getReplConf()->getMemCachedAddr() );
-    if ( m_pMemcacheListener.Start() != LS_OK )
+    if ( (ret = m_pMemcacheListener.Start()) != LS_OK )
     {
         if ((uds) && (!geteuid()))
             umask(mask);
-        LS_ERROR("Memcache Listener failed to start");
+        LS_ERROR("Memcache Listener failed to start (%s)", strerror(ret));
         return LS_FAIL;
     }
     if ((uds) && (!geteuid()))

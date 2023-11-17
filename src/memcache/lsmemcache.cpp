@@ -773,6 +773,33 @@ void LsMemcache::onTimer()
 }
 
 
+int LsMemcache::validateDb(MemcacheConn *pConn)
+{
+    if (pConn->getHdrOff() == 0)
+    {
+        LS_DBG("validateDb, Header not set yet, ok\n");
+        return 0;
+    }
+    LsMcHdr *pHdr = ((LsMcHdr *)pConn->getHash()->offset2ptr(pConn->getHdrOff()));
+    int ret = 0;
+    if (pHdr->x_withcas != m_mcparms.m_usecas)
+    {
+        LS_NOTICE("MisMatch: shared database %sUSING cas - rebuilding.\n",
+                 (pHdr->x_withcas ? "" : "NOT "));
+        ret = LS_FAIL;
+    } else if (pHdr->x_withsasl != m_mcparms.m_usesasl)
+    {
+        LS_NOTICE("MisMatch: shared database %sUSING sasl - rebuilding.\n",
+                 (pHdr->x_withsasl ? "" : "NOT "));
+        ret = LS_FAIL;
+    } 
+    if (ret != 0)
+        pConn->getHash()->rebuild();
+    LS_DBG_M("validateDb ok\n");
+    return ret;
+}
+
+
 int LsMemcache::processCmd(char *pStr, int iLen, MemcacheConn *pConn)
 {
     int datasz;

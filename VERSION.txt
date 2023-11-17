@@ -166,3 +166,7 @@ VERSION: 1.4.35 August 14, 2023
 
 VERSION: 1.4.36 August 15, 2023
 [FEATURE] Add Ubuntu support to lsmcd cPanel install.
+
+VERSION: 1.4.37 November 17, 2023
+[IMPROVEMENT] Report reason why a listener won't start correctly (like "Address already in use").
+[BUGIX] Detect when DB CAS or SASL settings don't match configuration and rebuild database.

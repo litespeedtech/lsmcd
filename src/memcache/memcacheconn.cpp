@@ -387,6 +387,8 @@ int MemcacheConn::processIncoming()
                 (((unsigned char)*m_bufIncoming.begin() == (unsigned char)MC_BINARY_REQ) ?
                 MC_BINARY : MC_ASCII);
         }
+        if (LsMemcache::getInstance().validateDb(this))
+            return -1;
         switch (_Protocol)
         {
             case MC_ASCII:

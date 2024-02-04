@@ -2,6 +2,16 @@
 
 LSMCD_HOME=/usr/local/lsmcd
 TMP_DIR=/tmp/lsmcd
+MODE=regular
+
+# handle arguments
+while getopts h:m: flag
+do
+    case "${flag}" in
+        h) LSMCD_HOME=${OPTARG};;
+        m) MODE=${OPTARG};;
+    esac
+done
 
 #rm -rf $LSMCD_HOME
 
@@ -22,15 +32,17 @@ else
     UPDATE=0
 fi
 
-if [ -x /sbin/chkconfig ]; then
-    cp ../dist/bin/lsmcd.init /etc/init.d/lsmcd
-    chkconfig lsmcd on
-elif [ -x /bin/systemctl ]; then
-    cp ../dist/bin/lsmcd.service /etc/systemd/system/lsmcd.service
-    systemctl enable lsmcd.service
-else
-    echo "Distro not recognized, contact tech support"
-    exit 1
+if [ $MODE != docker ]; then
+    if [ -x /sbin/chkconfig ]; then
+        cp ../dist/bin/lsmcd.init /etc/init.d/lsmcd
+        chkconfig lsmcd on
+    elif [ -x /bin/systemctl ]; then
+        cp ../dist/bin/lsmcd.service /etc/systemd/system/lsmcd.service
+        systemctl enable lsmcd.service
+    else
+        echo "Distro not recognized, contact tech support"
+        exit 1
+    fi
 fi
 
 if [ $UPDATE -eq 0 ]; then

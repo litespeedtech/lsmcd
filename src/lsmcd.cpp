@@ -871,35 +871,45 @@ UsockClnt* Lsmcd::getUsockConn() const
 }
 
 
+int Lsmcd::deleteDatabases()
+{
+    char *shmdir = (char *)"/dev/shm/lsmcd";
+    LS_NOTICE("Deleting the shared memory database\n");
+    DIR *dir = opendir(shmdir);
+    if (!dir)
+    {
+        LS_ERROR("Unable to open the shared memory directory: %s\n", 
+                 strerror(errno));
+        return -1;
+    }
+    else 
+    {
+        struct dirent *ent;
+        while ((ent = readdir(dir)))
+        {
+            if (ent->d_type == DT_REG && !strncmp(ent->d_name, "data", 4))
+            {
+                char filename[512];
+                snprintf(filename, sizeof(filename), "%s/%s", shmdir, 
+                         ent->d_name);
+                LS_DBG_M("Deleting %s\n", filename);
+                if (unlink(filename))
+                    LS_NOTICE("Error deleting %s: %s\n", filename, 
+                              strerror(errno));
+            }
+        }
+    }
+    return 0;
+}
+
+
 int Lsmcd::childSignaled(int seq, pid_t pid, int signal, int coredump)
 {
     if (signal == SIGUSR2)
     {
-        char *shmdir = (char *)"/dev/shm/lsmcd";
-        LS_NOTICE("Deleting the shared memory database\n");
-        DIR *dir = opendir(shmdir);
-        if (!dir)
-            LS_ERROR("Unable to open the shared memory directory: %s\n", 
-                     strerror(errno));
-        else 
-        {
-            struct dirent *ent;
-            while ((ent = readdir(dir)))
-            {
-                if (ent->d_type == DT_REG && !strncmp(ent->d_name, "data", 4))
-                {
-                    char filename[512];
-                    snprintf(filename, sizeof(filename), "%s/%s", shmdir, 
-                             ent->d_name);
-                    LS_DBG_M("Deleting %s\n", filename);
-                    if (unlink(filename))
-                        LS_NOTICE("Error deleting %s: %s\n", filename, 
-                                  strerror(errno));
-                }
-            }
-            LS_DBG_M("Restarting service with no databases...\n");
-            kill(getpid(), SIGUSR1);
-        }
+        deleteDatabases();
+        LS_DBG_M("Restarting service with no databases...\n");
+        kill(getpid(), SIGUSR1);
     }
     return 0;
 }

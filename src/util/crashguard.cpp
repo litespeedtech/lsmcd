@@ -17,6 +17,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <lsmcd.h>
 #include <util/signalutil.h>
 #include <log4cxx/logger.h>
 
@@ -126,7 +127,10 @@ int CrashGuard::guardCrash()
                     if (sig_num == SIGKILL)
                         break;
                     if (WCOREDUMP(stat) && sig_num != SIGUSR2)
+                    {
                         LS_NOTICE("Program crashed and may have produced a core file.  Automatically restarted.\n");
+                        Lsmcd::deleteDatabases();
+                    }
                     ret = m_pGuardedApp->childSignaled(1, rpid, sig_num,
 #ifdef WCOREDUMP
                                                        WCOREDUMP(stat)
@@ -257,7 +261,10 @@ int CrashGuard::guardCrash(int workers)
                     if (sig_num == SIGKILL)
                         break;
                     if (WCOREDUMP(stat) && sig_num != SIGUSR2)
+                    {
                         LS_NOTICE("Program crashed and may have produced a core file.  Automatically restarted\n");
+                        Lsmcd::deleteDatabases();
+                    }
                     ret = m_pGuardedApp->childSignaled(count, rpid, sig_num,
 #ifdef WCOREDUMP
                                                        WCOREDUMP(stat)

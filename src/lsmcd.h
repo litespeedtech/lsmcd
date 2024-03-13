@@ -120,6 +120,7 @@ public:
     uint8_t getProcId() const;
     void setProcId(uint8_t procId);
     UsockClnt *getUsockConn() const;
+    static int deleteDatabases();
 private:
     static Lsmcd   _msServer;
     LsmcdImpl *    _pReplSvrImpl;

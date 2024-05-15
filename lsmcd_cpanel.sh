@@ -1,36 +1,31 @@
 #!/bin/bash
 
 # bash script for quick set up LiteSpeed Memcached with SASL support on cPanel system
-# CentOS 7 or CloudLinux 7 supported.
 
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root"
-   exit 1
+    echo "This script must be run as root"
+    exit 1
 fi
 
 UBUNTU="0"
 if cat /etc/*release | grep -q "CentOS Linux 7" ; then
-  echo -e "\nDetecting CentOS 7.x...\n"
+    echo -e "\nDetecting CentOS 7.x...\n"
 elif cat /etc/*release | grep -q "Ubuntu" ; then
-  echo -e "\nDetecting Ubuntu...\n"
-  UBUNTU="1"
+    echo -e "\nDetecting Ubuntu...\n"
+    UBUNTU="1"
 elif cat /etc/*release | grep -q "CloudLinux 7" ; then
-  echo -e "\nDetecting CloudLinux 7.x...\n"
-elif cat /etc/*release | grep -q "CentOS Linux 8" ; then
-  echo -e "\nDetecting CentOS 8.x...\n"
-  dnf config-manager --set-enabled PowerTools > /dev/null 2>&1
-  dnf config-manager --set-enabled powertools > /dev/null 2>&1
-elif cat /etc/*release | grep -q "CloudLinux 8" ; then
-  echo -e "\nDetecting CloudLinux 8.x...\n"
-  dnf config-manager --set-enabled cloudlinux-PowerTools > /dev/null 2>&1
-  dnf config-manager --set-enabled PowerTools > /dev/null 2>&1
-elif cat /etc/*release | grep -q "AlmaLinux 8" ; then
-  echo -e "\nDetecting AlmaLinux 8.x...\n"
-  dnf config-manager --set-enabled PowerTools > /dev/null 2>&1
-  dnf config-manager --set-enabled powertools > /dev/null 2>&1
+    echo -e "\nDetecting CloudLinux 7.x...\n"
+elif cat /etc/*release | grep -q "CloudLinux" ; then
+    echo -e "\nDetecting CloudLinux ...\n"
+    dnf config-manager --set-enabled cloudlinux-PowerTools > /dev/null 2>&1
+    dnf config-manager --set-enabled PowerTools > /dev/null 2>&1
+elif cat /etc/*release | grep -qi "CentOS" ; then
+    echo -e "\nDetecting CentOS ...\n"
+    dnf config-manager --set-enabled PowerTools > /dev/null 2>&1
+    dnf config-manager --set-enabled powertools > /dev/null 2>&1
 else
-  echo "This script only supports CentOS 7.x , 8.x , CloudLinux 7.x , 8.x and AlmaLinux 8.x"
-  exit 1
+    echo "This script only supports CentOS, CloudLinux and Ubuntu system!"
+    exit 1
 fi
 
 if [[ ! -d /usr/local/cpanel ]] ; then
